@@ -7,14 +7,19 @@ defmodule Langler.Content.Readability do
   def parse(html, opts \\ [])
 
   def parse(html, opts) when is_binary(html) do
-    if nif_available?() do
-      try do
-        Langler.Content.ReadabilityNif.parse(html, opts)
-      rescue
-        e -> {:error, e}
-      end
-    else
-      fallback(html)
+    cond do
+      not use_nif?() ->
+        fallback(html)
+
+      nif_available?() ->
+        try do
+          Langler.Content.ReadabilityNif.parse(html, opts)
+        rescue
+          e -> {:error, e}
+        end
+
+      true ->
+        fallback(html)
     end
   end
 
@@ -34,5 +39,10 @@ defmodule Langler.Content.Readability do
   defp nif_available? do
     Code.ensure_loaded?(Langler.Content.ReadabilityNif) and
       function_exported?(Langler.Content.ReadabilityNif, :parse, 2)
+  end
+
+  defp use_nif? do
+    Application.get_env(:langler, __MODULE__, [])
+    |> Keyword.get(:use_nif, true)
   end
 end

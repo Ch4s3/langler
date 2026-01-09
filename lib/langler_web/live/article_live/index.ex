@@ -1,13 +1,13 @@
 defmodule LanglerWeb.ArticleLive.Index do
   use LanglerWeb, :live_view
 
-  alias Langler.Accounts
   alias Langler.Content
   alias Langler.Content.ArticleImporter
 
   def mount(_params, _session, socket) do
-    current_user = ensure_user()
-    articles = Content.list_articles()
+    scope = socket.assigns.current_scope
+    current_user = scope.user
+    articles = Content.list_articles_for_user(current_user.id)
 
     {:ok,
      socket
@@ -146,10 +146,6 @@ defmodule LanglerWeb.ArticleLive.Index do
          |> put_flash(:error, humanize_error(reason))
          |> assign(importing: false)}
     end
-  end
-
-  defp ensure_user do
-    Accounts.ensure_demo_user()
   end
 
   defp humanize_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)

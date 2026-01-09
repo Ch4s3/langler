@@ -106,6 +106,7 @@ defmodule Langler.Content.ArticleImporter do
 
   defp seed_sentences(article, content) when is_binary(content) do
     content
+    |> sanitize_content()
     |> split_sentences()
     |> Enum.with_index()
     |> Enum.reduce_while(:ok, fn {sentence, idx}, _ ->
@@ -128,6 +129,7 @@ defmodule Langler.Content.ArticleImporter do
 
   defp sanitize_content(content) do
     content
+    |> String.replace(~r/<head[\s\S]*?<\/head>/im, "")
     |> String.replace(~r/<(script|style)[\s\S]*?>[\s\S]*?<\/\1>/im, "")
     |> strip_tags()
     |> String.replace(~r/\s+/, " ")

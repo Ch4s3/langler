@@ -1,6 +1,8 @@
 defmodule LanglerWeb.Router do
   use LanglerWeb, :router
 
+  import LanglerWeb.UserAuth
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -8,6 +10,7 @@ defmodule LanglerWeb.Router do
     plug :put_root_layout, html: {LanglerWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :fetch_current_scope_for_user
   end
 
   pipeline :api do
@@ -18,7 +21,6 @@ defmodule LanglerWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    live "/articles", ArticleLive.Index, :index
   end
 
   # Other scopes may use custom stacks.
@@ -41,5 +43,34 @@ defmodule LanglerWeb.Router do
       live_dashboard "/dashboard", metrics: LanglerWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
+  end
+
+  ## Authentication routes
+
+  scope "/", LanglerWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :require_authenticated_user,
+      on_mount: [{LanglerWeb.UserAuth, :require_authenticated}] do
+      live "/users/settings", UserLive.Settings, :edit
+      live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
+      live "/articles", ArticleLive.Index, :index
+    end
+
+    post "/users/update-password", UserSessionController, :update_password
+  end
+
+  scope "/", LanglerWeb do
+    pipe_through [:browser]
+
+    live_session :current_user,
+      on_mount: [{LanglerWeb.UserAuth, :mount_current_scope}] do
+      live "/users/register", UserLive.Registration, :new
+      live "/users/log-in", UserLive.Login, :new
+      live "/users/log-in/:token", UserLive.Confirmation, :new
+    end
+
+    post "/users/log-in", UserSessionController, :create
+    delete "/users/log-out", UserSessionController, :delete
   end
 end

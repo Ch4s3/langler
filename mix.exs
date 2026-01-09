@@ -11,7 +11,15 @@ defmodule Langler.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      assay: [
+        dialyzer: [
+          # Analyze project apps + dependencies
+          apps: :project_plus_deps,
+          # Only show warnings for project apps
+          warning_apps: :project
+        ]
+      ]
     ]
   end
 
@@ -40,6 +48,7 @@ defmodule Langler.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:bcrypt_elixir, "~> 3.0"},
       {:phoenix, "~> 1.8.1"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
@@ -62,6 +71,9 @@ defmodule Langler.MixProject do
       {:req, "~> 0.5"},
       {:oban, "~> 2.17"},
       {:rustler, ">= 0.32.0"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:assay, "~> 0.3", only: [:dev, :test], runtime: false},
+      {:bypass, "~> 2.1", only: :test},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.26"},
