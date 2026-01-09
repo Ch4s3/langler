@@ -38,6 +38,7 @@ custom classes must fully style the input
 ### UI/UX & design guidelines
 
 - **Produce world-class UI designs** with a focus on usability, aesthetics, and modern design principles
+- Lean on **DaisyUI components** wherever possible for UI building blocks (cards, buttons, badges, alerts, etc.) to keep styling consistent with the app theme — see `daisy.md` in the repo for class references when you need a local source
 - Implement **subtle micro-interactions** (e.g., button hover effects, and smooth transitions)
 - Ensure **clean typography, spacing, and layout balance** for a refined, premium look
 - Focus on **delightful details** like hover effects, loading states, and smooth page transitions

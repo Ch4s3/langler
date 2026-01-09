@@ -12,26 +12,25 @@ defmodule Langler.Content.ArticleImporter do
 
   require Logger
 
-  @type import_result :: {:ok, Content.Article.t()} | {:error, term()}
+  @type import_result :: {:ok, Content.Article.t(), :new | :existing} | {:error, term()}
 
   @spec import_from_url(Accounts.User.t(), String.t()) :: import_result
   def import_from_url(%Accounts.User{} = user, url) when is_binary(url) do
-    with {:ok, normalized_url} <- normalize_url(url),
-         nil <- Content.get_article_by_url(normalized_url) || :not_found,
-         {:ok, html} <- fetch_html(normalized_url),
-         {:ok, parsed} <- Readability.parse(html, base_url: normalized_url),
-         {:ok, article} <- persist_article(user, normalized_url, parsed) do
-      enqueue_word_extraction(article)
-      {:ok, article}
-    else
-      %Content.Article{} = article ->
-        {:ok, ensure_association(article, user)}
+    with {:ok, normalized_url} <- normalize_url(url) do
+      case Content.get_article_by_url(normalized_url) do
+        %Content.Article{} = article ->
+          {:ok, ensure_association(article, user), :existing}
 
-      {:error, _} = error ->
-        error
-
-      :not_found ->
-        :not_found
+        nil ->
+          with {:ok, html} <- fetch_html(normalized_url),
+               {:ok, parsed} <- Readability.parse(html, base_url: normalized_url),
+               {:ok, article} <- persist_article(user, normalized_url, parsed) do
+            enqueue_word_extraction(article)
+            {:ok, article, :new}
+          else
+            {:error, _} = error -> error
+          end
+      end
     end
   end
 

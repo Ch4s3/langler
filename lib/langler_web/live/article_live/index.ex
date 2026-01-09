@@ -7,92 +7,107 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   def mount(_params, _session, socket) do
     current_user = ensure_user()
+    articles = Content.list_articles()
 
     {:ok,
      socket
      |> assign(:current_user, current_user)
      |> assign(:importing, false)
+     |> assign(:articles_count, length(articles))
      |> assign(:form, to_form(%{"url" => ""}, as: :article))
-     |> stream(:articles, Content.list_articles())}
+     |> stream(:articles, articles)}
   end
 
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="mx-auto max-w-4xl space-y-8 py-8">
-        <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur">
-          <h1 class="text-2xl font-semibold text-slate-900">Import an article</h1>
-          <p class="mt-2 text-sm text-slate-500">
-            Paste a URL to extract the readable content and queue vocabulary analysis.
-          </p>
-
-          <.form
-            for={@form}
-            id="article-import-form"
-            class="mt-6 space-y-4"
-            phx-submit="import"
-            phx-change="validate"
-          >
-            <.input
-              field={@form[:url]}
-              type="url"
-              label="Article URL"
-              placeholder="https://elpais.com/cultura/..."
-              required
-              disabled={@importing}
-            />
-            <div class="flex justify-end">
-              <.button
-                phx-disable-with="Importing..."
-                disabled={@importing}
-                class="inline-flex items-center gap-2"
-              >
-                <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import Article
-              </.button>
+      <div class="mx-auto max-w-5xl space-y-8 py-8">
+        <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+          <div class="card-body space-y-4">
+            <div>
+              <h1 class="text-3xl font-semibold text-base-content">Import an article</h1>
+              <p class="mt-2 text-sm text-base-content/70">
+                Paste a URL to extract the readable content and queue vocabulary analysis.
+              </p>
             </div>
-          </.form>
+
+            <.form
+              for={@form}
+              id="article-import-form"
+              class="space-y-4"
+              phx-submit="import"
+              phx-change="validate"
+            >
+              <.input
+                field={@form[:url]}
+                type="url"
+                label="Article URL"
+                placeholder="https://elpais.com/cultura/..."
+                required
+                disabled={@importing}
+              />
+              <div class="flex justify-end">
+                <.button
+                  phx-disable-with="Importing..."
+                  disabled={@importing}
+                  class="btn btn-primary gap-2"
+                >
+                  <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import Article
+                </.button>
+              </div>
+            </.form>
+          </div>
         </div>
 
-        <div class="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-semibold text-slate-900">Your articles</h2>
-            <span class="text-sm text-slate-500">
-              {length(@streams.articles)}
-            </span>
-          </div>
-
-          <div
-            id="articles"
-            phx-update="stream"
-            class="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-100 bg-white shadow-inner"
-          >
-            <div class={[
-              "p-6 text-center text-sm text-slate-400",
-              length(@streams.articles) > 0 && "hidden"
-            ]}>
-              No articles yet. Import one to get started.
+        <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+          <div class="card-body space-y-6">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
+                  Library
+                </p>
+                <h2 class="text-2xl font-semibold text-base-content">Your articles</h2>
+              </div>
+              <span class="badge badge-lg badge-outline font-semibold text-base-content/80">
+                {@articles_count}
+              </span>
             </div>
 
             <div
-              :for={{dom_id, article} <- @streams.articles}
-              id={dom_id}
-              class="group flex flex-col gap-2 p-6 transition hover:bg-slate-50/70"
+              id="articles"
+              phx-update="stream"
+              class="grid gap-4"
             >
-              <div class="flex items-center justify-between gap-4">
-                <div>
-                  <p class="text-base font-medium text-slate-900">{article.title}</p>
-                  <p class="text-xs text-slate-500">
-                    {article.source || URI.parse(article.url).host}
+              <div class={[
+                "alert border border-dashed border-base-300 text-base-content/70",
+                @articles_count > 0 && "hidden"
+              ]}>
+                No articles yet. Import one to get started.
+              </div>
+
+              <div
+                :for={{dom_id, article} <- @streams.articles}
+                id={dom_id}
+                class="card border border-base-200 bg-base-100/80 shadow transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <div class="card-body gap-3">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-lg font-semibold text-base-content">{article.title}</p>
+                      <p class="text-xs uppercase tracking-wide text-base-content/50">
+                        {article.source || URI.parse(article.url).host}
+                      </p>
+                    </div>
+                    <span class="badge badge-primary badge-outline uppercase tracking-wide">
+                      {article.language}
+                    </span>
+                  </div>
+                  <p class="line-clamp-2 text-sm text-base-content/70">
+                    {article.content |> String.slice(0, 220)}
+                    {if String.length(article.content || "") > 220, do: "…"}
                   </p>
                 </div>
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-600">
-                  {article.language}
-                </span>
               </div>
-              <p class="line-clamp-2 text-sm text-slate-500">
-                {article.content |> String.slice(0, 220)}
-                {if String.length(article.content || "") > 220, do: "…"}
-              </p>
             </div>
           </div>
         </div>
@@ -112,11 +127,17 @@ defmodule LanglerWeb.ArticleLive.Index do
     socket = assign(socket, importing: true)
 
     case ArticleImporter.import_from_url(user, url) do
-      {:ok, article} ->
+      {:ok, article, status} ->
+        count_delta = if status == :new, do: 1, else: 0
+
         {:noreply,
          socket
          |> put_flash(:info, "Imported #{article.title}")
-         |> assign(importing: false, form: to_form(%{"url" => ""}, as: :article))
+         |> assign(
+           importing: false,
+           form: to_form(%{"url" => ""}, as: :article),
+           articles_count: socket.assigns.articles_count + count_delta
+         )
          |> stream_insert(:articles, article, at: 0)}
 
       {:error, reason} ->

@@ -5,6 +5,7 @@ defmodule Langler.Content.Readability do
 
   @spec parse(binary(), keyword()) :: {:ok, map()} | {:error, term()}
   def parse(html, opts \\ [])
+
   def parse(html, opts) when is_binary(html) do
     if nif_available?() do
       try do
