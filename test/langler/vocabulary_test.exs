@@ -1,8 +1,8 @@
 defmodule Langler.VocabularyTest do
   use Langler.DataCase, async: true
 
-  alias Langler.Vocabulary
   alias Langler.ContentFixtures
+  alias Langler.Vocabulary
 
   test "normalize_form/1 strips accents and lowercases" do
     assert Vocabulary.normalize_form("Árbol") == "arbol"

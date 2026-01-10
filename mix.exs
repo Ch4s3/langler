@@ -12,13 +12,24 @@ defmodule Langler.MixProject do
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
+      rustler_crates: rustler_crates(),
       assay: [
         dialyzer: [
           # Analyze project apps + dependencies
           apps: :project_plus_deps,
           # Only show warnings for project apps
-          warning_apps: :project
+          warning_apps: :project,
+          plt_add_apps: [:crypto]
         ]
+      ]
+    ]
+  end
+
+  defp rustler_crates do
+    [
+      readability_nif: [
+        path: "native/readability_nif",
+        mode: if(Mix.env() == :prod, do: :release, else: :debug)
       ]
     ]
   end
@@ -29,7 +40,7 @@ defmodule Langler.MixProject do
   def application do
     [
       mod: {Langler.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:crypto, :logger, :runtime_tools]
     ]
   end
 
@@ -60,6 +71,7 @@ defmodule Langler.MixProject do
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
+      {:floki, "~> 0.36"},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",

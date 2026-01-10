@@ -35,35 +35,46 @@ defmodule LanglerWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
-        </a>
-      </div>
-      <div class="flex-none">
-        <ul class="flex flex-column px-1 space-x-4 items-center">
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
-          </li>
-          <li>
-            <.theme_toggle />
-          </li>
-          <li>
-            <a href="https://hexdocs.pm/phoenix/overview.html" class="btn btn-primary">
-              Get Started <span aria-hidden="true">&rarr;</span>
-            </a>
-          </li>
-        </ul>
+    <header class="border-b border-base-200 bg-base-100/90 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <.link
+          navigate={~p"/articles"}
+          class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
+        >
+          <img src={~p"/images/logo.svg"} width="36" alt="Langler logo" />
+          <span>Langler</span>
+        </.link>
+
+        <nav class="flex flex-wrap items-center gap-2 text-sm font-semibold text-base-content/80">
+          <.link navigate={~p"/articles"} class="btn btn-ghost btn-sm">Library</.link>
+          <.link navigate={~p"/study"} class="btn btn-ghost btn-sm">Study</.link>
+          <.link navigate={~p"/users/settings"} class="btn btn-ghost btn-sm">Settings</.link>
+        </nav>
+
+        <div class="flex items-center gap-3">
+          <.theme_toggle />
+          <div :if={@current_scope} class="flex items-center gap-3">
+            <div class="rounded-full bg-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70">
+              {@current_scope.user.email}
+            </div>
+            <.link href={~p"/users/log-out"} method="delete" class="btn btn-sm btn-primary text-white">
+              Log out
+            </.link>
+          </div>
+          <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
+            <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
+              Log in
+            </.link>
+            <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
+              Create account
+            </.link>
+          </div>
+        </div>
       </div>
     </header>
 
-    <main class="px-4 py-20 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-2xl space-y-4">
+    <main class="px-4 py-12 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-5xl space-y-4">
         {render_slot(@inner_block)}
       </div>
     </main>

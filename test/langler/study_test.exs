@@ -1,9 +1,9 @@
 defmodule Langler.StudyTest do
   use Langler.DataCase, async: true
 
+  alias Langler.AccountsFixtures
   alias Langler.Study
   alias Langler.StudyFixtures
-  alias Langler.AccountsFixtures
   alias Langler.VocabularyFixtures
 
   test "create_item/1 persists FSRS item" do
@@ -32,5 +32,21 @@ defmodule Langler.StudyTest do
     scheduler_item = Study.to_scheduler_item(item)
 
     assert scheduler_item.user_id == item.user_id
+  end
+
+  test "review_item/2 updates interval and history" do
+    now = DateTime.utc_now()
+
+    item =
+      StudyFixtures.fsrs_item_fixture(%{
+        interval: 1,
+        due_date: DateTime.add(now, -86_400, :second),
+        ease_factor: 2.5
+      })
+
+    assert {:ok, updated} = Study.review_item(item, :good, now: now)
+    assert updated.interval >= 1
+    assert List.last(updated.quality_history) == 3
+    assert DateTime.compare(updated.due_date, now) == :gt
   end
 end

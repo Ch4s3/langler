@@ -4,9 +4,9 @@ defmodule Langler.AccountsTest do
   alias Langler.Accounts
   alias Langler.AccountsFixtures
 
-  test "create_user/1 persists a user" do
+  test "register_user/1 persists a user" do
     assert {:ok, user} =
-             Accounts.create_user(%{email: "unique@example.com", name: "Jane"})
+             Accounts.register_user(%{email: "unique@example.com"})
 
     assert user.email == "unique@example.com"
   end

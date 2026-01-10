@@ -1,8 +1,10 @@
 defmodule Langler.Accounts.UserNotifier do
+  @moduledoc false
+
   import Swoosh.Email
 
-  alias Langler.Mailer
   alias Langler.Accounts.User
+  alias Langler.Mailer
 
   # Delivers the email using the application mailer.
   defp deliver(recipient, subject, body) do

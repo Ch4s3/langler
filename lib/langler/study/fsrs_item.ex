@@ -1,4 +1,6 @@
 defmodule Langler.Study.FSRSItem do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset
 

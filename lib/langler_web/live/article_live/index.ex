@@ -20,7 +20,7 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-5xl space-y-8 py-8">
         <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
           <div class="card-body space-y-4">
@@ -85,28 +85,31 @@ defmodule LanglerWeb.ArticleLive.Index do
                 No articles yet. Import one to get started.
               </div>
 
-              <div
-                :for={{dom_id, article} <- @streams.articles}
-                id={dom_id}
-                class="card border border-base-200 bg-base-100/80 shadow transition hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                <div class="card-body gap-3">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p class="text-lg font-semibold text-base-content">{article.title}</p>
-                      <p class="text-xs uppercase tracking-wide text-base-content/50">
-                        {article.source || URI.parse(article.url).host}
+              <div :for={{dom_id, article} <- @streams.articles} id={dom_id}>
+                <.link
+                  navigate={~p"/articles/#{article}"}
+                  class="block rounded-xl no-underline transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+                >
+                  <div class="card border border-base-200 bg-base-100/80 shadow">
+                    <div class="card-body gap-3">
+                      <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p class="text-lg font-semibold text-base-content">{article.title}</p>
+                          <p class="text-xs uppercase tracking-wide text-base-content/50">
+                            {article.source || URI.parse(article.url).host}
+                          </p>
+                        </div>
+                        <span class="badge badge-primary badge-outline uppercase tracking-wide">
+                          {article.language}
+                        </span>
+                      </div>
+                      <p class="line-clamp-2 text-sm text-base-content/70">
+                        {article.content |> String.slice(0, 220)}
+                        {if String.length(article.content || "") > 220, do: "…"}
                       </p>
                     </div>
-                    <span class="badge badge-primary badge-outline uppercase tracking-wide">
-                      {article.language}
-                    </span>
                   </div>
-                  <p class="line-clamp-2 text-sm text-base-content/70">
-                    {article.content |> String.slice(0, 220)}
-                    {if String.length(article.content || "") > 220, do: "…"}
-                  </p>
-                </div>
+                </.link>
               </div>
             </div>
           </div>

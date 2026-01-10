@@ -1,6 +1,8 @@
 defmodule Langler.StudyFixtures do
-  alias Langler.Study
+  @moduledoc false
+
   alias Langler.AccountsFixtures
+  alias Langler.Study
   alias Langler.VocabularyFixtures
 
   def fsrs_item_fixture(attrs \\ %{}) do

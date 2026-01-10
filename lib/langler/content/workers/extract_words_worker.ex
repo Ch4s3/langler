@@ -1,4 +1,6 @@
 defmodule Langler.Content.Workers.ExtractWordsWorker do
+  @moduledoc false
+
   use Oban.Worker, queue: :ingestion, max_attempts: 5
 
   @impl Oban.Worker

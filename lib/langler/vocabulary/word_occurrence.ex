@@ -1,4 +1,6 @@
 defmodule Langler.Vocabulary.WordOccurrence do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset
 

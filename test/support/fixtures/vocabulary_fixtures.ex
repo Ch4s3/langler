@@ -1,12 +1,16 @@
 defmodule Langler.VocabularyFixtures do
-  alias Langler.Vocabulary
+  @moduledoc false
+
   alias Langler.ContentFixtures
+  alias Langler.Vocabulary
 
   def word_fixture(attrs \\ %{}) do
+    unique_term = "hola-#{System.unique_integer([:positive])}"
+
     {:ok, word} =
       attrs
       |> Enum.into(%{
-        normalized_form: "hola",
+        normalized_form: unique_term,
         lemma: "hola",
         language: "spanish",
         part_of_speech: "interjection"

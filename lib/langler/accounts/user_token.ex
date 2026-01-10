@@ -1,4 +1,6 @@
 defmodule Langler.Accounts.UserToken do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Query
   alias Langler.Accounts.UserToken
@@ -42,7 +44,7 @@ defmodule Langler.Accounts.UserToken do
   session they deem invalid.
   """
   def build_session_token(user) do
-    token = :crypto.strong_rand_bytes(@rand_size)
+    token = crypto_strong_rand_bytes(@rand_size)
     dt = user.authenticated_at || DateTime.utc_now(:second)
     {token, %UserToken{token: token, context: "session", user_id: user.id, authenticated_at: dt}}
   end
@@ -83,8 +85,8 @@ defmodule Langler.Accounts.UserToken do
   end
 
   defp build_hashed_token(user, context, sent_to) do
-    token = :crypto.strong_rand_bytes(@rand_size)
-    hashed_token = :crypto.hash(@hash_algorithm, token)
+    token = crypto_strong_rand_bytes(@rand_size)
+    hashed_token = crypto_hash(@hash_algorithm, token)
 
     {Base.url_encode64(token, padding: false),
      %UserToken{
@@ -107,7 +109,7 @@ defmodule Langler.Accounts.UserToken do
   def verify_magic_link_token_query(token) do
     case Base.url_decode64(token, padding: false) do
       {:ok, decoded_token} ->
-        hashed_token = :crypto.hash(@hash_algorithm, decoded_token)
+        hashed_token = crypto_hash(@hash_algorithm, decoded_token)
 
         query =
           from token in by_token_and_context_query(hashed_token, "login"),
@@ -137,7 +139,7 @@ defmodule Langler.Accounts.UserToken do
   def verify_change_email_token_query(token, "change:" <> _ = context) do
     case Base.url_decode64(token, padding: false) do
       {:ok, decoded_token} ->
-        hashed_token = :crypto.hash(@hash_algorithm, decoded_token)
+        hashed_token = crypto_hash(@hash_algorithm, decoded_token)
 
         query =
           from token in by_token_and_context_query(hashed_token, context),
@@ -153,4 +155,10 @@ defmodule Langler.Accounts.UserToken do
   defp by_token_and_context_query(token, context) do
     from UserToken, where: [token: ^token, context: ^context]
   end
+
+  # credo:disable-for-next-line Credo.Check.Refactor.Apply
+  defp crypto_strong_rand_bytes(size), do: apply(:crypto, :strong_rand_bytes, [size])
+
+  # credo:disable-for-next-line Credo.Check.Refactor.Apply
+  defp crypto_hash(algorithm, value), do: apply(:crypto, :hash, [algorithm, value])
 end

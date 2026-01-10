@@ -1,6 +1,8 @@
 defmodule Langler.ContentFixtures do
-  alias Langler.Content
+  @moduledoc false
+
   alias Langler.AccountsFixtures
+  alias Langler.Content
 
   def article_fixture(attrs \\ %{}) do
     user = Map.get(attrs, :user) || AccountsFixtures.user_fixture()

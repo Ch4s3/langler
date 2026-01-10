@@ -37,3 +37,6 @@ npm-debug.log
 
 /plans/
 
+# Rust build artifacts
+/native/**/target/
+/native/**/Cargo.lock

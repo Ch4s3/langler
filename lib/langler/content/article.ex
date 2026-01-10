@@ -1,4 +1,6 @@
 defmodule Langler.Content.Article do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -16,6 +18,8 @@ defmodule Langler.Content.Article do
 
     timestamps(type: :utc_datetime)
   end
+
+  @type t :: %__MODULE__{}
 
   @doc false
   def changeset(article, attrs) do

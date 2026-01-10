@@ -1,4 +1,6 @@
 defmodule LanglerWeb.UserAuth do
+  @moduledoc false
+
   use LanglerWeb, :verified_routes
 
   import Plug.Conn

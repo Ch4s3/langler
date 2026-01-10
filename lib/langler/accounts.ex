@@ -6,7 +6,7 @@ defmodule Langler.Accounts do
   import Ecto.Query, warn: false
   alias Langler.Repo
 
-  alias Langler.Accounts.{User, UserNotifier, UserToken, UserPreference}
+  alias Langler.Accounts.{User, UserNotifier, UserPreference, UserToken}
 
   def get_user_preference(user_id), do: Repo.get_by(UserPreference, user_id: user_id)
 

@@ -1,0 +1,16 @@
+[package]
+name = "readability_nif"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "readability_nif"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+rustler = "0.37"
+readabilityrs = "0.1.0"
+scraper = "0.20"
+
+[profile.release]
+opt-level = 3

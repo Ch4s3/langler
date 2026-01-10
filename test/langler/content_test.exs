@@ -1,8 +1,8 @@
 defmodule Langler.ContentTest do
   use Langler.DataCase, async: true
 
-  alias Langler.Content
   alias Langler.AccountsFixtures
+  alias Langler.Content
 
   test "create_article/1 inserts an article and associates user" do
     user = AccountsFixtures.user_fixture()
@@ -56,6 +56,10 @@ defmodule Langler.ContentTest do
       })
 
     assert sentence.article_id == article.id
-    assert [^sentence] = Content.list_sentences(article)
+
+    [fetched] = Content.list_sentences(article)
+    assert fetched.id == sentence.id
+    assert fetched.article_id == article.id
+    assert fetched.content == "Hola mundo."
   end
 end

@@ -1,4 +1,6 @@
 defmodule Langler.Content.ArticleUser do
+  @moduledoc false
+
   use Ecto.Schema
   import Ecto.Changeset
 

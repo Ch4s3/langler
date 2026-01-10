@@ -17,6 +17,9 @@ defmodule Langler.Vocabulary do
     |> String.replace(~r/\p{Mn}/u, "")
   end
 
+  def get_word(id), do: Repo.get(Word, id)
+  def get_word!(id), do: Repo.get!(Word, id)
+
   def get_word_by_normalized_form(normalized_form, language) do
     Repo.get_by(Word, normalized_form: normalized_form, language: language)
   end

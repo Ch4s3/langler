@@ -55,6 +55,8 @@ defmodule LanglerWeb.Router do
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
       live "/articles", ArticleLive.Index, :index
+      live "/articles/:id", ArticleLive.Show, :show
+      live "/study", StudyLive.Index, :index
     end
 
     post "/users/update-password", UserSessionController, :update_password

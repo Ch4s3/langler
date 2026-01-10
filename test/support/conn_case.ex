@@ -16,6 +16,10 @@ defmodule LanglerWeb.ConnCase do
   """
 
   use ExUnit.CaseTemplate
+  alias Langler.Accounts
+  alias Langler.Accounts.Scope
+  alias Langler.AccountsFixtures
+  alias Phoenix.ConnTest
 
   using do
     quote do
@@ -33,7 +37,7 @@ defmodule LanglerWeb.ConnCase do
 
   setup tags do
     Langler.DataCase.setup_sandbox(tags)
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+    {:ok, conn: ConnTest.build_conn()}
   end
 
   @doc """
@@ -45,8 +49,8 @@ defmodule LanglerWeb.ConnCase do
   test context.
   """
   def register_and_log_in_user(%{conn: conn} = context) do
-    user = Langler.AccountsFixtures.user_fixture()
-    scope = Langler.Accounts.Scope.for_user(user)
+    user = AccountsFixtures.user_fixture()
+    scope = Scope.for_user(user)
 
     opts =
       context
@@ -62,18 +66,18 @@ defmodule LanglerWeb.ConnCase do
   It returns an updated `conn`.
   """
   def log_in_user(conn, user, opts \\ []) do
-    token = Langler.Accounts.generate_user_session_token(user)
+    token = Accounts.generate_user_session_token(user)
 
     maybe_set_token_authenticated_at(token, opts[:token_authenticated_at])
 
     conn
-    |> Phoenix.ConnTest.init_test_session(%{})
+    |> ConnTest.init_test_session(%{})
     |> Plug.Conn.put_session(:user_token, token)
   end
 
   defp maybe_set_token_authenticated_at(_token, nil), do: nil
 
   defp maybe_set_token_authenticated_at(token, authenticated_at) do
-    Langler.AccountsFixtures.override_token_authenticated_at(token, authenticated_at)
+    AccountsFixtures.override_token_authenticated_at(token, authenticated_at)
   end
 end

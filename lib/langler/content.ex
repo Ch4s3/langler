@@ -24,6 +24,13 @@ defmodule Langler.Content do
 
   def get_article_by_url(url), do: Repo.get_by(Article, url: url)
 
+  def get_article_for_user!(user_id, article_id) do
+    Article
+    |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
+    |> where([a, au], a.id == ^article_id and au.user_id == ^user_id)
+    |> Repo.one!()
+  end
+
   def create_article(attrs \\ %{}) do
     %Article{}
     |> Article.changeset(attrs)
@@ -71,6 +78,7 @@ defmodule Langler.Content do
     |> where(article_id: ^article.id)
     |> order_by([s], asc: s.position)
     |> Repo.all()
+    |> Repo.preload(word_occurrences: [:word])
   end
 
   def create_sentence(attrs \\ %{}) do

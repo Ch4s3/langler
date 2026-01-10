@@ -1,10 +1,10 @@
 defmodule LanglerWeb.UserAuthTest do
   use LanglerWeb.ConnCase, async: true
 
-  alias Phoenix.LiveView
   alias Langler.Accounts
   alias Langler.Accounts.Scope
   alias LanglerWeb.UserAuth
+  alias Phoenix.LiveView
 
   import Langler.AccountsFixtures
 
