@@ -11,17 +11,53 @@ const ensureTooltipEl = () => {
   const tooltip = document.createElement("div")
   tooltip.id = TOOLTIP_ID
   tooltip.className =
-    "fixed z-50 w-80 max-w-xs rounded-2xl border border-base-300 bg-base-100 p-4 shadow-2xl transition-opacity duration-150 opacity-0"
+    "fixed z-50 w-80 max-w-xs rounded-2xl border border-base-200 bg-base-100/95 p-5 shadow-2xl transition-all duration-200 opacity-0"
   tooltip.setAttribute("role", "status")
   tooltip.dataset.actionsBound = "true"
   tooltip.addEventListener("click", event => {
-    const target = event.target.closest("[data-action='add-to-study']")
-    if (!target) return
-    event.preventDefault()
-    event.stopPropagation()
-    const wordId = target.dataset.wordId
-    if (!wordId || !activeHook) return
-    activeHook.pushEvent("add_to_study", {word_id: wordId})
+    const addButton = event.target.closest("[data-action='add-to-study']")
+    if (addButton) {
+      event.preventDefault()
+      event.stopPropagation()
+      const wordId = addButton.dataset.wordId
+      const translations = addButton.dataset.translations
+      const definitions = addButton.dataset.definitions
+      if (!wordId || !activeHook) return
+      activeHook.pushEvent("add_to_study", {
+        word_id: wordId,
+        translations,
+        definitions,
+        dom_id: activeHook.el.id,
+      })
+      return
+    }
+
+    const ratingButton = event.target.closest("[data-action='rate-word']")
+    if (ratingButton) {
+      event.preventDefault()
+      event.stopPropagation()
+      const {wordId, quality, rateTarget} = ratingButton.dataset
+      if (!wordId || !quality || !activeHook) return
+      const eventName = rateTarget === "existing" ? "rate_existing_word" : "rate_new_word"
+      activeHook.pushEvent(eventName, {
+        word_id: wordId,
+        quality,
+        dom_id: activeHook.el.id,
+      })
+      return
+    }
+
+    const removeButton = event.target.closest("[data-action='remove-word']")
+    if (removeButton) {
+      event.preventDefault()
+      event.stopPropagation()
+      const {wordId} = removeButton.dataset
+      if (!wordId || !activeHook) return
+      activeHook.pushEvent("remove_from_study", {
+        word_id: wordId,
+        dom_id: activeHook.el.id,
+      })
+    }
   })
   document.body.appendChild(tooltip)
   return tooltip
@@ -78,9 +114,18 @@ const positionTooltip = (tooltip, anchor) => {
   tooltip.style.left = `${left}px`
 }
 
-const renderCta = entry => {
+const ratingButtons = [
+  {label: "Hard", quality: "hard", className: "btn-warning"},
+  {label: "Good", quality: "good", className: "btn-primary"},
+  {label: "Easy", quality: "easy", className: "btn-success"}
+]
+
+const renderCornerAction = entry => {
   if (entry.studied) {
-    return `<span class="badge badge-success badge-outline text-xs font-semibold">✓</span>`
+    return `<div class="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-success/10 px-2 py-1 text-success">
+      <span class="text-xs font-semibold">Tracked</span>
+      <span class="text-base">✓</span>
+    </div>`
   }
 
   if (!entry.word_id) {
@@ -88,14 +133,66 @@ const renderCta = entry => {
   }
 
   return `<button
-    class="btn btn-xs btn-circle btn-primary text-white"
+    class="absolute right-3 top-3 btn btn-circle btn-xs btn-primary text-white shadow"
     data-action="add-to-study"
     data-word-id="${entry.word_id}"
-    aria-label="Añadir a estudio"
-    title="Añadir a estudio"
+    data-translations="${entry.translation || ""}"
+    data-definitions="${(entry.definitions || []).join("||")}"
+    aria-label="Add to study"
+    title="Add to study"
   >
     +
   </button>`
+}
+
+
+const renderActionSection = entry => {
+  if (!entry.word_id) return ""
+
+  const viewButton = entry.study_item_id
+    ? `<a
+        class="btn btn-xs btn-ghost border border-base-300/70 text-sm"
+        href="/study#items-${entry.study_item_id}"
+      >
+        View card
+      </a>`
+    : ""
+
+  const removeButton = `<button
+    type="button"
+    class="btn btn-xs btn-ghost border border-error/40 text-error"
+    data-action="remove-word"
+    data-word-id="${entry.word_id}"
+  >
+    Remove
+  </button>`
+
+  const ratingBlock = entry.studied
+    ? `<div class="space-y-2 rounded-2xl border border-dashed border-base-300/80 bg-base-200/30 p-3">
+      <p class="text-xs uppercase tracking-widest text-base-content/60">Score difficulty</p>
+      <div class="flex flex-wrap gap-2">
+        ${ratingButtons
+          .map(
+            button => `<button
+                type="button"
+                class="btn btn-xs font-semibold text-white ${button.className}"
+                data-action="rate-word"
+                data-rate-target="existing"
+                data-word-id="${entry.word_id}"
+                data-quality="${button.quality}"
+              >
+                ${button.label}
+              </button>`
+          )
+          .join("")}
+      </div>
+    </div>`
+    : ""
+
+  return `<div class="space-y-3">
+    <div class="flex flex-wrap gap-2">${viewButton}${entry.studied ? removeButton : ""}</div>
+    ${ratingBlock}
+  </div>`
 }
 
 const renderEntry = entry => {
@@ -118,20 +215,19 @@ const renderEntry = entry => {
     : ""
 
   return `
-    <div>
-      <div class="flex items-start justify-between gap-3">
-        <div>
-          <p class="text-base font-semibold text-base-content">${escapeHtml(entry.word)}</p>
-          ${meta}
-          ${translation}
-        </div>
-        <div class="flex items-center gap-2">${renderCta(entry)}</div>
+    <div class="relative space-y-3 pr-6">
+      ${renderCornerAction(entry)}
+      <div>
+        <p class="text-base font-semibold text-base-content">${escapeHtml(entry.word)}</p>
+        ${meta}
+        ${translation}
       </div>
-      <div class="mt-3">${buildDefinitions(entry.definitions)}</div>
-      <div class="mt-3 flex items-center justify-between">
+      <div>${buildDefinitions(entry.definitions)}</div>
+      <div class="flex items-center justify-between">
         ${context}
         ${sourceLink}
       </div>
+      ${renderActionSection(entry)}
     </div>
   `
 }
@@ -173,11 +269,18 @@ const WordTooltip = {
     this.handleClick = this.handleClick.bind(this)
     this.handleDocClick = this.handleDocClick.bind(this)
     this.handleWordData = this.handleWordData.bind(this)
+    this.handleWordRated = this.handleWordRated.bind(this)
+    this.handleWordRemoved = this.handleWordRemoved.bind(this)
+    this.handleWordAdded = this.handleWordAdded.bind(this)
     this.pendingTimeout = null
+    this.currentEntry = null
 
     this.el.addEventListener("click", this.handleClick)
     document.addEventListener("click", this.handleDocClick)
     this.handleEvent("word-data", this.handleWordData)
+    this.handleEvent("word-rated", this.handleWordRated)
+    this.handleEvent("word-removed", this.handleWordRemoved)
+    this.handleEvent("word-added", this.handleWordAdded)
   },
   destroyed() {
     this.el.removeEventListener("click", this.handleClick)
@@ -196,6 +299,11 @@ const WordTooltip = {
     if (payload.dom_id !== this.el.id) return
     if (this.pendingTimeout) clearTimeout(this.pendingTimeout)
     activeHook = this
+    console.log("word-data", payload)
+    if (payload.word_id) {
+      this.el.dataset.wordId = payload.word_id
+    }
+    this.currentEntry = payload
     showTooltip(this.tooltipEl, renderEntry(payload), this.el)
   },
   handleDocClick(event) {
@@ -207,6 +315,47 @@ const WordTooltip = {
     if (activeHook === this) {
       activeHook = null
     }
+  },
+  matchesPayload(payload) {
+    const matchesDom = payload.dom_id && payload.dom_id === this.el.id
+    const matchesWord = payload.word_id?.toString() === this.el.dataset.wordId
+    return matchesDom || matchesWord
+  },
+  handleWordRated(payload) {
+    if (!this.matchesPayload(payload)) return
+    if (!this.currentEntry) return
+    this.currentEntry = {
+      ...this.currentEntry,
+      studied: true,
+      rating_required: true,
+      study_item_id: payload.study_item_id || this.currentEntry.study_item_id,
+      fsrs_sleep_until: payload.fsrs_sleep_until || this.currentEntry.fsrs_sleep_until,
+    }
+    showTooltip(this.tooltipEl, renderEntry(this.currentEntry), this.el)
+  },
+  handleWordRemoved(payload) {
+    if (!this.matchesPayload(payload)) return
+    if (!this.currentEntry) return
+    this.currentEntry = {
+      ...this.currentEntry,
+      studied: false,
+      rating_required: false,
+      study_item_id: null,
+      fsrs_sleep_until: null,
+    }
+    showTooltip(this.tooltipEl, renderEntry(this.currentEntry), this.el)
+  },
+  handleWordAdded(payload) {
+    if (!this.matchesPayload(payload)) return
+    if (!this.currentEntry) return
+    this.currentEntry = {
+      ...this.currentEntry,
+      studied: true,
+      rating_required: true,
+      study_item_id: payload.study_item_id,
+      fsrs_sleep_until: payload.fsrs_sleep_until || this.currentEntry.fsrs_sleep_until,
+    }
+    showTooltip(this.tooltipEl, renderEntry(this.currentEntry), this.el)
   },
   pushLookup() {
     this.pushEvent("fetch_word_data", {

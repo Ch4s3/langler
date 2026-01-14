@@ -56,6 +56,13 @@ defmodule Langler.Study do
     end
   end
 
+  def remove_item(user_id, word_id) do
+    case get_item_by_user_and_word(user_id, word_id) do
+      %FSRSItem{} = item -> Repo.delete(item)
+      nil -> {:error, :not_found}
+    end
+  end
+
   def create_item(attrs \\ %{}) do
     %FSRSItem{}
     |> FSRSItem.changeset(attrs)
@@ -65,17 +72,21 @@ defmodule Langler.Study do
   def review_item(%FSRSItem{} = item, rating, opts \\ []) do
     now = Keyword.get(opts, :now, DateTime.utc_now())
     rating = normalize_rating(rating)
+    scheduler_item = to_scheduler_item(item)
+    result = FSRS.calculate_next_review(scheduler_item, rating, now: now)
     quality = FSRS.quality_from_rating(rating)
-    interval = next_interval(item.interval || 0, rating)
-    ease_factor = adjust_ease_factor(item.ease_factor || 2.5, rating)
-    due_date = DateTime.add(now, interval * 86_400, :second)
 
     attrs = %{
-      interval: interval,
-      ease_factor: ease_factor,
-      due_date: due_date,
+      interval: result.interval,
+      ease_factor: result.ease_factor,
+      due_date: result.due,
       repetitions: (item.repetitions || 0) + 1,
-      last_reviewed_at: now
+      last_reviewed_at: now,
+      stability: result.stability,
+      difficulty: result.difficulty,
+      retrievability: result.retrievability,
+      state: encode_state(result.state),
+      step: result.step
     }
 
     case append_quality(item, quality, attrs) do
@@ -108,34 +119,14 @@ defmodule Langler.Study do
     |> FSRS.item(overrides)
   end
 
-  defp normalize_rating(rating) when is_atom(rating), do: rating
-  defp normalize_rating("again"), do: :again
-  defp normalize_rating("hard"), do: :hard
-  defp normalize_rating("good"), do: :good
-  defp normalize_rating("easy"), do: :easy
-  defp normalize_rating(_), do: :good
+  defp encode_state(nil), do: nil
+  defp encode_state(state) when is_atom(state), do: Atom.to_string(state)
+  defp encode_state(state) when is_binary(state), do: state
 
-  defp next_interval(_current, :again), do: 1
-
-  defp next_interval(current, :hard) do
-    base = max(current, 1)
-    max(1, round(base * 1.2))
-  end
-
-  defp next_interval(current, :good) do
-    base = max(current, 1)
-    max(1, round(base * 2.5))
-  end
-
-  defp next_interval(current, :easy) do
-    base = max(current, 1)
-    max(2, round(base * 3.5))
-  end
-
-  defp adjust_ease_factor(ease, :again), do: clamp_ease(ease - 0.3)
-  defp adjust_ease_factor(ease, :hard), do: clamp_ease(ease - 0.15)
-  defp adjust_ease_factor(ease, :good), do: clamp_ease(ease + 0.05)
-  defp adjust_ease_factor(ease, :easy), do: clamp_ease(ease + 0.15)
-
-  defp clamp_ease(value), do: value |> Float.round(2) |> min(3.7) |> max(1.3)
+  def normalize_rating(rating) when is_atom(rating), do: rating
+  def normalize_rating("again"), do: :again
+  def normalize_rating("hard"), do: :hard
+  def normalize_rating("good"), do: :good
+  def normalize_rating("easy"), do: :easy
+  def normalize_rating(_), do: :good
 end

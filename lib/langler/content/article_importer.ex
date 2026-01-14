@@ -3,28 +3,40 @@ defmodule Langler.Content.ArticleImporter do
   Fetches remote articles, extracts readable content, and seeds sentences + background jobs.
   """
 
+  @dialyzer {:nowarn_function, remove_spaces_before_punctuation: 1}
+
   alias Langler.Accounts
   alias Langler.Content
   alias Langler.Content.Readability
+  alias Langler.Content.Classifier
   alias Langler.Content.Workers.ExtractWordsWorker
   alias Langler.Repo
   alias Oban
 
+  import Ecto.Query, warn: false
   require Logger
 
   @type import_result :: {:ok, Content.Article.t(), :new | :existing} | {:error, term()}
 
   @spec import_from_url(Accounts.User.t(), String.t()) :: import_result
   def import_from_url(%Accounts.User{} = user, url) when is_binary(url) do
-    with {:ok, normalized_url} <- normalize_url(url) do
+    with {:ok, normalized_url} <- normalize_url(url),
+         {:ok, html} <- fetch_html(normalized_url),
+         {:ok, parsed} <- parse_article_html(html, normalized_url) do
       case Content.get_article_by_url(normalized_url) do
         %Content.Article{} = article ->
-          {:ok, ensure_association(article, user), :existing}
+          case refresh_article(article, user, normalized_url, html, parsed) do
+            {:ok, refreshed} ->
+              enqueue_word_extraction(refreshed)
+              {:ok, refreshed, :existing}
+
+            {:error, reason} ->
+              Logger.warning("Article refresh failed: #{inspect(reason)}")
+              {:ok, ensure_association(article, user), :existing}
+          end
 
         nil ->
-          with {:ok, html} <- fetch_html(normalized_url),
-               {:ok, parsed} <- Readability.parse(html, base_url: normalized_url),
-               {:ok, article} <- persist_article(user, normalized_url, parsed) do
+          with {:ok, article} <- persist_article(user, normalized_url, html, parsed) do
             enqueue_word_extraction(article)
             {:ok, article, :new}
           else
@@ -71,11 +83,35 @@ defmodule Langler.Content.ArticleImporter do
     end
   end
 
-  defp persist_article(user, url, parsed) do
+  defp parse_article_html(html, url) do
+    case Readability.parse(html, base_url: url) do
+      {:ok, parsed} ->
+        {:ok, parsed}
+
+      {:error, reason} ->
+        Logger.warning(
+          "ArticleImporter: Readability parse failed for #{url}: #{inspect(reason)}. Falling back to raw HTML."
+        )
+
+        {:ok,
+         %{
+           title: html_title(html),
+           content: html,
+           excerpt: nil,
+           author: nil,
+           length: html && String.length(html)
+         }}
+    end
+  end
+
+  defp persist_article(user, url, html, parsed) do
+    sanitized_content = sanitize_content(parsed[:content] || parsed["content"] || "")
+
     Repo.transaction(fn ->
-      with {:ok, article} <- create_article(parsed, url, user),
+      with {:ok, article} <- create_article(parsed, html, url, user),
            {:ok, _} <- Content.ensure_article_user(article, user.id),
-           :ok <- seed_sentences(article, parsed[:content] || parsed["content"]) do
+           :ok <- seed_sentences(article, sanitized_content),
+           :ok <- classify_and_tag_article(article, sanitized_content) do
         article
       else
         {:error, reason} -> Repo.rollback(reason)
@@ -83,26 +119,76 @@ defmodule Langler.Content.ArticleImporter do
     end)
   end
 
-  defp create_article(parsed, url, user) do
+  defp classify_and_tag_article(article, content) when is_binary(content) do
+    language = article.language
+    topics = Classifier.classify(content, language)
+    Content.tag_article(article, topics)
+  end
+
+  defp classify_and_tag_article(_article, _), do: :ok
+
+  defp refresh_article(article, user, url, html, parsed) do
+    sanitized_content = sanitize_content(parsed[:content] || parsed["content"] || "")
+
+    Repo.transaction(fn ->
+      attrs = %{
+        title: derive_title(parsed, html, url),
+        source: URI.parse(url).host,
+        content: sanitized_content,
+        extracted_at: DateTime.utc_now()
+      }
+
+      with {:ok, article} <- Content.update_article(article, attrs),
+           _ <-
+             Repo.delete_all(
+               from s in Langler.Content.Sentence, where: s.article_id == ^article.id
+             ),
+           :ok <- seed_sentences(article, sanitized_content),
+           {:ok, _} <- Content.ensure_article_user(article, user.id, %{status: "imported"}),
+           :ok <- classify_and_tag_article(article, sanitized_content) do
+        article
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp derive_title(parsed, html, url) do
+    raw_title = parsed[:title] || parsed["title"] || html_title(html) || url
+
+    processed =
+      raw_title
+      |> strip_tags()
+      |> decode_html_entities()
+      |> String.trim()
+
+    if processed == "", do: url, else: processed
+  end
+
+  defp html_title(html) when is_binary(html) do
+    with {:ok, document} <- Floki.parse_document(html),
+         [title | _] <- Floki.find(document, "title") do
+      title
+      |> Floki.text()
+      |> String.trim()
+    else
+      _ -> nil
+    end
+  end
+
+  defp html_title(_), do: nil
+
+  defp create_article(parsed, html, url, user) do
     language = user_language(user)
     source = URI.parse(url).host
-
-    raw_title = parsed[:title] || parsed["title"] || url
-
-    title =
-      if raw_title && raw_title != url && raw_title != "" do
-        processed = raw_title |> strip_tags() |> decode_html_entities() |> String.trim()
-        if processed == "", do: url, else: processed
-      else
-        url
-      end
+    content = sanitize_content(parsed[:content] || parsed["content"] || "")
 
     Content.create_article(%{
-      title: title,
+      title: derive_title(parsed, html, url),
       url: url,
       source: source,
       language: language,
-      content: sanitize_content(parsed[:content] || parsed["content"] || ""),
+      content: content,
       extracted_at: DateTime.utc_now()
     })
   end
@@ -293,6 +379,8 @@ defmodule Langler.Content.ArticleImporter do
   defp sanitize_content(nil), do: ""
 
   defp sanitize_content(content) do
+    content = ensure_utf8(content)
+
     # If content is already plain text (from NIF paragraph extraction),
     # we only need minimal processing
     if String.contains?(content, "<") do
@@ -310,6 +398,7 @@ defmodule Langler.Content.ArticleImporter do
       |> decode_html_entities()
       |> remove_navigation_noise()
       |> String.replace(~r/\s+/, " ")
+      |> fix_punctuation_spacing()
       |> String.trim()
     else
       # Plain text from NIF - just decode entities and normalize whitespace
@@ -322,9 +411,25 @@ defmodule Langler.Content.ArticleImporter do
       content
       |> decode_html_entities()
       |> String.replace(~r/\s+/, " ")
+      |> fix_punctuation_spacing()
       |> String.trim()
     end
   end
+
+  defp ensure_utf8(content) when is_binary(content) do
+    case String.valid?(content) do
+      true ->
+        content
+
+      false ->
+        :unicode.characters_to_binary(content, :utf8, {:replace, <<32>>})
+    end
+  rescue
+    ArgumentError ->
+      :unicode.characters_to_binary(to_string(content), :utf8, {:replace, <<32>>})
+  end
+
+  defp ensure_utf8(_), do: ""
 
   defp strip_tags(content) do
     Regex.replace(~r/<[^>]*>/, content, "")
@@ -341,6 +446,15 @@ defmodule Langler.Content.ArticleImporter do
     |> String.replace(~r/&gt;/i, ">")
     |> String.replace(~r/&nbsp;/i, " ")
     |> decode_numeric_entities()
+  end
+
+  defp fix_punctuation_spacing(content) do
+    # Remove spaces before punctuation and ensure proper spacing after
+    content
+    |> remove_spaces_before_punctuation()
+    |> ensure_space_after_punctuation()
+    |> ensure_space_after_inverted_marks()
+    |> squeeze_whitespace()
   end
 
   defp decode_numeric_entities(content) do
@@ -434,5 +548,26 @@ defmodule Langler.Content.ArticleImporter do
     %{article_id: article.id}
     |> ExtractWordsWorker.new()
     |> Oban.insert()
+  end
+
+  @spec remove_spaces_before_punctuation(String.t()) :: String.t()
+  defp remove_spaces_before_punctuation(content) when is_binary(content) do
+    step1 = String.replace(content, ~r/\s+([,\.;:!?\)\]\}])/u, "\\1")
+    step2 = String.replace(step1, ~r/\s+([¡¿])/u, "\\1")
+    String.replace(step2, ~r/([\(\[\{])\s+/u, "\\1")
+  end
+
+  defp remove_spaces_before_punctuation(content), do: to_string(content)
+
+  defp ensure_space_after_punctuation(content) do
+    Regex.replace(~r/([,\.;:!?])([^\s,\.;:!?\)\]\}]|$)/u, content, "\\1 \\2")
+  end
+
+  defp ensure_space_after_inverted_marks(content) do
+    Regex.replace(~r/([¡¿])([^\s])/u, content, "\\1 \\2")
+  end
+
+  defp squeeze_whitespace(content) do
+    String.replace(content, ~r/\s+/u, " ")
   end
 end

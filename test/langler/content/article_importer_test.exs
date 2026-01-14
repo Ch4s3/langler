@@ -46,16 +46,21 @@ defmodule Langler.Content.ArticleImporterTest do
       assert Enum.map(sentences, & &1.content) == ["Hola mundo.", "Adiós Phoenix!"]
     end
 
-    test "returns existing article without re-fetching content", %{bypass: bypass, user: user} do
-      Bypass.expect_once(bypass, "GET", "/same", fn conn ->
+    test "re-importing existing article refreshes content", %{bypass: bypass, user: user} do
+      parent = self()
+
+      Bypass.expect(bypass, fn conn ->
+        send(parent, :fetched)
         resp(conn, 200, "<p>Hola mundo.</p>")
       end)
 
       url = article_url(bypass, "/same")
       assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
-
       assert {:ok, same_article, :existing} = ArticleImporter.import_from_url(user, url)
       assert same_article.id == article.id
+      assert_receive(:fetched)
+      assert_receive(:fetched)
+      assert DateTime.compare(same_article.updated_at, article.updated_at) != :lt
     end
 
     test "rejects invalid schemes", %{user: user} do

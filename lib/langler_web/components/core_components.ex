@@ -260,16 +260,21 @@ defmodule LanglerWeb.CoreComponents do
           name={@name}
           id={@id}
           value={Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
+          class={input_class(@class, @errors, @error_class, @type)}
           {@rest}
         />
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
+  end
+
+  defp input_class(custom, errors, error_class, type) do
+    [
+      custom || "w-full input",
+      errors != [] && (error_class || "input-error"),
+      type in ["url", "email", "text"] && "break-all"
+    ]
   end
 
   # Helper used by inputs to generate form errors

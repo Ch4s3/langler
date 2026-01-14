@@ -6,6 +6,32 @@
 @source "../js";
 @source "../../lib/langler_web";
 
+.conjugation-table td {
+  padding: 0.35rem 0.5rem;
+  transition: background-color 0.2s ease;
+}
+
+.conjugation-table td.conjugation-person,
+.conjugation-table td.conjugation-form {
+  position: relative;
+  z-index: 1;
+}
+
+.conjugation-table tr:has(td.pair-left:hover) td.pair-left,
+.conjugation-table tr:has(td.pair-right:hover) td.pair-right {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.conjugation-table td.conjugation-person {
+  font-weight: 600;
+  color: var(--color-base-content, #1f2937);
+  width: 8rem;
+}
+
+.conjugation-table td.conjugation-form {
+  font-family: var(--font-family-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
+}
+
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
 @plugin "../vendor/heroicons";

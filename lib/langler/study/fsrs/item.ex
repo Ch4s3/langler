@@ -15,6 +15,7 @@ defmodule Langler.Study.FSRS.Item do
     :elapsed_days,
     :last_quality,
     :interval,
+    :ease_factor,
     :state,
     :step,
     :due,
@@ -30,6 +31,7 @@ defmodule Langler.Study.FSRS.Item do
           elapsed_days: non_neg_integer() | nil,
           last_quality: non_neg_integer() | nil,
           interval: non_neg_integer() | nil,
+          ease_factor: float() | nil,
           state: state() | nil,
           step: integer() | nil,
           due: DateTime.t() | nil,
@@ -50,7 +52,11 @@ defmodule Langler.Study.FSRS.Item do
       elapsed_days: Map.get(record, :elapsed_days),
       last_quality: Map.get(record, :last_quality),
       interval: Map.get(record, :interval),
-      state: Map.get(record, :state, :learning),
+      ease_factor: Map.get(record, :ease_factor),
+      state:
+        record
+        |> Map.get(:state, :learning)
+        |> normalize_state(),
       step: Map.get(record, :step),
       due: Map.get(record, :due_date) || Map.get(record, :due),
       last_reviewed_at: Map.get(record, :last_reviewed_at)
@@ -88,6 +94,12 @@ defmodule Langler.Study.FSRS.Item do
 
     {maybe_put(item, :retrievability, retrievability), retrievability}
   end
+
+  defp normalize_state(state) when state in [:learning, :review, :relearning], do: state
+  defp normalize_state("learning"), do: :learning
+  defp normalize_state("review"), do: :review
+  defp normalize_state("relearning"), do: :relearning
+  defp normalize_state(_), do: nil
 
   defp calc_retrievability(stability, elapsed_days) do
     decay = -0.5

@@ -120,9 +120,51 @@ fn extract_paragraphs_from_document(document: &Html) -> String {
 #[rustler::nif(schedule = "DirtyCpu")]
 fn parse(env: Env, html: String, base_url: Option<String>) -> Result<Term, Error> {
     let url = base_url.as_ref().map(|s| s.as_str());
+    let is_elpais = url.map(|u| u.contains("elpais.com")).unwrap_or(false);
+
+    // For El País, extract title from the full document first (before extracting body)
+    let extracted_title: Option<String> = if is_elpais {
+        let document = Html::parse_document(&html);
+        let mut title: Option<String> = None;
+        
+        // Try multiple selectors for El País title
+        // 1. Try h1 within article header region
+        if let Ok(header_selector) = Selector::parse("[data-dtm-region=\"articulo_cabecera\"] h1") {
+            if let Some(h1) = document.select(&header_selector).next() {
+                let title_text = h1.text().collect::<String>();
+                let trimmed = title_text.trim();
+                if !trimmed.is_empty() {
+                    title = Some(trimmed.to_string());
+                }
+            }
+        }
+        
+        // 2. Try h1 directly (fallback if header region didn't work)
+        if title.is_none() {
+            if let Ok(h1_selector) = Selector::parse("h1") {
+                for h1 in document.select(&h1_selector) {
+                    let title_text = h1.text().collect::<String>();
+                    let trimmed = title_text.trim();
+                    // Filter out navigation/UI h1s (usually short or contain specific text)
+                    if !trimmed.is_empty() 
+                        && trimmed.len() > 20 
+                        && !trimmed.eq_ignore_ascii_case("EL PAÍS")
+                        && !trimmed.contains("Seleccione")
+                        && !trimmed.contains("suscríbete") {
+                        title = Some(trimmed.to_string());
+                        break;
+                    }
+                }
+            }
+        }
+        
+        title
+    } else {
+        None
+    };
 
     // For El País, extract from the article body region in the original HTML first
-    let html_to_parse = if url.map(|u| u.contains("elpais.com")).unwrap_or(false) {
+    let html_to_parse = if is_elpais {
         if let Ok(region_selector) = Selector::parse("[data-dtm-region=\"articulo_cuerpo\"]") {
             let document = Html::parse_document(&html);
             if let Some(article_body) = document.select(&region_selector).next() {
@@ -148,10 +190,14 @@ fn parse(env: Env, html: String, base_url: Option<String>) -> Result<Term, Error
                 Some(article) => {
                     let mut map = rustler::types::map::map_new(env);
 
-                    // Add title (can be nil)
-                    let title_term = match article.title.as_ref() {
-                        Some(title) => title.encode(env),
-                        None => rustler::types::atom::nil().encode(env),
+                    // Add title - use extracted title for El País if available, otherwise use readability title
+                    let title_term = if let Some(title) = extracted_title {
+                        title.encode(env)
+                    } else {
+                        match article.title.as_ref() {
+                            Some(title) => title.encode(env),
+                            None => rustler::types::atom::nil().encode(env),
+                        }
                     };
                     map = map
                         .map_put(Atom::from_str(env, "title")?.encode(env), title_term)

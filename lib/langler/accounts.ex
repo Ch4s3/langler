@@ -6,7 +6,7 @@ defmodule Langler.Accounts do
   import Ecto.Query, warn: false
   alias Langler.Repo
 
-  alias Langler.Accounts.{User, UserNotifier, UserPreference, UserToken}
+  alias Langler.Accounts.{User, UserNotifier, UserPreference, UserTopicPreference, UserToken}
 
   def get_user_preference(user_id), do: Repo.get_by(UserPreference, user_id: user_id)
 
@@ -16,6 +16,43 @@ defmodule Langler.Accounts do
     pref
     |> UserPreference.changeset(Map.put(attrs, :user_id, user.id))
     |> Repo.insert_or_update()
+  end
+
+  @doc """
+  Gets user topic preferences as a map of topic => weight.
+  """
+  @spec get_user_topic_preferences(integer()) :: %{String.t() => Decimal.t()}
+  def get_user_topic_preferences(user_id) do
+    UserTopicPreference
+    |> where(user_id: ^user_id)
+    |> Repo.all()
+    |> Enum.map(fn pref -> {pref.topic, pref.weight} end)
+    |> Map.new()
+  end
+
+  @doc """
+  Sets a topic preference for a user.
+  """
+  @spec set_user_topic_preference(integer(), String.t(), float()) ::
+          {:ok, UserTopicPreference.t()} | {:error, Ecto.Changeset.t()}
+  def set_user_topic_preference(user_id, topic, weight) do
+    pref = Repo.get_by(UserTopicPreference, user_id: user_id, topic: topic) ||
+             %UserTopicPreference{user_id: user_id, topic: topic}
+
+    pref
+    |> UserTopicPreference.changeset(%{user_id: user_id, topic: topic, weight: Decimal.from_float(weight)})
+    |> Repo.insert_or_update()
+  end
+
+  @doc """
+  Deletes a topic preference for a user.
+  """
+  @spec delete_user_topic_preference(integer(), String.t()) :: :ok | {:error, term()}
+  def delete_user_topic_preference(user_id, topic) do
+    case Repo.get_by(UserTopicPreference, user_id: user_id, topic: topic) do
+      nil -> :ok
+      pref -> Repo.delete(pref)
+    end
   end
 
   ## Database getters

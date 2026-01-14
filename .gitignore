@@ -40,3 +40,4 @@ npm-debug.log
 # Rust build artifacts
 /native/**/target/
 /native/**/Cargo.lock
+lib/langler/creds.txt

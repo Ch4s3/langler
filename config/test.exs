@@ -44,3 +44,5 @@ config :langler, Oban,
   queues: false
 
 config :langler, Langler.Content.Readability, use_nif: false
+
+config :langler, Langler.External.Dictionary.CacheLoader, enabled: false

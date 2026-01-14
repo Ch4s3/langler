@@ -30,6 +30,10 @@ defmodule Langler.MixProject do
       readability_nif: [
         path: "native/readability_nif",
         mode: if(Mix.env() == :prod, do: :release, else: :debug)
+      ],
+      classifier_nif: [
+        path: "native/classifier_nif",
+        mode: if(Mix.env() == :prod, do: :release, else: :debug)
       ]
     ]
   end

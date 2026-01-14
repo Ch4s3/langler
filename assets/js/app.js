@@ -24,10 +24,36 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/langler"
 import WordTooltip from "./hooks/word_tooltip"
+import CopyToClipboard from "./hooks/copy_to_clipboard"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-const hooks = {...colocatedHooks, WordTooltip}
+const WordCardToggle = {
+  mounted() {
+    this.itemId = Number(this.el.dataset.itemId)
+    this.log(`mounted for card ${this.itemId}`)
+
+    this.clickHandler = () => {
+      this.log(`click dispatched for card ${this.itemId}`)
+    }
+
+    this.el.addEventListener("click", this.clickHandler)
+
+    this.handleEvent("study:card-toggled", detail => {
+      if (detail.id === this.itemId) {
+        this.log(`card ${this.itemId} toggled; flipped=${detail.flipped}`)
+      }
+    })
+  },
+  destroyed() {
+    this.el.removeEventListener("click", this.clickHandler)
+  },
+  log(message) {
+    console.log(`[WordCardToggle] ${message}`)
+  },
+}
+
+const hooks = {...colocatedHooks, WordTooltip, WordCardToggle, CopyToClipboard}
 
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

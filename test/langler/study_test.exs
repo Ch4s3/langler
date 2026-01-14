@@ -45,7 +45,7 @@ defmodule Langler.StudyTest do
       })
 
     assert {:ok, updated} = Study.review_item(item, :good, now: now)
-    assert updated.interval >= 1
+    assert updated.interval >= 0
     assert List.last(updated.quality_history) == 3
     assert DateTime.compare(updated.due_date, now) == :gt
   end

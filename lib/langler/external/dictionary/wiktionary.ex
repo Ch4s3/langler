@@ -3,25 +3,49 @@ defmodule Langler.External.Dictionary.Wiktionary do
   Minimal Wiktionary HTML scraper for definitions.
   """
 
-  @definition_selector "#mw-content-text .mw-parser-output > ol li"
   @header_selector "h1#firstHeading"
 
   alias Langler.External.Dictionary
+  alias Langler.External.Dictionary.Cache
 
   @spec lookup(String.t(), String.t()) :: {:ok, Dictionary.entry()} | {:error, term()}
   def lookup(term, language) do
-    with {:ok, body, url} <- fetch(term) do
-      parse(body, term, language, url)
-    end
+    normalized_language = String.downcase(language || "")
+    cache_key = {normalized_language, String.downcase(term)}
+    table = cache_table()
+
+    Cache.get_or_store(table, cache_key, [ttl: ttl()], fn ->
+      with {:ok, body, url} <- fetch_with_fallback(term, normalized_language) do
+        parse(body, term, normalized_language, url)
+      end
+    end)
   end
 
-  defp fetch(term) do
+  defp fetch_with_fallback(term, language) do
+    term
+    |> candidate_terms()
+    |> Enum.reduce_while({:error, :not_found}, fn candidate, _acc ->
+      case fetch(candidate, language) do
+        {:ok, body, url} ->
+          {:halt, {:ok, body, url}}
+
+        {:error, {:http_error, 404}} ->
+          {:cont, {:error, :not_found}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp fetch(term, language) do
     config = Application.get_env(:langler, __MODULE__, [])
     base_url = Keyword.get(config, :base_url, "https://en.wiktionary.org/wiki")
 
     url =
       [base_url, URI.encode(term)]
       |> Enum.join("/")
+      |> with_language_anchor(language)
 
     case Req.get(url: url, headers: default_headers(), retry: false) do
       {:ok, %{status: status, body: body}} when status in 200..299 ->
@@ -35,14 +59,19 @@ defmodule Langler.External.Dictionary.Wiktionary do
     end
   end
 
+  defp candidate_terms(term) do
+    lower = String.downcase(term || "")
+
+    [term, lower]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.dedup()
+  end
+
   defp parse(body, term, language, url) do
     with {:ok, doc} <- Floki.parse_document(body) do
       defs =
         doc
-        |> Floki.find(@definition_selector)
-        |> Enum.map(&Floki.text/1)
-        |> Enum.map(&String.trim/1)
-        |> Enum.reject(&(&1 == ""))
+        |> extract_language_definitions(language)
         |> Enum.take(3)
 
       lemma =
@@ -79,6 +108,16 @@ defmodule Langler.External.Dictionary.Wiktionary do
     end
   end
 
+  defp cache_table do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :cache_table, :wiktionary_cache)
+  end
+
+  defp ttl do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :ttl, :timer.hours(6))
+  end
+
   defp default_headers do
     [
       {"user-agent", "LanglerBot/0.1 (+https://langler.local)"}
@@ -87,4 +126,98 @@ defmodule Langler.External.Dictionary.Wiktionary do
 
   defp fallback(value, term) when value in [nil, ""], do: term
   defp fallback(value, _term), do: value
+
+  defp extract_language_definitions(doc, language) do
+    anchor = language_anchor(language)
+
+    doc
+    |> Floki.find("#mw-content-text .mw-parser-output")
+    |> List.first()
+    |> case do
+      nil ->
+        []
+
+      {_tag, _attrs, children} ->
+        children
+        |> take_language_section(anchor)
+        |> Enum.flat_map(&Floki.find(&1, "ol li"))
+        |> Enum.map(&Floki.text/1)
+        |> Enum.map(&String.replace(&1, ~r/\[\d+\]/, ""))
+        |> Enum.map(&String.trim/1)
+        |> Enum.reject(&(&1 == ""))
+    end
+  end
+
+  defp take_language_section(children, nil), do: children
+
+  defp take_language_section(children, anchor) do
+    {_acc, _result} =
+      Enum.reduce(children, {false, []}, fn node, {found, acc} ->
+        cond do
+          language_heading?(node, anchor) ->
+            {true, []}
+
+          found && heading?(node) ->
+            throw({:done, Enum.reverse(acc)})
+
+          found ->
+            {found, [node | acc]}
+
+          true ->
+            {found, acc}
+        end
+      end)
+  catch
+    {:done, acc} -> acc
+  else
+    {false, _} -> children
+    {_found, acc} -> Enum.reverse(acc)
+  end
+
+  defp language_heading?({"h2", _attrs, children}, anchor) do
+    Enum.any?(children, fn
+      {"span", span_attrs, _} ->
+        id = Enum.find_value(span_attrs, fn
+          {"id", value} -> value
+          _ -> nil
+        end)
+
+        class = Enum.find_value(span_attrs, fn
+          {"class", value} -> value
+          _ -> nil
+        end)
+
+        id == anchor && String.contains?(class || "", "mw-headline")
+
+      _ ->
+        false
+    end)
+  end
+
+  defp language_heading?(_, _), do: false
+
+  defp heading?({"h2", _, _}), do: true
+  defp heading?(_), do: false
+
+  defp with_language_anchor(url, ""), do: url
+
+  defp with_language_anchor(url, language) do
+    anchor =
+      language
+      |> language_anchor()
+      |> case do
+        nil -> nil
+        value -> "##{value}"
+      end
+
+    if anchor, do: url <> anchor, else: url
+  end
+
+  defp language_anchor("spanish"), do: "Spanish"
+  defp language_anchor("french"), do: "French"
+  defp language_anchor("english"), do: "English"
+  defp language_anchor("german"), do: "German"
+  defp language_anchor("italian"), do: "Italian"
+  defp language_anchor("portuguese"), do: "Portuguese"
+  defp language_anchor(_), do: nil
 end

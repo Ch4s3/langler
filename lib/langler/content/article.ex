@@ -15,6 +15,7 @@ defmodule Langler.Content.Article do
     has_many :sentences, Langler.Content.Sentence
     has_many :article_users, Langler.Content.ArticleUser
     has_many :users, through: [:article_users, :user]
+    has_many :article_topics, Langler.Content.ArticleTopic
 
     timestamps(type: :utc_datetime)
   end

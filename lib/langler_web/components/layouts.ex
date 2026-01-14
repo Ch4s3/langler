@@ -46,9 +46,24 @@ defmodule LanglerWeb.Layouts do
         </.link>
 
         <nav class="flex flex-wrap items-center gap-2 text-sm font-semibold text-base-content/80">
-          <.link navigate={~p"/articles"} class="btn btn-ghost btn-sm">Library</.link>
-          <.link navigate={~p"/study"} class="btn btn-ghost btn-sm">Study</.link>
-          <.link navigate={~p"/users/settings"} class="btn btn-ghost btn-sm">Settings</.link>
+          <.link
+            navigate={~p"/articles"}
+            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+          >
+            Library
+          </.link>
+          <.link
+            navigate={~p"/study"}
+            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+          >
+            Study
+          </.link>
+          <.link
+            navigate={~p"/users/settings"}
+            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+          >
+            Settings
+          </.link>
         </nav>
 
         <div class="flex items-center gap-3">

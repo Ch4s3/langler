@@ -48,16 +48,30 @@ config :langler, Oban,
   repo: Langler.Repo,
   engine: Oban.Engines.Basic,
   queues: [default: 50, ingestion: 10],
-  plugins: [Oban.Plugins.Pruner]
+  plugins: [
+    Oban.Plugins.Pruner,
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 */6 * * *", Langler.Content.Workers.DiscoverArticlesWorker, args: %{enqueue_all: true}}
+     ]}
+  ]
 
 config :langler, Langler.External.Dictionary.Wiktionary,
   base_url: "https://en.wiktionary.org/wiki",
   cache_table: :wiktionary_cache
 
 config :langler, Langler.External.Dictionary.Google,
-  endpoint: "https://translation.googleapis.com/language/translate/v2",
-  rate_limit_per_minute: 60,
-  api_key: :runtime_env
+  dictionary_endpoint: "https://translate.googleapis.com/translate_a/single",
+  cache_table: :google_translation_cache,
+  ttl: :timer.hours(6)
+
+config :langler, Langler.External.Dictionary.Cache,
+  persistent_tables: [:dictionary_entry_cache]
+
+config :langler, Langler.External.Dictionary.LanguageTool,
+  endpoint: "https://api.languagetool.org/v2/check",
+  cache_table: :language_tool_cache,
+  ttl: :timer.hours(12)
 
 config :langler, Langler.Study.FSRS.Params,
   weights: [
