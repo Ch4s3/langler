@@ -33,8 +33,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
             navigate={~p"/users/settings"}
             class="btn btn-ghost btn-sm"
           >
-            <.icon name="hero-arrow-left" class="h-4 w-4" />
-            Back to Settings
+            <.icon name="hero-arrow-left" class="h-4 w-4" /> Back to Settings
           </.link>
         </div>
 
@@ -44,7 +43,10 @@ defmodule LanglerWeb.UserLive.LlmSettings do
             <h2 class="card-title">Your LLM Configurations</h2>
 
             <div :if={@configs == []} class="py-8 text-center">
-              <.icon name="hero-chat-bubble-left-right" class="mx-auto h-12 w-12 text-base-content/30" />
+              <.icon
+                name="hero-chat-bubble-left-right"
+                class="mx-auto h-12 w-12 text-base-content/30"
+              />
               <p class="mt-4 text-base-content/70">No LLM configurations yet.</p>
               <p class="text-sm text-base-content/50">Add your first API key below to get started.</p>
             </div>
@@ -57,8 +59,12 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                 <div class="flex items-start justify-between">
                   <div class="flex-1">
                     <div class="flex items-center gap-2">
-                      <h3 class="font-semibold text-base-content">{provider_display_name(config.provider_name, @providers)}</h3>
-                      <span :if={config.is_default} class="badge badge-primary badge-sm">Default</span>
+                      <h3 class="font-semibold text-base-content">
+                        {provider_display_name(config.provider_name, @providers)}
+                      </h3>
+                      <span :if={config.is_default} class="badge badge-primary badge-sm">
+                        Default
+                      </span>
                     </div>
                     <dl class="mt-2 space-y-1 text-sm">
                       <div class="flex gap-2">
@@ -68,7 +74,10 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                       <div class="flex gap-2">
                         <dt class="font-medium text-base-content/70">API Key:</dt>
                         <dd class="font-mono text-base-content/60">
-                          {LlmConfig.decrypt_api_key_masked(@current_scope.user.id, config.encrypted_api_key)}
+                          {LlmConfig.decrypt_api_key_masked(
+                            @current_scope.user.id,
+                            config.encrypted_api_key
+                          )}
                         </dd>
                       </div>
                       <div class="flex gap-2">
@@ -88,8 +97,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                       phx-click="edit_config"
                       phx-value-id={config.id}
                     >
-                      <.icon name="hero-pencil" class="h-4 w-4" />
-                      Edit
+                      <.icon name="hero-pencil" class="h-4 w-4" /> Edit
                     </button>
                     <button
                       type="button"
@@ -98,8 +106,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                       phx-value-id={config.id}
                       data-confirm="Are you sure you want to delete this configuration?"
                     >
-                      <.icon name="hero-trash" class="h-4 w-4" />
-                      Delete
+                      <.icon name="hero-trash" class="h-4 w-4" /> Delete
                     </button>
                   </div>
                 </div>
@@ -112,7 +119,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
         <div class="card border border-base-200 bg-base-100 shadow-xl">
           <div class="card-body">
             <h2 class="card-title">
-              <%= if @editing_config, do: "Edit Configuration", else: "Add New Configuration" %>
+              {if @editing_config, do: "Edit Configuration", else: "Add New Configuration"}
             </h2>
 
             <.form
@@ -138,7 +145,9 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                 placeholder="sk-..."
                 required={is_nil(@editing_config)}
               />
-              <p class="-mt-2 text-sm text-base-content/60">Your API key will be encrypted and stored securely</p>
+              <p class="-mt-2 text-sm text-base-content/60">
+                Your API key will be encrypted and stored securely
+              </p>
 
               <.input
                 field={f[:model]}
@@ -196,8 +205,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
                   phx-click="test_config"
                   disabled={get_field_value(f, :api_key, "") == ""}
                 >
-                  <.icon name="hero-beaker" class="h-4 w-4" />
-                  Test Connection
+                  <.icon name="hero-beaker" class="h-4 w-4" /> Test Connection
                 </button>
               </div>
             </.form>
@@ -217,7 +225,14 @@ defmodule LanglerWeb.UserLive.LlmSettings do
   def handle_event("validate", params, socket) when is_map(params) do
     form =
       params
-      |> Map.drop(["_target", "_unused_provider_name", "_unused_api_key", "_unused_model", "_unused_temperature", "_unused_max_tokens"])
+      |> Map.drop([
+        "_target",
+        "_unused_provider_name",
+        "_unused_api_key",
+        "_unused_model",
+        "_unused_temperature",
+        "_unused_max_tokens"
+      ])
       |> Map.put_new("is_default", "false")
 
     {:noreply, assign(socket, :form, to_form(form))}

@@ -21,7 +21,8 @@ defmodule Langler.Chat.RateLimiter do
   @requests_per_minute 20
   @requests_per_day 500
   @tokens_per_day 200_000
-  @max_concurrent 2  # Allow 2 concurrent requests per user
+  # Allow 2 concurrent requests per user
+  @max_concurrent 2
 
   @type limit_type :: :requests_per_minute | :requests_per_day | :tokens_per_day | :concurrent
 

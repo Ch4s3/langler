@@ -9,7 +9,8 @@ defmodule Langler.Content.ClassifierTrainer do
   Trains the ML classifier using existing articles with high-confidence topic assignments.
   This uses rule-based classifications as training labels.
   """
-  @spec train_from_existing_articles(String.t(), integer()) :: {:ok, String.t()} | {:error, term()}
+  @spec train_from_existing_articles(String.t(), integer()) ::
+          {:ok, String.t()} | {:error, term()}
   def train_from_existing_articles(language \\ "spanish", min_articles \\ 50) do
     training_data = Classifier.collect_training_data(0.7, min_articles * 2)
 
@@ -17,7 +18,11 @@ defmodule Langler.Content.ClassifierTrainer do
       {:error, :insufficient_data}
     else
       require Logger
-      Logger.info("[ClassifierTrainer] Training ML classifier with #{length(training_data)} articles")
+
+      Logger.info(
+        "[ClassifierTrainer] Training ML classifier with #{length(training_data)} articles"
+      )
+
       Classifier.train(training_data, language)
     end
   end
@@ -33,7 +38,11 @@ defmodule Langler.Content.ClassifierTrainer do
 
     if length(training_data) >= min_new_articles do
       require Logger
-      Logger.info("[ClassifierTrainer] Retraining ML classifier with #{length(training_data)} articles")
+
+      Logger.info(
+        "[ClassifierTrainer] Retraining ML classifier with #{length(training_data)} articles"
+      )
+
       case Classifier.train(training_data, language) do
         {:ok, _model} -> :ok
         {:error, reason} -> {:error, reason}

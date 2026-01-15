@@ -152,7 +152,8 @@ defmodule Langler.External.Dictionary.LanguageTool do
       String.contains?(rule_lower, "pronoun") or String.contains?(category_lower, "pronoun") ->
         "Pronoun"
 
-      String.contains?(rule_lower, "preposition") or String.contains?(category_lower, "preposition") ->
+      String.contains?(rule_lower, "preposition") or
+          String.contains?(category_lower, "preposition") ->
         "Preposition"
 
       String.contains?(rule_lower, "article") or String.contains?(category_lower, "article") ->

@@ -51,7 +51,9 @@ defmodule Langler.Content.Workers.DiscoverArticlesWorker do
       Content.list_active_source_sites()
       |> Enum.filter(fn source ->
         case source.last_checked_at do
-          nil -> true
+          nil ->
+            true
+
           last_checked ->
             hours_since_check = DateTime.diff(now, last_checked, :hour)
             hours_since_check >= source.check_interval_hours

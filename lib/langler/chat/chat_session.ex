@@ -24,8 +24,19 @@ defmodule Langler.Chat.ChatSession do
   @doc false
   def changeset(chat_session, attrs) do
     chat_session
-    |> cast(attrs, [:user_id, :title, :context_type, :context_id, :llm_provider, :llm_model, :target_language, :native_language])
+    |> cast(attrs, [
+      :user_id,
+      :title,
+      :context_type,
+      :context_id,
+      :llm_provider,
+      :llm_model,
+      :target_language,
+      :native_language
+    ])
     |> validate_required([:user_id, :llm_provider, :target_language, :native_language])
-    |> validate_inclusion(:context_type, ["general", "article", "vocabulary", "conjugation", "grammar"], allow_nil: true)
+    |> validate_inclusion(
+      :context_type,
+      ["general", "article", "vocabulary", "conjugation", "grammar"], allow_nil: true)
   end
 end

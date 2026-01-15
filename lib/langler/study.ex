@@ -51,12 +51,14 @@ defmodule Langler.Study do
   end
 
   defp due_for_practice?(%{due_date: nil}, _), do: true
+
   defp due_for_practice?(%{due_date: due_date}, reference_datetime) do
     DateTime.compare(due_date, reference_datetime) != :gt
   end
 
   defp not_marked_easy?(%{quality_history: nil}), do: false
   defp not_marked_easy?(%{quality_history: []}), do: false
+
   defp not_marked_easy?(%{quality_history: history}) when is_list(history) do
     last_quality = List.last(history)
     not is_nil(last_quality) and last_quality < 4
@@ -158,4 +160,13 @@ defmodule Langler.Study do
   def normalize_rating("good"), do: :good
   def normalize_rating("easy"), do: :easy
   def normalize_rating(_), do: :good
+
+  @doc """
+  Gets the user's vocabulary level based on their FSRS study items.
+  Returns %{cefr_level: "A1" | "A2" | "B1" | "B2" | "C1" | "C2", numeric_level: float()}
+  """
+  def get_user_vocabulary_level(user_id) do
+    alias Langler.Content.RecommendationScorer
+    RecommendationScorer.calculate_user_level(user_id)
+  end
 end

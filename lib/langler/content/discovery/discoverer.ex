@@ -42,7 +42,8 @@ defmodule Langler.Content.Discovery.Discoverer do
 
   defp discover_from_scraping(%SourceSite{} = source_site) do
     with {:ok, html} <- fetch_html(source_site.url),
-         {:ok, entries} <- WebScraper.scrape(html, source_site.url, source_site.scraping_config || %{}),
+         {:ok, entries} <-
+           WebScraper.scrape(html, source_site.url, source_site.scraping_config || %{}),
          {:ok, _} <- Langler.Content.upsert_discovered_articles(source_site.id, entries) do
       Langler.Content.mark_source_checked(source_site)
       {:ok, length(entries)}

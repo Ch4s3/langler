@@ -39,7 +39,9 @@ defmodule Langler.Content.ClassifierTest do
 
       assert length(topics) > 0
       # Check that we got política topic
-      politica_topics = Enum.filter(topics, fn {topic, _conf} -> topic =~ "política" or topic =~ "politica" end)
+      politica_topics =
+        Enum.filter(topics, fn {topic, _conf} -> topic =~ "política" or topic =~ "politica" end)
+
       assert length(politica_topics) > 0
       {_topic, confidence} = List.first(politica_topics)
       assert confidence >= 0.3
@@ -124,11 +126,13 @@ defmodule Langler.Content.ClassifierTest do
       # Mock training data
       training_data = [
         %{
-          "content" => "La ciencia busca nuevas respuestas. Los científicos realizan investigaciones.",
+          "content" =>
+            "La ciencia busca nuevas respuestas. Los científicos realizan investigaciones.",
           "topics" => ["ciencia"]
         },
         %{
-          "content" => "El gobierno anunció nuevas políticas. El presidente se reunió con el congreso.",
+          "content" =>
+            "El gobierno anunció nuevas políticas. El presidente se reunió con el congreso.",
           "topics" => ["política"]
         },
         %{
@@ -275,12 +279,12 @@ defmodule Langler.Content.ClassifierTest do
 
       # Verify specific articles are included
       assert Enum.any?(training_data, fn doc ->
-        doc["content"] =~ "ciencia" and "ciencia" in doc["topics"]
-      end)
+               doc["content"] =~ "ciencia" and "ciencia" in doc["topics"]
+             end)
 
       assert Enum.any?(training_data, fn doc ->
-        doc["content"] =~ "gobierno" and "política" in doc["topics"]
-      end)
+               doc["content"] =~ "gobierno" and "política" in doc["topics"]
+             end)
     end
 
     test "filters by confidence threshold" do
@@ -377,9 +381,10 @@ defmodule Langler.Content.ClassifierTest do
 
       # Should still work, may return multiple topics
       assert is_list(topics)
+
       assert Enum.all?(topics, fn {topic, conf} ->
-        is_binary(topic) and is_float(conf) and conf >= 0.0
-      end)
+               is_binary(topic) and is_float(conf) and conf >= 0.0
+             end)
     end
 
     test "handles content with special characters" do

@@ -65,8 +65,7 @@ config :langler, Langler.External.Dictionary.Google,
   cache_table: :google_translation_cache,
   ttl: :timer.hours(6)
 
-config :langler, Langler.External.Dictionary.Cache,
-  persistent_tables: [:dictionary_entry_cache]
+config :langler, Langler.External.Dictionary.Cache, persistent_tables: [:dictionary_entry_cache]
 
 config :langler, Langler.External.Dictionary.LanguageTool,
   endpoint: "https://api.languagetool.org/v2/check",

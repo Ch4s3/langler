@@ -32,7 +32,10 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
           </p>
         </div>
 
-        <div :if={length(@recommended_articles) == 0} class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+        <div
+          :if={length(@recommended_articles) == 0}
+          class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur"
+        >
           <div class="card-body">
             <div class="alert border border-dashed border-base-300 text-base-content/70">
               No recommendations available yet. Import some articles to get personalized suggestions.
@@ -43,39 +46,38 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
         <div :if={length(@recommended_articles) > 0} class="grid gap-4 md:grid-cols-2">
           <div :for={article <- @recommended_articles} class="relative group">
             <div class="card border border-base-200 bg-base-100/80 shadow hover:shadow-xl transition">
-              <div class="card-body gap-4">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div class="flex-1">
-                    <p class="text-lg font-semibold text-base-content">
-                      {article.title || article.url}
-                    </p>
-                    <p class="text-xs uppercase tracking-wide text-base-content/50">
-                      {article.source || URI.parse(article.url).host}
-                    </p>
-                  </div>
-                  <div class="flex flex-col items-end gap-2">
-                    <span class="badge badge-primary badge-outline uppercase tracking-wide">
+              <div class="card-body gap-5">
+                <div class="space-y-2">
+                  <p class="text-lg font-semibold text-base-content">
+                    {article.title || article.url}
+                  </p>
+                  <p class="text-xs uppercase tracking-[0.2em] text-base-content/50">
+                    {article.source || URI.parse(article.url).host}
+                  </p>
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/70">
+                    <span class="badge badge-sm badge-primary badge-outline uppercase tracking-wide">
                       {article.language}
                     </span>
-                    <div class="flex flex-wrap gap-1 justify-end">
-                      <span
-                        :if={article.id}
-                        :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
-                        class="badge badge-xs badge-ghost"
-                      >
-                        {Topics.topic_name(article.language, topic.topic)}
-                      </span>
-                      <span :if={article.is_discovered} class="badge badge-xs badge-info">
-                        New
-                      </span>
-                    </div>
+                    <span :if={article.is_discovered} class="badge badge-sm badge-info/80 text-white">
+                      New
+                    </span>
+                    <span
+                      :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
+                      :if={article.id}
+                      class="badge badge-sm badge-ghost"
+                    >
+                      {Topics.topic_name(article.language, topic.topic)}
+                    </span>
                   </div>
                 </div>
-                <p :if={article.content && article.content != ""} class="line-clamp-3 text-sm text-base-content/70">
+                <p
+                  :if={article.content && article.content != ""}
+                  class="line-clamp-3 text-sm text-base-content/70"
+                >
                   {article.content |> String.slice(0, 220)}
                   {if String.length(article.content || "") > 220, do: "…"}
                 </p>
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
                   <span class="text-xs text-base-content/60">
                     {if article.published_at do
                       "Published #{format_timestamp(article.published_at)}"
@@ -134,6 +136,7 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
 
   defp humanize_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)
   defp humanize_error(reason) when is_atom(reason), do: Phoenix.Naming.humanize(reason)
+  defp humanize_error(%{__struct__: _} = struct), do: inspect(struct)
   defp humanize_error(reason), do: to_string(reason)
 
   defp format_timestamp(nil), do: "recently"

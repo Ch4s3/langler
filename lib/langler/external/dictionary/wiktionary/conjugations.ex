@@ -38,6 +38,7 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
           # Debug: log what we found
           require Logger
           language_section = find_language_section(doc, normalized_language)
+
           tables_count =
             if language_section do
               language_section
@@ -48,6 +49,7 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
             end
 
           section_status = if language_section, do: "found", else: "not found"
+
           Logger.warning(
             "Wiktionary conjugations: no conjugations found for #{lemma}. Language section: #{section_status}, Tables: #{tables_count}"
           )
@@ -170,15 +172,17 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
   defp language_heading?({"h2", _attrs, children}, anchor) do
     Enum.any?(children, fn
       {"span", span_attrs, _} ->
-        id = Enum.find_value(span_attrs, fn
-          {"id", value} -> value
-          _ -> nil
-        end)
+        id =
+          Enum.find_value(span_attrs, fn
+            {"id", value} -> value
+            _ -> nil
+          end)
 
-        class = Enum.find_value(span_attrs, fn
-          {"class", value} -> value
-          _ -> nil
-        end)
+        class =
+          Enum.find_value(span_attrs, fn
+            {"class", value} -> value
+            _ -> nil
+          end)
 
         id == anchor && String.contains?(class || "", "mw-headline")
 
@@ -193,12 +197,12 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
   defp heading?({"h3", _, _}), do: true
   defp heading?(_), do: false
 
-
   defp extract_non_finite(conjugations, section) do
     # Look for non-finite forms (infinitive, gerund, past participle)
     non_finite = %{}
 
     # Try to find infinitive from the page title or Spanish heading
+    # Fallback: look for dl/dt/dd structure with infinitive
     infinitive =
       section
       |> Enum.find_value(fn node ->
@@ -209,6 +213,7 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
               case child do
                 {"span", attrs, _} ->
                   id = Enum.find_value(attrs, fn {k, v} -> if k == "id", do: v, else: nil end)
+
                   if id == "Spanish" do
                     # The infinitive is usually the text before the Spanish span
                     nil
@@ -225,11 +230,11 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
             nil
         end
       end) ||
-        # Fallback: look for dl/dt/dd structure with infinitive
         section
         |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd") end)
         |> Enum.find_value(fn elem ->
           text = Floki.text(elem) |> String.downcase()
+
           if String.contains?(text, "infinitive") do
             # Try to find the value
             find_next_value(elem)
@@ -238,7 +243,8 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
           end
         end)
 
-    non_finite = if infinitive, do: Map.put(non_finite, "infinitive", infinitive), else: non_finite
+    non_finite =
+      if infinitive, do: Map.put(non_finite, "infinitive", infinitive), else: non_finite
 
     # Look for gerund and past participle
     gerund =
@@ -246,6 +252,7 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
       |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
       |> Enum.find_value(fn elem ->
         text = Floki.text(elem) |> String.downcase()
+
         if String.contains?(text, "gerund") do
           find_next_value(elem)
         else
@@ -258,6 +265,7 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
       |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
       |> Enum.find_value(fn elem ->
         text = Floki.text(elem) |> String.downcase()
+
         if String.contains?(text, "past participle") or String.contains?(text, "participle") do
           find_next_value(elem)
         else
@@ -268,7 +276,9 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
     non_finite =
       non_finite
       |> (fn nf -> if gerund, do: Map.put(nf, "gerund", gerund), else: nf end).()
-      |> (fn nf -> if past_participle, do: Map.put(nf, "past_participle", past_participle), else: nf end).()
+      |> (fn nf ->
+            if past_participle, do: Map.put(nf, "past_participle", past_participle), else: nf
+          end).()
 
     if map_size(non_finite) > 0 do
       Map.put(conjugations, "non_finite", non_finite)
@@ -295,7 +305,9 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
           end
         end) ||
           (cells != [] &&
-             (Floki.text(List.first(cells)) |> String.downcase() |> String.contains?(["indicative", "subjunctive", "imperative"])))
+             Floki.text(List.first(cells))
+             |> String.downcase()
+             |> String.contains?(["indicative", "subjunctive", "imperative"]))
 
       if is_header do
         # Skip header rows
@@ -313,7 +325,8 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
               String.contains?(tense_text, "indicative") -> "indicative"
               String.contains?(tense_text, "subjunctive") -> "subjunctive"
               String.contains?(tense_text, "imperative") -> "imperative"
-              true -> "indicative" # Default to indicative
+              # Default to indicative
+              true -> "indicative"
             end
 
           # Extract tense name (remove mood if present)
@@ -347,14 +360,29 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
     tense_text = String.downcase(tense_text)
 
     cond do
-      String.contains?(tense_text, "present") -> "present"
-      String.contains?(tense_text, "preterite") or String.contains?(tense_text, "pretérito") -> "preterite"
-      String.contains?(tense_text, "imperfect") or String.contains?(tense_text, "imperfecto") -> "imperfect"
-      String.contains?(tense_text, "future") -> "future"
-      String.contains?(tense_text, "conditional") -> "conditional"
-      String.contains?(tense_text, "imperfect subjunctive") -> "imperfect"
-      String.contains?(tense_text, "future subjunctive") -> "future"
-      true -> nil
+      String.contains?(tense_text, "present") ->
+        "present"
+
+      String.contains?(tense_text, "preterite") or String.contains?(tense_text, "pretérito") ->
+        "preterite"
+
+      String.contains?(tense_text, "imperfect") or String.contains?(tense_text, "imperfecto") ->
+        "imperfect"
+
+      String.contains?(tense_text, "future") ->
+        "future"
+
+      String.contains?(tense_text, "conditional") ->
+        "conditional"
+
+      String.contains?(tense_text, "imperfect subjunctive") ->
+        "imperfect"
+
+      String.contains?(tense_text, "future subjunctive") ->
+        "future"
+
+      true ->
+        nil
     end
   end
 
@@ -363,7 +391,14 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
     person_cells = Enum.drop(cells, 1)
 
     # Standard Spanish conjugation order: yo, tú, él/ella/usted, nosotros, vosotros, ellos/ellas/ustedes
-    persons = ["yo", "tú", "él/ella/usted", "nosotros/nosotras", "vosotros/vosotras", "ellos/ellas/ustedes"]
+    persons = [
+      "yo",
+      "tú",
+      "él/ella/usted",
+      "nosotros/nosotras",
+      "vosotros/vosotras",
+      "ellos/ellas/ustedes"
+    ]
 
     person_cells
     |> Enum.take(6)

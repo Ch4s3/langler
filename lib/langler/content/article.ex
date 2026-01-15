@@ -11,6 +11,10 @@ defmodule Langler.Content.Article do
     field :language, :string
     field :content, :string
     field :extracted_at, :utc_datetime
+    field :difficulty_score, :float
+    field :unique_word_count, :integer
+    field :avg_word_frequency, :float
+    field :avg_sentence_length, :float
 
     has_many :sentences, Langler.Content.Sentence
     has_many :article_users, Langler.Content.ArticleUser

@@ -11,6 +11,8 @@ defmodule Langler.Vocabulary.Word do
     field :part_of_speech, :string
     field :definitions, {:array, :string}, default: []
     field :conjugations, :map
+    field :frequency_rank, :integer
+    field :cefr_level, :string
 
     has_many :occurrences, Langler.Vocabulary.WordOccurrence
     has_many :fsrs_items, Langler.Study.FSRSItem
@@ -21,7 +23,16 @@ defmodule Langler.Vocabulary.Word do
   @doc false
   def changeset(word, attrs) do
     word
-    |> cast(attrs, [:normalized_form, :lemma, :language, :part_of_speech, :definitions, :conjugations])
+    |> cast(attrs, [
+      :normalized_form,
+      :lemma,
+      :language,
+      :part_of_speech,
+      :definitions,
+      :conjugations,
+      :frequency_rank,
+      :cefr_level
+    ])
     |> validate_required([:normalized_form, :language])
     |> put_default_definitions()
     |> unique_constraint([:normalized_form, :language])

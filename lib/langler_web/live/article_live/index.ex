@@ -180,7 +180,9 @@ defmodule LanglerWeb.ArticleLive.Index do
                             </span>
                             <div class="flex flex-wrap gap-1">
                               <span
-                                :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
+                                :for={
+                                  topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)
+                                }
                                 class="badge badge-xs badge-ghost normal-case"
                               >
                                 {Topics.topic_name(article.language, topic.topic)}
@@ -308,6 +310,7 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   defp humanize_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)
   defp humanize_error(reason) when is_atom(reason), do: Phoenix.Naming.humanize(reason)
+
   defp humanize_error(%_{} = reason) do
     if function_exported?(reason.__struct__, :exception, 1) do
       Exception.message(reason)

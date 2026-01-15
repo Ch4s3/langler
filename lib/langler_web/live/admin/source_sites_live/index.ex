@@ -25,8 +25,7 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
             class="btn btn-primary"
             id="new-source-site"
           >
-            <.icon name="hero-plus" class="w-5 h-5" />
-            New Source Site
+            <.icon name="hero-plus" class="w-5 h-5" /> New Source Site
           </.link>
         </div>
 
@@ -45,24 +44,22 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
             </thead>
             <tbody id="source-sites" phx-update="stream">
               <tr :for={{id, source_site} <- @streams.source_sites} id={id}>
-                <td><%= source_site.name %></td>
+                <td>{source_site.name}</td>
                 <td>
                   <a href={source_site.url} target="_blank" class="link link-primary">
-                    <%= source_site.url %>
+                    {source_site.url}
                   </a>
                 </td>
                 <td>
-                  <span class="badge badge-outline"><%= source_site.discovery_method %></span>
+                  <span class="badge badge-outline">{source_site.discovery_method}</span>
                 </td>
-                <td><%= source_site.language %></td>
+                <td>{source_site.language}</td>
                 <td>
-                  <span
-                    class={[
-                      "badge",
-                      if(source_site.is_active, do: "badge-success", else: "badge-error")
-                    ]}
-                  >
-                    <%= if source_site.is_active, do: "Active", else: "Inactive" %>
+                  <span class={[
+                    "badge",
+                    if(source_site.is_active, do: "badge-success", else: "badge-error")
+                  ]}>
+                    {if source_site.is_active, do: "Active", else: "Inactive"}
                   </span>
                   <%= if source_site.last_error do %>
                     <div class="tooltip tooltip-error" data-tip={source_site.last_error}>
@@ -72,7 +69,7 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
                 </td>
                 <td>
                   <%= if source_site.last_checked_at do %>
-                    <%= Calendar.strftime(source_site.last_checked_at, "%Y-%m-%d %H:%M") %>
+                    {Calendar.strftime(source_site.last_checked_at, "%Y-%m-%d %H:%M")}
                   <% else %>
                     <span class="text-gray-400">Never</span>
                   <% end %>
@@ -144,7 +141,10 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
         {:noreply,
          socket
          |> stream_insert(:source_sites, updated)
-         |> put_flash(:info, "Source site #{if updated.is_active, do: "activated", else: "deactivated"}")}
+         |> put_flash(
+           :info,
+           "Source site #{if updated.is_active, do: "activated", else: "deactivated"}"
+         )}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update source site")}

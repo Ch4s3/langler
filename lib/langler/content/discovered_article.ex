@@ -13,6 +13,8 @@ defmodule Langler.Content.DiscoveredArticle do
     field :discovered_at, :utc_datetime
     field :status, :string, default: "new"
     field :language, :string
+    field :difficulty_score, :float
+    field :avg_sentence_length, :float
 
     belongs_to :source_site, Langler.Content.SourceSite
     belongs_to :article, Langler.Content.Article
@@ -34,7 +36,9 @@ defmodule Langler.Content.DiscoveredArticle do
       :discovered_at,
       :article_id,
       :status,
-      :language
+      :language,
+      :difficulty_score,
+      :avg_sentence_length
     ])
     |> validate_required([:source_site_id, :url, :discovered_at])
     |> validate_inclusion(:status, ["new", "imported", "skipped"])

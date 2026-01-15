@@ -33,7 +33,10 @@ defmodule Langler.Content.ClassifierNif do
           :ok
 
         {:error, reason} ->
-          Logger.warning("[ClassifierNif] Failed to load NIF from #{lib_path}: #{inspect(reason)}")
+          Logger.warning(
+            "[ClassifierNif] Failed to load NIF from #{lib_path}: #{inspect(reason)}"
+          )
+
           :ok
       end
     end

@@ -177,15 +177,17 @@ defmodule Langler.External.Dictionary.Wiktionary do
   defp language_heading?({"h2", _attrs, children}, anchor) do
     Enum.any?(children, fn
       {"span", span_attrs, _} ->
-        id = Enum.find_value(span_attrs, fn
-          {"id", value} -> value
-          _ -> nil
-        end)
+        id =
+          Enum.find_value(span_attrs, fn
+            {"id", value} -> value
+            _ -> nil
+          end)
 
-        class = Enum.find_value(span_attrs, fn
-          {"class", value} -> value
-          _ -> nil
-        end)
+        class =
+          Enum.find_value(span_attrs, fn
+            {"class", value} -> value
+            _ -> nil
+          end)
 
         id == anchor && String.contains?(class || "", "mw-headline")
 

@@ -21,7 +21,15 @@ defmodule Langler.Accounts.UserLlmConfig do
   @doc false
   def changeset(user_llm_config, attrs) do
     user_llm_config
-    |> cast(attrs, [:user_id, :provider_name, :encrypted_api_key, :model, :temperature, :max_tokens, :is_default])
+    |> cast(attrs, [
+      :user_id,
+      :provider_name,
+      :encrypted_api_key,
+      :model,
+      :temperature,
+      :max_tokens,
+      :is_default
+    ])
     |> validate_required([:user_id, :provider_name, :encrypted_api_key])
     |> validate_number(:temperature, greater_than_or_equal_to: 0.0, less_than_or_equal_to: 2.0)
     |> validate_number(:max_tokens, greater_than: 0)

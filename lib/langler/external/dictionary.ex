@@ -94,7 +94,8 @@ defmodule Langler.External.Dictionary do
               (wiktionary_entry && wiktionary_entry.part_of_speech),
           pronunciation: wiktionary_entry && wiktionary_entry.pronunciation,
           definitions: definitions,
-          translation: google_data.translation || (lemma_google_data && lemma_google_data.translation),
+          translation:
+            google_data.translation || (lemma_google_data && lemma_google_data.translation),
           source_url: wiktionary_entry && wiktionary_entry.source_url
         }
 

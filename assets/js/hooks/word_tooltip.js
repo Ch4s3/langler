@@ -344,6 +344,37 @@ const renderEntry = entry => {
   `
 }
 
+const renderLoadingSkeleton = () => {
+  return `
+    <div class="relative space-y-4 pr-6">
+      <div class="absolute right-3 top-3 flex items-center justify-center rounded-full bg-base-200/80 p-2">
+        <span class="loading loading-ring loading-primary"></span>
+      </div>
+      <div class="space-y-2">
+        <div class="h-4 w-32 rounded-full bg-base-300/80"></div>
+        <div class="h-3 w-24 rounded-full bg-base-200"></div>
+      </div>
+      <div class="space-y-2">
+        <div class="h-3 w-full rounded-full bg-base-200"></div>
+        <div class="h-3 w-5/6 rounded-full bg-base-200"></div>
+        <div class="h-3 w-4/6 rounded-full bg-base-200"></div>
+      </div>
+      <div class="space-y-2">
+        <div class="h-3 w-2/3 rounded-full bg-base-200"></div>
+        <div class="h-3 w-1/2 rounded-full bg-base-200"></div>
+      </div>
+      <div class="rounded-2xl border border-dashed border-base-300/70 bg-base-100/80 p-3">
+        <div class="h-3 w-28 rounded-full bg-base-200"></div>
+        <div class="mt-3 flex gap-2">
+          <div class="h-8 w-20 rounded-full bg-base-200"></div>
+          <div class="h-8 w-20 rounded-full bg-base-200"></div>
+          <div class="h-8 w-20 rounded-full bg-base-200"></div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 const hideTooltip = tooltip => {
   tooltip.dataset.active = "false"
   tooltip.style.opacity = "0"
@@ -477,6 +508,10 @@ const WordTooltip = {
       dom_id: this.el.id,
       word_id: this.el.dataset.wordId,
     }
+
+    activeHook = this
+    this.currentEntry = null
+    showTooltip(this.tooltipEl, renderLoadingSkeleton(), this.el)
     
     // If component-id is set, target the component instead of parent LiveView
     const componentId = this.el.dataset.componentId
@@ -497,8 +532,8 @@ const WordTooltip = {
         if (componentEl) {
           this.pushEventTo(componentEl, "fetch_word_data", eventData)
           return
-        }
-      }
+  }
+}
       // If not in drawer, try to find component by traversing up (but stop at drawer container)
       // This prevents finding the parent LiveView
       let current = this.el.parentElement

@@ -38,6 +38,7 @@ defmodule Langler.External.DictionaryTest do
         :wiktionary_dictionary_test_cache,
         :languagetool_dictionary_test_cache
       ])
+
       Application.delete_env(:langler, Langler.External.Dictionary.Google)
       Application.delete_env(:langler, Langler.External.Dictionary.Wiktionary)
       Application.delete_env(:langler, Langler.External.Dictionary.LanguageTool)
@@ -248,6 +249,7 @@ defmodule Langler.External.DictionaryTest do
           end
       end
     end)
+
     Repo.delete_all(CacheEntry)
   end
 end

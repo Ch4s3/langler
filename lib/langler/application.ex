@@ -11,7 +11,8 @@ defmodule Langler.Application do
       [
         LanglerWeb.Telemetry,
         Langler.Repo
-      ] ++ cache_loader_children() ++
+      ] ++
+        cache_loader_children() ++
         [
           {Oban, oban_config()},
           {DNSCluster, query: Application.get_env(:langler, :dns_cluster_query) || :ignore},

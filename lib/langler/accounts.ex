@@ -36,11 +36,16 @@ defmodule Langler.Accounts do
   @spec set_user_topic_preference(integer(), String.t(), float()) ::
           {:ok, UserTopicPreference.t()} | {:error, Ecto.Changeset.t()}
   def set_user_topic_preference(user_id, topic, weight) do
-    pref = Repo.get_by(UserTopicPreference, user_id: user_id, topic: topic) ||
-             %UserTopicPreference{user_id: user_id, topic: topic}
+    pref =
+      Repo.get_by(UserTopicPreference, user_id: user_id, topic: topic) ||
+        %UserTopicPreference{user_id: user_id, topic: topic}
 
     pref
-    |> UserTopicPreference.changeset(%{user_id: user_id, topic: topic, weight: Decimal.from_float(weight)})
+    |> UserTopicPreference.changeset(%{
+      user_id: user_id,
+      topic: topic,
+      weight: Decimal.from_float(weight)
+    })
     |> Repo.insert_or_update()
   end
 

@@ -28,7 +28,7 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Form do
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 sm:px-6 lg:px-0">
         <h1 class="text-3xl font-bold">
-          <%= if @source_site.id, do: "Edit Source Site", else: "New Source Site" %>
+          {if @source_site.id, do: "Edit Source Site", else: "New Source Site"}
         </h1>
 
         <.form

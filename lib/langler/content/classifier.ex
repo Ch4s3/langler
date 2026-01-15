@@ -59,10 +59,15 @@ defmodule Langler.Content.Classifier do
               |> Map.get("topics", [])
               |> Enum.map(fn topic_map ->
                 topic = Map.get(topic_map, "topic") || Map.get(topic_map, :topic)
-                conf = Map.get(topic_map, "confidence", 0.0) || Map.get(topic_map, :confidence, 0.0)
+
+                conf =
+                  Map.get(topic_map, "confidence", 0.0) || Map.get(topic_map, :confidence, 0.0)
+
                 {topic, conf}
               end)
-              |> Enum.filter(fn {_topic, conf} -> is_float(conf) and conf >= @confidence_threshold end)
+              |> Enum.filter(fn {_topic, conf} ->
+                is_float(conf) and conf >= @confidence_threshold
+              end)
               |> Enum.sort_by(fn {_topic, conf} -> conf end, :desc)
               |> Enum.take(@default_max_topics)
 
@@ -245,10 +250,11 @@ defmodule Langler.Content.Classifier do
       # Keyword density: how many of the topic's keywords matched (higher is better)
       keyword_density = matches / length(keywords)
       # Boost score based on number of matches (more matches = stronger signal)
-      match_boost = min(matches / 3.0, 1.0) # Cap boost at 3 matches
+      # Cap boost at 3 matches
+      match_boost = min(matches / 3.0, 1.0)
 
       # Combine scores with boost
-      score = (base_score * 0.5) + (keyword_density * 0.3) + (match_boost * 0.2)
+      score = base_score * 0.5 + keyword_density * 0.3 + match_boost * 0.2
       score * weight
     else
       0.0

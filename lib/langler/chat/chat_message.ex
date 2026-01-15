@@ -20,7 +20,14 @@ defmodule Langler.Chat.ChatMessage do
   @doc false
   def changeset(chat_message, attrs) do
     chat_message
-    |> cast(attrs, [:chat_session_id, :role, :encrypted_content, :content_hash, :token_count, :metadata])
+    |> cast(attrs, [
+      :chat_session_id,
+      :role,
+      :encrypted_content,
+      :content_hash,
+      :token_count,
+      :metadata
+    ])
     |> validate_required([:chat_session_id, :role, :encrypted_content, :content_hash])
     |> validate_inclusion(:role, ["user", "assistant", "system"])
   end

@@ -59,8 +59,11 @@ defmodule Langler.Content.Discovery.RssParser do
     # Atom feeds use <link href="..."> or <link>text</link>
     link =
       case Floki.find(entry, "link") do
-        [] -> nil
-        [link_elem | _] -> Floki.attribute(link_elem, "href") |> List.first() || Floki.text(link_elem)
+        [] ->
+          nil
+
+        [link_elem | _] ->
+          Floki.attribute(link_elem, "href") |> List.first() || Floki.text(link_elem)
       end
 
     title = extract_text(entry, "title")
@@ -81,7 +84,9 @@ defmodule Langler.Content.Discovery.RssParser do
 
   defp extract_text(element, selector) do
     case Floki.find(element, selector) do
-      [] -> nil
+      [] ->
+        nil
+
       [found | _] ->
         # Get raw HTML/text content to handle CDATA
         raw_html = Floki.raw_html(found)
@@ -112,9 +117,12 @@ defmodule Langler.Content.Discovery.RssParser do
   end
 
   defp normalize_link(nil, _base_url), do: {:error, :no_link}
-  defp normalize_link(link, base_url), do: Langler.Content.Discovery.UrlNormalizer.normalize(link, base_url)
+
+  defp normalize_link(link, base_url),
+    do: Langler.Content.Discovery.UrlNormalizer.normalize(link, base_url)
 
   defp clean_text(nil), do: nil
+
   defp clean_text(text) when is_binary(text) do
     text
     |> String.trim()
@@ -122,6 +130,7 @@ defmodule Langler.Content.Discovery.RssParser do
   end
 
   defp parse_date(nil), do: nil
+
   defp parse_date(date_string) when is_binary(date_string) do
     # Try ISO8601 format first
     case DateTime.from_iso8601(date_string) do

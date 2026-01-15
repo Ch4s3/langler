@@ -8,6 +8,7 @@ defmodule LanglerWeb.StudyLive.Index do
   alias Langler.Repo
   alias Langler.External.Dictionary
   alias Langler.External.Dictionary.Wiktionary.Conjugations
+  alias Langler.Content
   alias MapSet
   require Logger
 
@@ -30,6 +31,10 @@ defmodule LanglerWeb.StudyLive.Index do
     filter = :now
     visible_items = filter_items(items, filter)
 
+    # Calculate user level and get recommendations
+    user_level = Study.get_user_vocabulary_level(scope.user.id)
+    recommended_articles = Content.get_recommended_articles_for_user(scope.user.id, 5)
+
     {:ok,
      socket
      |> assign(:current_user, scope.user)
@@ -41,6 +46,8 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:all_items, items)
      |> assign(:flipped_cards, MapSet.new())
      |> assign(:expanded_conjugations, MapSet.new())
+     |> assign(:user_level, user_level)
+     |> assign(:recommended_articles, recommended_articles)
      |> stream(:items, visible_items)}
   end
 
@@ -141,6 +148,66 @@ defmodule LanglerWeb.StudyLive.Index do
               >
                 {filter.label}
               </button>
+            </div>
+
+            <%!-- Recommended Articles Section --%>
+            <div
+              :if={@recommended_articles != [] && @filter == :now}
+              class="card bg-base-100 shadow-lg"
+            >
+              <div class="card-body">
+                <h2 class="card-title">
+                  <.icon name="hero-light-bulb" class="h-6 w-6 text-primary" /> Recommended Reading
+                  <span class="badge badge-primary badge-sm">
+                    {@user_level.cefr_level || "Learning"}
+                  </span>
+                </h2>
+                <p class="text-sm text-base-content/70">
+                  Articles matched to your vocabulary level
+                </p>
+
+                <div class="space-y-3 mt-4">
+                  <div
+                    :for={rec <- @recommended_articles}
+                    class="flex items-start gap-3 p-3 rounded-lg bg-base-200/50
+                              hover:bg-base-200 transition"
+                  >
+                    <div class="flex-1">
+                      <.link
+                        href={rec.article.url}
+                        target="_blank"
+                        class="font-semibold hover:text-primary"
+                      >
+                        {rec.article.title}
+                      </.link>
+                      <button
+                        phx-click="import_article"
+                        phx-value-id={rec.article.id}
+                        class="btn btn-xs btn-primary ml-2"
+                      >
+                        Import
+                      </button>
+                      <div class="flex gap-2 mt-1">
+                        <span class="badge badge-sm">
+                          Level {trunc(rec.article.difficulty_score || 0)}
+                        </span>
+                        <span
+                          :if={rec.article.avg_sentence_length}
+                          class="badge badge-sm badge-outline"
+                        >
+                          {trunc(rec.article.avg_sentence_length)} words/sentence
+                        </span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-xs text-base-content/60">Match</div>
+                      <div class="text-lg font-semibold text-primary">
+                        {trunc(rec.score * 100)}%
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -392,6 +459,31 @@ defmodule LanglerWeb.StudyLive.Index do
      socket
      |> assign(:search_query, query)
      |> stream(:items, visible, reset: true)}
+  end
+
+  def handle_event("import_article", %{"id" => discovered_article_id_str}, socket) do
+    with {discovered_article_id, ""} <- Integer.parse(discovered_article_id_str),
+         discovered_article <- Content.get_discovered_article(discovered_article_id),
+         {:ok, _} <-
+           Content.mark_discovered_article_imported(
+             discovered_article_id,
+             socket.assigns.current_user.id
+           ) do
+      # Refresh recommendations
+      user_level = Study.get_user_vocabulary_level(socket.assigns.current_user.id)
+
+      recommended_articles =
+        Content.get_recommended_articles_for_user(socket.assigns.current_user.id, limit: 5)
+
+      {:noreply,
+       socket
+       |> assign(:user_level, user_level)
+       |> assign(:recommended_articles, recommended_articles)
+       |> put_flash(:info, "Article imported successfully")}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :error, "Failed to import article")}
+    end
   end
 
   defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query

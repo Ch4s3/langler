@@ -50,6 +50,7 @@ defmodule Langler.Accounts.LlmConfig do
         |> Map.put("encrypted_api_key", encrypted_key)
         |> Map.put("user_id", user.id)
         |> Map.delete("api_key")
+
       # If this is the first config, make it default
       is_first = get_user_configs(user.id) == []
 
@@ -66,9 +67,9 @@ defmodule Langler.Accounts.LlmConfig do
       |> case do
         {:ok, config} = result ->
           # If setting as default, unset other defaults
-        if default_selected?(attrs) do
-          unset_other_defaults(user.id, config.id)
-        end
+          if default_selected?(attrs) do
+            unset_other_defaults(user.id, config.id)
+          end
 
           result
 
@@ -109,7 +110,8 @@ defmodule Langler.Accounts.LlmConfig do
   @doc """
   Deletes an LLM config.
   """
-  @spec delete_config(UserLlmConfig.t()) :: {:ok, UserLlmConfig.t()} | {:error, Ecto.Changeset.t()}
+  @spec delete_config(UserLlmConfig.t()) ::
+          {:ok, UserLlmConfig.t()} | {:error, Ecto.Changeset.t()}
   def delete_config(%UserLlmConfig{} = config) do
     Repo.delete(config)
   end

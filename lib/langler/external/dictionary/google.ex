@@ -14,8 +14,7 @@ defmodule Langler.External.Dictionary.Google do
     target_language = opts[:to] || @default_target
 
     cache_key =
-      {String.downcase(source_language), String.downcase(target_language),
-       String.downcase(term)}
+      {String.downcase(source_language), String.downcase(target_language), String.downcase(term)}
 
     table = cache_table()
 

@@ -83,6 +83,7 @@ defmodule Langler.Chat.Encryption do
   @spec hash_content(integer(), String.t()) :: String.t()
   def hash_content(user_id, content) when is_integer(user_id) and is_binary(content) do
     key = derive_key(user_id)
+
     :crypto.mac(:hmac, :sha256, key, content)
     |> Base.encode16(case: :lower)
   end

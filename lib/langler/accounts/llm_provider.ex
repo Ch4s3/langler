@@ -21,7 +21,15 @@ defmodule Langler.Accounts.LlmProvider do
   @doc false
   def changeset(llm_provider, attrs) do
     llm_provider
-    |> cast(attrs, [:name, :display_name, :adapter_module, :requires_api_key, :api_key_label, :base_url, :enabled])
+    |> cast(attrs, [
+      :name,
+      :display_name,
+      :adapter_module,
+      :requires_api_key,
+      :api_key_label,
+      :base_url,
+      :enabled
+    ])
     |> validate_required([:name, :display_name, :adapter_module])
     |> unique_constraint(:name)
   end

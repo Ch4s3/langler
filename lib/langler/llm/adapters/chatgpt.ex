@@ -17,13 +17,20 @@ defmodule Langler.LLM.Adapters.ChatGPT do
   # Valid OpenAI models (based on https://platform.openai.com/docs/models)
   # We use a pattern match approach to support models that start with known prefixes
   @valid_model_prefixes [
-    "gpt-4o",           # gpt-4o, gpt-4o-mini, gpt-4o-2024-08-06, etc.
-    "gpt-4-turbo",      # gpt-4-turbo, gpt-4-turbo-preview, etc.
-    "gpt-4",            # gpt-4, gpt-4-0613, etc.
-    "gpt-3.5-turbo",    # gpt-3.5-turbo, gpt-3.5-turbo-16k, etc.
-    "o1",               # o1-preview, o1-mini, etc.
-    "o3",               # o3-mini, etc.
-    "gpt-5"             # Future models
+    # gpt-4o, gpt-4o-mini, gpt-4o-2024-08-06, etc.
+    "gpt-4o",
+    # gpt-4-turbo, gpt-4-turbo-preview, etc.
+    "gpt-4-turbo",
+    # gpt-4, gpt-4-0613, etc.
+    "gpt-4",
+    # gpt-3.5-turbo, gpt-3.5-turbo-16k, etc.
+    "gpt-3.5-turbo",
+    # o1-preview, o1-mini, etc.
+    "o1",
+    # o3-mini, etc.
+    "o3",
+    # Future models
+    "gpt-5"
   ]
 
   @impl true
@@ -104,7 +111,10 @@ defmodule Langler.LLM.Adapters.ChatGPT do
     }
 
     api_key = config.api_key
-    Logger.debug("ChatGPT: Using API key length=#{String.length(api_key)}, starts with: #{String.slice(api_key, 0, 10)}")
+
+    Logger.debug(
+      "ChatGPT: Using API key length=#{String.length(api_key)}, starts with: #{String.slice(api_key, 0, 10)}"
+    )
 
     headers = [
       {"authorization", "Bearer #{api_key}"},
@@ -129,12 +139,19 @@ defmodule Langler.LLM.Adapters.ChatGPT do
           |> Map.get("retry-after")
           |> parse_retry_after()
 
-        Logger.warning("ChatGPT API rate limit (429): #{error_message}, retry after #{retry_after}s")
+        Logger.warning(
+          "ChatGPT API rate limit (429): #{error_message}, retry after #{retry_after}s"
+        )
+
         {:error, {:rate_limit_exceeded, retry_after}}
 
       {:ok, %{status: status, body: body}} ->
         error_message = extract_error_message(body)
-        Logger.warning("ChatGPT API error: status=#{status}, message=#{error_message}, body=#{inspect(body)}")
+
+        Logger.warning(
+          "ChatGPT API error: status=#{status}, message=#{error_message}, body=#{inspect(body)}"
+        )
+
         {:error, {:api_error, status, error_message}}
 
       {:error, %{reason: :timeout}} ->

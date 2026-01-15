@@ -185,7 +185,10 @@ defmodule Langler.Content do
     Article
     |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
     |> join(:inner, [a, au], at in ArticleTopic, on: at.article_id == a.id)
-    |> where([a, au, at], au.user_id == ^user_id and at.topic == ^topic and au.status != "archived")
+    |> where(
+      [a, au, at],
+      au.user_id == ^user_id and at.topic == ^topic and au.status != "archived"
+    )
     |> order_by([a, au, at], desc: a.inserted_at)
     |> preload(:article_topics)
     |> Repo.all()
@@ -194,8 +197,10 @@ defmodule Langler.Content do
   @doc """
   Lists all topics for an article.
   """
-  @spec list_topics_for_article(integer()) :: [ArticleTopic.t()]
-  def list_topics_for_article(article_id) do
+  @spec list_topics_for_article(integer() | nil) :: [ArticleTopic.t()]
+  def list_topics_for_article(nil), do: []
+
+  def list_topics_for_article(article_id) when is_integer(article_id) do
     ArticleTopic
     |> where(article_id: ^article_id)
     |> order_by([at], desc: at.confidence)
@@ -230,12 +235,12 @@ defmodule Langler.Content do
         user_pref = Map.get(user_topics, at.topic, Decimal.new("1.0"))
         weight = Decimal.to_float(user_pref)
         confidence = Decimal.to_float(at.confidence)
-        acc + (confidence * weight)
+        acc + confidence * weight
       end)
 
     # Add freshness bonus (newer articles get slight boost)
     days_old = DateTime.diff(DateTime.utc_now(), article.inserted_at, :day)
-    freshness_bonus = max(0.0, 1.0 - (days_old / 30.0)) * 0.1
+    freshness_bonus = max(0.0, 1.0 - days_old / 30.0) * 0.1
 
     base_score + freshness_bonus
   end
@@ -256,12 +261,19 @@ defmodule Langler.Content do
       |> where([au], au.user_id == ^user_id)
       |> select([au], au.article_id)
       |> Repo.all()
+      |> Enum.filter(&(not is_nil(&1)))
 
     regular_articles =
-      Article
-      |> where([a], a.id not in ^user_article_ids)
-      |> preload(:article_topics)
-      |> Repo.all()
+      if Enum.empty?(user_article_ids) do
+        Article
+        |> preload(:article_topics)
+        |> Repo.all()
+      else
+        Article
+        |> where([a], a.id not in ^user_article_ids)
+        |> preload(:article_topics)
+        |> Repo.all()
+      end
 
     # Convert discovered articles to article-like maps
     discovered_article_maps =
@@ -395,7 +407,10 @@ defmodule Langler.Content do
         discovered_at =
           if attrs[:discovered_at] || attrs["discovered_at"] do
             discovered = attrs[:discovered_at] || attrs["discovered_at"]
-            if is_struct(discovered, DateTime), do: DateTime.truncate(discovered, :second), else: now
+
+            if is_struct(discovered, DateTime),
+              do: DateTime.truncate(discovered, :second),
+              else: now
           else
             now
           end
@@ -453,18 +468,38 @@ defmodule Langler.Content do
     user_imported_article_ids =
       ArticleUser
       |> where([au], au.user_id == ^user_id)
+      |> where([au], not is_nil(au.article_id))
       |> select([au], au.article_id)
       |> Repo.all()
 
-    from(da in DiscoveredArticle,
-      left_join: dau in DiscoveredArticleUser,
-      on: dau.discovered_article_id == da.id and dau.user_id == ^user_id,
-      where: da.status == "new" or (dau.status == ^status and is_nil(da.article_id)),
-      where: da.article_id not in ^user_imported_article_ids or is_nil(da.article_id),
-      preload: [:source_site, :article, :article_topics],
-      order_by: [desc: da.discovered_at],
-      limit: ^limit
-    )
+    # Build query - handle nil article_id separately to avoid unsafe nil comparisons
+    base_query =
+      from(da in DiscoveredArticle,
+        left_join: dau in DiscoveredArticleUser,
+        on: dau.discovered_article_id == da.id and dau.user_id == ^user_id,
+        where: da.status == "new" or (dau.status == ^status and is_nil(da.article_id))
+      )
+
+    # Filter by article_id - handle nil separately
+    query =
+      if Enum.empty?(user_imported_article_ids) do
+        # No imported articles, so all discovered articles with nil article_id are eligible
+        base_query
+        |> where([da], is_nil(da.article_id))
+      else
+        # Articles that either have nil article_id OR (non-nil article_id not in user's imported list)
+        base_query
+        |> where([da], is_nil(da.article_id))
+        |> or_where(
+          [da],
+          not is_nil(da.article_id) and da.article_id not in ^user_imported_article_ids
+        )
+      end
+
+    query
+    |> preload([:source_site, :article])
+    |> order_by([da], desc: da.discovered_at)
+    |> limit(^limit)
     |> Repo.all()
   end
 
@@ -511,5 +546,124 @@ defmodule Langler.Content do
            get_or_create_discovered_article_user(discovered_article_id, user_id) do
       update_discovered_article_user(dau, %{status: "dismissed"})
     end
+  end
+
+  ## Article Difficulty
+
+  @doc """
+  Calculates and stores difficulty metrics for an article.
+  """
+  def calculate_article_difficulty(article_id) do
+    alias Langler.Content.RecommendationScorer
+
+    article = get_article!(article_id)
+    difficulty_score = RecommendationScorer.calculate_article_difficulty(article_id)
+
+    # Calculate unique word count and average frequency
+    words = RecommendationScorer.get_words_for_article(article_id)
+    unique_word_count = length(words)
+
+    words_with_freq =
+      Enum.filter(words, fn word -> not is_nil(word.frequency_rank) end)
+
+    avg_word_frequency =
+      if Enum.empty?(words_with_freq) do
+        nil
+      else
+        words_with_freq
+        |> Enum.map(& &1.frequency_rank)
+        |> Enum.sum()
+        |> div(length(words_with_freq))
+        |> then(&(&1 / 1.0))
+      end
+
+    # Calculate average sentence length
+    sentences =
+      Sentence
+      |> where([s], s.article_id == ^article_id)
+      |> select([s], s.content)
+      |> Repo.all()
+
+    avg_sentence_length =
+      if Enum.empty?(sentences) do
+        nil
+      else
+        sentences
+        |> Enum.map(fn content ->
+          content
+          |> String.split(~r/\s+/)
+          |> Enum.filter(&(&1 != ""))
+          |> length()
+        end)
+        |> then(fn lengths ->
+          if lengths == [], do: nil, else: Enum.sum(lengths) / length(lengths)
+        end)
+      end
+
+    case update_article(article, %{
+           difficulty_score: difficulty_score,
+           unique_word_count: unique_word_count,
+           avg_word_frequency: avg_word_frequency,
+           avg_sentence_length: avg_sentence_length
+         }) do
+      {:ok, updated} -> {:ok, updated}
+      error -> error
+    end
+  end
+
+  @doc """
+  Gets recommended articles for a user based on vocabulary level matching.
+  """
+  def get_recommended_articles_for_user(user_id, limit \\ 5) do
+    alias Langler.Content.RecommendationScorer
+
+    user_level = RecommendationScorer.calculate_user_level(user_id)
+    numeric_level = user_level.numeric_level
+
+    # Get discovered articles user hasn't imported yet
+    DiscoveredArticle
+    |> where([da], da.language == "spanish")
+    |> where([da], not is_nil(da.difficulty_score))
+    |> join(:left, [da], dau in DiscoveredArticleUser,
+      on: dau.discovered_article_id == da.id and dau.user_id == ^user_id
+    )
+    |> where([da, dau], is_nil(dau.id) or dau.status == "discovered")
+    |> where([da], da.difficulty_score >= ^max(numeric_level - 2, 0))
+    |> where([da], da.difficulty_score <= ^min(numeric_level + 2, 10))
+    |> order_by([da], desc: da.published_at)
+    |> limit(^(limit * 3))
+    |> Repo.all()
+    |> Enum.map(&{&1, RecommendationScorer.score_discovered_article_match(&1, user_id)})
+    |> Enum.sort_by(fn {_, score} -> -score end)
+    |> Enum.take(limit)
+    |> Enum.map(fn {article, score} -> %{article: article, score: score} end)
+  end
+
+  @doc """
+  Refreshes difficulty scores for all articles.
+  Admin function for recalculating all difficulties.
+  """
+  def refresh_article_difficulties do
+    Article
+    |> select([a], a.id)
+    |> Repo.all()
+    |> Enum.each(&calculate_article_difficulty/1)
+  end
+
+  @doc """
+  Enqueues background jobs to calculate difficulty for all discovered articles.
+  """
+  def enqueue_difficulty_backfill do
+    alias Langler.Content.Workers.CalculateArticleDifficultyWorker
+
+    DiscoveredArticle
+    |> where([da], is_nil(da.difficulty_score))
+    |> select([da], da.id)
+    |> Repo.all()
+    |> Enum.each(fn discovered_article_id ->
+      %{"discovered_article_id" => discovered_article_id}
+      |> CalculateArticleDifficultyWorker.new()
+      |> Oban.insert()
+    end)
   end
 end
