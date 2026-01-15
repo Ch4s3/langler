@@ -2,6 +2,7 @@ defmodule LanglerWeb.ArticleLive.Show do
   use LanglerWeb, :live_view
   require Logger
 
+  alias Langler.Accounts.LlmConfig
   alias Langler.Content
   alias Langler.Content.ArticleImporter
   alias Langler.External.Dictionary
@@ -35,7 +36,9 @@ defmodule LanglerWeb.ArticleLive.Show do
                   Imported {format_timestamp(@article.inserted_at)}
                 </p>
                 <div :if={@article_topics != []} class="flex flex-wrap items-center gap-2">
-                  <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">Topics</span>
+                  <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
+                    Topics
+                  </span>
                   <span
                     :for={topic <- @article_topics}
                     class="badge badge-sm rounded-full border border-primary/30 bg-primary/10 text-primary"
@@ -58,6 +61,13 @@ defmodule LanglerWeb.ArticleLive.Show do
               </.link>
 
               <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm gap-2 text-white"
+                  phx-click="start_article_chat"
+                >
+                  <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" /> Practice with chat
+                </button>
                 <button
                   type="button"
                   class="btn btn-ghost btn-sm gap-2 text-error"
@@ -104,16 +114,18 @@ defmodule LanglerWeb.ArticleLive.Show do
               data-word-id={token.word && token.word.id}
               phx-hook={token.lexical? && "WordTooltip"}
               id={"token-#{sentence.id}-#{token.id}"}
-              class={[
-                "inline align-baseline text-base sm:text-lg leading-relaxed text-base-content",
-                # Restore font size (parent has font-size: 0 to collapse whitespace between spans)
-                token.lexical? &&
-                  [
-                    "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40",
-                    studied_token?(token, @studied_word_ids, @studied_forms) &&
-                      "bg-primary/5 text-primary"
-                  ]
-              ]}
+              class={
+                [
+                  "inline align-baseline text-base sm:text-lg leading-relaxed text-base-content",
+                  # Restore font size (parent has font-size: 0 to collapse whitespace between spans)
+                  token.lexical? &&
+                    [
+                      "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40",
+                      studied_token?(token, @studied_word_ids, @studied_forms) &&
+                        "bg-primary/5 text-primary"
+                    ]
+                ]
+              }
               style={
                 # Remove spacing before punctuation tokens to attach them visually to previous word
                 if not token.lexical? and String.match?(token.text, ~r/^[,\.;:!?\)\]\}]/u) do
@@ -135,7 +147,10 @@ defmodule LanglerWeb.ArticleLive.Show do
   defp assign_article(socket, article) do
     user_id = socket.assigns.current_scope.user.id
     sentences = Content.list_sentences(article)
-    {studied_word_ids, studied_forms, study_items_by_word} = seed_studied_words(user_id, sentences)
+
+    {studied_word_ids, studied_forms, study_items_by_word} =
+      seed_studied_words(user_id, sentences)
+
     topics = Content.list_topics_for_article(article.id)
 
     sentence_lookup =
@@ -181,6 +196,30 @@ defmodule LanglerWeb.ArticleLive.Show do
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Unable to archive: #{inspect(reason)}")}
+    end
+  end
+
+  def handle_event(
+        "start_article_chat",
+        _params,
+        %{assigns: %{current_scope: scope, article: article}} = socket
+      ) do
+    if LlmConfig.get_default_config(scope.user.id) do
+      send_update(LanglerWeb.ChatLive.Drawer,
+        id: "chat-drawer",
+        action: :start_article_chat,
+        article_id: article.id,
+        article_title: display_title(article),
+        article_language: article.language,
+        article_topics: Enum.map(socket.assigns.article_topics || [], & &1.topic),
+        article_content: article.content
+      )
+
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Add an LLM provider in settings before starting a chat")}
     end
   end
 
@@ -231,8 +270,10 @@ defmodule LanglerWeb.ArticleLive.Show do
               _ -> nil
             end),
         fsrs_sleep_until:
-          resolved_word && fsrs_sleep_until(socket.assigns[:study_items_by_word], resolved_word.id)
+          resolved_word &&
+            fsrs_sleep_until(socket.assigns[:study_items_by_word], resolved_word.id)
       })
+
     Logger.debug("word-data payload: #{inspect(payload)}")
 
     {:noreply, push_event(socket, "word-data", payload)}
@@ -404,7 +445,11 @@ defmodule LanglerWeb.ArticleLive.Show do
             text_len = String.length(text)
 
             leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
-            trailing_space = if trailing_start < text_len, do: String.slice(text, trailing_start, text_len - trailing_start), else: ""
+
+            trailing_space =
+              if trailing_start < text_len,
+                do: String.slice(text, trailing_start, text_len - trailing_start),
+                else: ""
 
             result = []
             result = if leading_space != "", do: [leading_space | result], else: result
@@ -423,7 +468,11 @@ defmodule LanglerWeb.ArticleLive.Show do
             text_len = String.length(text)
 
             leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
-            trailing_space = if trailing_start < text_len, do: String.slice(text, trailing_start, text_len - trailing_start), else: ""
+
+            trailing_space =
+              if trailing_start < text_len,
+                do: String.slice(text, trailing_start, text_len - trailing_start),
+                else: ""
 
             result = []
             result = if leading_space != "", do: [leading_space | result], else: result
@@ -444,52 +493,52 @@ defmodule LanglerWeb.ArticleLive.Show do
     # - Attach spaces to words or punctuation tokens to preserve natural spacing
     # - Use CSS to handle visual spacing between word and punctuation spans
     cleaned_tokens
-      |> Enum.reduce([], fn token, acc ->
-        is_word = String.match?(token, ~r/^\p{L}/u)
-        is_punct = String.match?(token, ~r/^[^\p{L}\s]+$/u)
-        is_space = String.match?(token, ~r/^\s+$/u)
+    |> Enum.reduce([], fn token, acc ->
+      is_word = String.match?(token, ~r/^\p{L}/u)
+      is_punct = String.match?(token, ~r/^[^\p{L}\s]+$/u)
+      is_space = String.match?(token, ~r/^\s+$/u)
 
-        cond do
-          # Word token - add as new token
-          is_word ->
-            [token | acc]
+      cond do
+        # Word token - add as new token
+        is_word ->
+          [token | acc]
 
-          # Punctuation token - keep separate, don't merge with words
-          is_punct ->
-            [token | acc]
+        # Punctuation token - keep separate, don't merge with words
+        is_punct ->
+          [token | acc]
 
-          # Space token - attach to previous token if it's a word or punctuation
-          is_space ->
-            case acc do
-              [prev | rest] ->
-                prev_is_word = String.match?(prev, ~r/^\p{L}/u)
-                prev_is_punct = String.match?(prev, ~r/^[^\p{L}\s]+$/u)
+        # Space token - attach to previous token if it's a word or punctuation
+        is_space ->
+          case acc do
+            [prev | rest] ->
+              prev_is_word = String.match?(prev, ~r/^\p{L}/u)
+              prev_is_punct = String.match?(prev, ~r/^[^\p{L}\s]+$/u)
 
-                if prev_is_word || prev_is_punct do
-                  # Attach space to previous word or punctuation
-                  [prev <> token | rest]
-                else
-                  # No previous word/punctuation - keep space separate
-                  [token | acc]
-                end
-
-              _ ->
-                # Empty acc - keep space separate
+              if prev_is_word || prev_is_punct do
+                # Attach space to previous word or punctuation
+                [prev <> token | rest]
+              else
+                # No previous word/punctuation - keep space separate
                 [token | acc]
-            end
+              end
 
-          # Other - keep as-is
-          true ->
-            [token | acc]
-        end
-      end)
-      |> Enum.reverse()
-      |> Enum.with_index()
-      |> Enum.map(fn {text, idx} ->
-        # Map word occurrences - try to find matching word from original position
-        word = Map.get(occurrence_map, idx)
-        %{id: idx, text: text, lexical?: lexical_token?(text), word: word}
-      end)
+            _ ->
+              # Empty acc - keep space separate
+              [token | acc]
+          end
+
+        # Other - keep as-is
+        true ->
+          [token | acc]
+      end
+    end)
+    |> Enum.reverse()
+    |> Enum.with_index()
+    |> Enum.map(fn {text, idx} ->
+      # Map word occurrences - try to find matching word from original position
+      word = Map.get(occurrence_map, idx)
+      %{id: idx, text: text, lexical?: lexical_token?(text), word: word}
+    end)
   end
 
   defp lexical_token?(text) do
@@ -546,6 +595,7 @@ defmodule LanglerWeb.ArticleLive.Show do
   defp resolve_word_record(nil, entry, normalized, language) do
     lemma =
       Map.get(entry, :lemma) || Map.get(entry, "lemma") || Map.get(entry, :word) || entry[:word]
+
     definitions = Map.get(entry, :definitions) || Map.get(entry, "definitions") || []
 
     Vocabulary.get_or_create_word(%{
@@ -625,12 +675,15 @@ defmodule LanglerWeb.ArticleLive.Show do
   end
 
   defp humanize_slug(nil), do: "Article"
+
   defp humanize_slug(url) do
     url
     |> URI.parse()
     |> Map.get(:path)
     |> case do
-      nil -> url
+      nil ->
+        url
+
       path ->
         path
         |> Path.basename()

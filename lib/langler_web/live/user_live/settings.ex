@@ -9,14 +9,47 @@ defmodule LanglerWeb.UserLive.Settings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="text-center">
-        <.header>
-          Account Settings
-          <:subtitle>Manage your account email address and password settings</:subtitle>
-        </.header>
-      </div>
+      <div class="mx-auto max-w-5xl space-y-8">
+        <div class="text-center">
+          <.header>
+            Account Settings
+            <:subtitle>Manage your account email address and password settings</:subtitle>
+          </.header>
+        </div>
 
-      <div class="grid gap-8 lg:grid-cols-2">
+        <%!-- Quick Settings Links --%>
+        <div class="grid gap-4 md:grid-cols-2">
+          <.link
+            navigate={~p"/users/settings/llm"}
+            class="card border border-base-200 bg-base-100 shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <div class="card-body flex flex-row items-center gap-4 p-4">
+              <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <.icon name="hero-chat-bubble-left-right" class="h-6 w-6 text-primary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h2 class="font-semibold text-base-content">AI Chat Settings</h2>
+                <p class="text-sm text-base-content/60 truncate">Configure LLM provider and API keys</p>
+              </div>
+              <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
+            </div>
+          </.link>
+
+          <div class="card border border-base-200 bg-base-100 shadow-md opacity-60">
+            <div class="card-body flex flex-row items-center gap-4 p-4">
+              <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-secondary/10">
+                <.icon name="hero-language" class="h-6 w-6 text-secondary" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h2 class="font-semibold text-base-content">Language Preferences</h2>
+                <p class="text-sm text-base-content/60 truncate">Target and native languages</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Account Details --%>
+        <div class="grid gap-8 lg:grid-cols-2">
         <div class="space-y-8">
           <div class="rounded-3xl border border-base-200 bg-base-100/90 p-6 space-y-4">
             <h2 class="text-lg font-semibold text-base-content">Email</h2>
@@ -83,6 +116,7 @@ defmodule LanglerWeb.UserLive.Settings do
             </div>
           </div>
         </div>
+      </div>
       </div>
     </Layouts.app>
     """

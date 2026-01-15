@@ -33,6 +33,35 @@ defmodule Langler.Study do
     |> Repo.all()
   end
 
+  @doc """
+  Gets words that are either due for review or marked as not easy (last quality < 4).
+  Returns a list of words with their normalized forms.
+  """
+  def get_practice_words(user_id, reference_datetime \\ DateTime.utc_now()) do
+    FSRSItem
+    |> where([i], i.user_id == ^user_id)
+    |> preload(:word)
+    |> Repo.all()
+    |> Enum.filter(fn item ->
+      not is_nil(item.word) and
+        (due_for_practice?(item, reference_datetime) or not_marked_easy?(item))
+    end)
+    |> Enum.map(fn item -> item.word.normalized_form end)
+    |> Enum.uniq()
+  end
+
+  defp due_for_practice?(%{due_date: nil}, _), do: true
+  defp due_for_practice?(%{due_date: due_date}, reference_datetime) do
+    DateTime.compare(due_date, reference_datetime) != :gt
+  end
+
+  defp not_marked_easy?(%{quality_history: nil}), do: false
+  defp not_marked_easy?(%{quality_history: []}), do: false
+  defp not_marked_easy?(%{quality_history: history}) when is_list(history) do
+    last_quality = List.last(history)
+    not is_nil(last_quality) and last_quality < 4
+  end
+
   def get_item!(id), do: Repo.get!(FSRSItem, id)
 
   def get_item_by_user_and_word(user_id, word_id) do

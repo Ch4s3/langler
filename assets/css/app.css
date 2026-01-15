@@ -73,4 +73,38 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
+/* Markdown styling in chat bubbles */
+.markdown-content table {
+  @apply w-full border-collapse my-2;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+  @apply border border-base-300 px-3 py-2 text-left;
+}
+
+.markdown-content table th {
+  @apply bg-base-200 font-semibold;
+}
+
+.markdown-content table tr:nth-child(even) {
+  @apply bg-base-100;
+}
+
+.markdown-content table tr:hover {
+  @apply bg-base-200;
+}
+
+.markdown-content code {
+  @apply bg-base-200 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-content pre {
+  @apply bg-base-200 p-3 rounded overflow-x-auto;
+}
+
+.markdown-content pre code {
+  @apply bg-transparent p-0;
+}
+
 /* This file is for your main application CSS */

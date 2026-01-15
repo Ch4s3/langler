@@ -384,7 +384,7 @@ defmodule LanglerWeb.StudyLive.Index do
   def handle_event("toggle_conjugations", %{"word-id" => word_id_str}, socket) do
     with {word_id, ""} <- Integer.parse(to_string(word_id_str)),
          {:ok, item} <- find_item_by_word_id(socket.assigns.all_items, word_id),
-         item.word != nil do
+         true <- not is_nil(item.word) do
       word = item.word
 
       # Check if conjugations already exist
@@ -774,17 +774,6 @@ defmodule LanglerWeb.StudyLive.Index do
       <% end %>
     </div>
     """
-  end
-
-  defp ordered_persons do
-    [
-      "yo",
-      "tú",
-      "él/ella/usted",
-      "nosotros/nosotras",
-      "vosotros/vosotras",
-      "ellos/ellas/ustedes"
-    ]
   end
 
   defp render_mood(assigns, _) do

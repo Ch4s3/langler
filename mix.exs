@@ -76,6 +76,7 @@ defmodule Langler.MixProject do
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.3", runtime: Mix.env() == :dev},
       {:floki, "~> 0.36"},
+      {:mdex, "~> 0.2"},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",

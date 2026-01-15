@@ -79,10 +79,7 @@ defmodule Langler.External.Dictionary.Google do
     }
   end
 
-  defp format_dictionary_entry(%{"entry" => entries} = dict) do
-    IO.inspect(dict, label: "dict")
-    pos = Map.get(dict, "pos")
-
+  defp format_dictionary_entry(%{"entry" => entries, "pos" => pos} = dict) do
     entries
     |> Enum.take(5)
     |> Enum.map(fn entry ->

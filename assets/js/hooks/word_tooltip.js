@@ -23,12 +23,50 @@ const ensureTooltipEl = () => {
       const translations = addButton.dataset.translations
       const definitions = addButton.dataset.definitions
       if (!wordId || !activeHook) return
-      activeHook.pushEvent("add_to_study", {
+      
+      const eventData = {
         word_id: wordId,
         translations,
         definitions,
         dom_id: activeHook.el.id,
-      })
+      }
+      
+      // If component-id is set, target the component instead of parent LiveView
+      const componentId = activeHook.el.dataset.componentId
+      if (componentId) {
+        const drawerContainer = activeHook.el.closest("#chat-drawer-container")
+        let componentEl = null
+        if (drawerContainer) {
+          const containerComponentId = drawerContainer.getAttribute("phx-component")
+          if (containerComponentId === componentId) {
+            componentEl = drawerContainer
+          } else {
+            componentEl = drawerContainer.querySelector(`[phx-component="${componentId}"]`)
+          }
+        }
+        if (!componentEl) {
+          // Not in drawer, manually traverse up (but stop at drawer container)
+          let current = activeHook.el.parentElement
+          while (current && !componentEl) {
+            if (current.id === "chat-drawer-container") break
+            if (current.getAttribute && current.getAttribute("phx-component") === componentId) {
+              componentEl = current
+              break
+            }
+            current = current.parentElement
+          }
+        }
+        if (!componentEl) {
+          componentEl = document.querySelector(`[phx-component="${componentId}"]`)
+        }
+        if (componentEl) {
+          activeHook.pushEventTo(componentEl, "add_to_study", eventData)
+        } else {
+          activeHook.pushEvent("add_to_study", eventData)
+        }
+      } else {
+        activeHook.pushEvent("add_to_study", eventData)
+      }
       return
     }
 
@@ -39,11 +77,48 @@ const ensureTooltipEl = () => {
       const {wordId, quality, rateTarget} = ratingButton.dataset
       if (!wordId || !quality || !activeHook) return
       const eventName = rateTarget === "existing" ? "rate_existing_word" : "rate_new_word"
-      activeHook.pushEvent(eventName, {
+      
+      const eventData = {
         word_id: wordId,
         quality,
         dom_id: activeHook.el.id,
-      })
+      }
+      
+      const componentId = activeHook.el.dataset.componentId
+      if (componentId) {
+        const drawerContainer = activeHook.el.closest("#chat-drawer-container")
+        let componentEl = null
+        if (drawerContainer) {
+          const containerComponentId = drawerContainer.getAttribute("phx-component")
+          if (containerComponentId === componentId) {
+            componentEl = drawerContainer
+          } else {
+            componentEl = drawerContainer.querySelector(`[phx-component="${componentId}"]`)
+          }
+        }
+        if (!componentEl) {
+          // Not in drawer, manually traverse up (but stop at drawer container)
+          let current = activeHook.el.parentElement
+          while (current && !componentEl) {
+            if (current.id === "chat-drawer-container") break
+            if (current.getAttribute && current.getAttribute("phx-component") === componentId) {
+              componentEl = current
+              break
+            }
+            current = current.parentElement
+          }
+        }
+        if (!componentEl) {
+          componentEl = document.querySelector(`[phx-component="${componentId}"]`)
+        }
+        if (componentEl) {
+          activeHook.pushEventTo(componentEl, eventName, eventData)
+        } else {
+          activeHook.pushEvent(eventName, eventData)
+        }
+      } else {
+        activeHook.pushEvent(eventName, eventData)
+      }
       return
     }
 
@@ -53,10 +128,47 @@ const ensureTooltipEl = () => {
       event.stopPropagation()
       const {wordId} = removeButton.dataset
       if (!wordId || !activeHook) return
-      activeHook.pushEvent("remove_from_study", {
+      
+      const eventData = {
         word_id: wordId,
         dom_id: activeHook.el.id,
-      })
+      }
+      
+      const componentId = activeHook.el.dataset.componentId
+      if (componentId) {
+        const drawerContainer = activeHook.el.closest("#chat-drawer-container")
+        let componentEl = null
+        if (drawerContainer) {
+          const containerComponentId = drawerContainer.getAttribute("phx-component")
+          if (containerComponentId === componentId) {
+            componentEl = drawerContainer
+          } else {
+            componentEl = drawerContainer.querySelector(`[phx-component="${componentId}"]`)
+          }
+        }
+        if (!componentEl) {
+          // Not in drawer, manually traverse up (but stop at drawer container)
+          let current = activeHook.el.parentElement
+          while (current && !componentEl) {
+            if (current.id === "chat-drawer-container") break
+            if (current.getAttribute && current.getAttribute("phx-component") === componentId) {
+              componentEl = current
+              break
+            }
+            current = current.parentElement
+          }
+        }
+        if (!componentEl) {
+          componentEl = document.querySelector(`[phx-component="${componentId}"]`)
+        }
+        if (componentEl) {
+          activeHook.pushEventTo(componentEl, "remove_from_study", eventData)
+        } else {
+          activeHook.pushEvent("remove_from_study", eventData)
+        }
+      } else {
+        activeHook.pushEvent("remove_from_study", eventData)
+      }
     }
   })
   document.body.appendChild(tooltip)
@@ -358,13 +470,63 @@ const WordTooltip = {
     showTooltip(this.tooltipEl, renderEntry(this.currentEntry), this.el)
   },
   pushLookup() {
-    this.pushEvent("fetch_word_data", {
+    const eventData = {
       word: this.el.dataset.word,
       language: this.el.dataset.language,
       sentence_id: this.el.dataset.sentenceId,
       dom_id: this.el.id,
       word_id: this.el.dataset.wordId,
-    })
+    }
+    
+    // If component-id is set, target the component instead of parent LiveView
+    const componentId = this.el.dataset.componentId
+    if (componentId) {
+      // First, check if we're inside the chat drawer container
+      const drawerContainer = this.el.closest("#chat-drawer-container")
+      if (drawerContainer) {
+        // The container itself should have the phx-component attribute
+        // Check if it matches our component ID
+        const containerComponentId = drawerContainer.getAttribute("phx-component")
+        if (containerComponentId === componentId) {
+          // Use the container as the component element
+          this.pushEventTo(drawerContainer, "fetch_word_data", eventData)
+          return
+        }
+        // If not, search within the container
+        const componentEl = drawerContainer.querySelector(`[phx-component="${componentId}"]`)
+        if (componentEl) {
+          this.pushEventTo(componentEl, "fetch_word_data", eventData)
+          return
+        }
+      }
+      // If not in drawer, try to find component by traversing up (but stop at drawer container)
+      // This prevents finding the parent LiveView
+      let current = this.el.parentElement
+      let componentEl = null
+      while (current && !componentEl) {
+        if (current.id === "chat-drawer-container") {
+          // Stop searching if we hit the drawer container
+          break
+        }
+        if (current.getAttribute && current.getAttribute("phx-component") === componentId) {
+          componentEl = current
+          break
+        }
+        current = current.parentElement
+      }
+      if (!componentEl) {
+        // Last resort: try to find anywhere in document
+        componentEl = document.querySelector(`[phx-component="${componentId}"]`)
+      }
+      if (componentEl) {
+        this.pushEventTo(componentEl, "fetch_word_data", eventData)
+      } else {
+        // Fallback to parent if component not found
+        this.pushEvent("fetch_word_data", eventData)
+      }
+    } else {
+      this.pushEvent("fetch_word_data", eventData)
+    }
   },
 }
 
