@@ -35,6 +35,7 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:current_user, scope.user)
      |> assign(:filters, @filters)
      |> assign(:filter, filter)
+     |> assign(:search_query, "")
      |> assign(:quality_buttons, @quality_buttons)
      |> assign(:stats, build_stats(items))
      |> assign(:all_items, items)
@@ -109,6 +110,24 @@ defmodule LanglerWeb.StudyLive.Index do
               </.link>
             </div>
 
+            <div class="flex flex-col gap-3 rounded-2xl border border-base-200 bg-base-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-sm font-semibold text-base-content/70">Search your deck</p>
+              <form phx-change="search_items" class="w-full sm:w-auto">
+                <label class="input input-bordered flex items-center gap-2 w-full sm:w-80">
+                  <.icon name="hero-magnifying-glass" class="h-4 w-4 text-base-content/60" />
+                  <input
+                    type="text"
+                    name="search_query"
+                    value={@search_query}
+                    placeholder="Search words..."
+                    phx-debounce="300"
+                    autocomplete="off"
+                    class="grow"
+                  />
+                </label>
+              </form>
+            </div>
+
             <div class="tabs tabs-boxed bg-base-200/70 p-1 text-sm font-semibold text-base-content/70">
               <button
                 :for={filter <- @filters}
@@ -173,7 +192,9 @@ defmodule LanglerWeb.StudyLive.Index do
                           <p
                             class="inline-flex items-center gap-2 text-3xl font-semibold text-base-content cursor-pointer transition hover:text-primary"
                             phx-hook="CopyToClipboard"
-                            data-copy-text={item.word && (item.word.lemma || item.word.normalized_form)}
+                            data-copy-text={
+                              item.word && (item.word.lemma || item.word.normalized_form)
+                            }
                             title="Click to copy"
                             id={"study-card-word-#{item.id}"}
                           >
@@ -255,7 +276,10 @@ defmodule LanglerWeb.StudyLive.Index do
                 </button>
 
                 <div
-                  :if={item.word && (is_verb?(item.word.part_of_speech) || looks_like_spanish_verb?(item.word))}
+                  :if={
+                    item.word &&
+                      (is_verb?(item.word.part_of_speech) || looks_like_spanish_verb?(item.word))
+                  }
                   class="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4"
                 >
                   <div class="flex flex-wrap items-center justify-between gap-3">
@@ -274,7 +298,9 @@ defmodule LanglerWeb.StudyLive.Index do
                       phx-value-word-id={item.word.id}
                     >
                       <.icon name="hero-table-cells" class="h-4 w-4" />
-                      {if MapSet.member?(@expanded_conjugations, item.word.id), do: "Hide", else: "View"} conjugations
+                      {if MapSet.member?(@expanded_conjugations, item.word.id),
+                        do: "Hide",
+                        else: "View"} conjugations
                     </button>
                   </div>
 
@@ -282,7 +308,7 @@ defmodule LanglerWeb.StudyLive.Index do
                     :if={MapSet.member?(@expanded_conjugations, item.word.id)}
                     class="mt-4 rounded-xl border border-base-200 bg-base-100/90 p-4 shadow-inner"
                   >
-                    <%= render_conjugation_table(assigns, item.word.conjugations) %>
+                    {render_conjugation_table(assigns, item.word.conjugations)}
                   </div>
                 </div>
 
@@ -317,7 +343,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   def handle_event("set_filter", %{"filter" => filter}, socket) do
     filter = parse_filter(filter)
-    visible = filter_items(socket.assigns.all_items, filter)
+    visible = filter_items(socket.assigns.all_items, filter, socket.assigns.search_query)
 
     {:noreply,
      socket
@@ -337,7 +363,7 @@ defmodule LanglerWeb.StudyLive.Index do
          {:ok, updated} <- Study.review_item(item, rating) do
       all_items = replace_item(socket.assigns.all_items, updated)
       stats = build_stats(all_items)
-      visible = filter_items(all_items, socket.assigns.filter)
+      visible = filter_items(all_items, socket.assigns.filter, socket.assigns.search_query)
 
       {:noreply,
        socket
@@ -353,6 +379,24 @@ defmodule LanglerWeb.StudyLive.Index do
         {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
     end
   end
+
+  def handle_event("search_items", params, socket) do
+    query =
+      params
+      |> extract_search_query()
+      |> String.trim()
+
+    visible = filter_items(socket.assigns.all_items, socket.assigns.filter, query)
+
+    {:noreply,
+     socket
+     |> assign(:search_query, query)
+     |> stream(:items, visible, reset: true)}
+  end
+
+  defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query
+  defp extract_search_query(%{"search-query" => query}) when is_binary(query), do: query
+  defp extract_search_query(_), do: ""
 
   def handle_event("toggle_card", %{"id" => id}, socket) do
     with {item_id, ""} <- Integer.parse(to_string(id)),
@@ -394,6 +438,7 @@ defmodule LanglerWeb.StudyLive.Index do
         if is_nil(conjugations) or conjugations == %{} do
           # Fetch conjugations - try to get infinitive form
           lemma = extract_infinitive_lemma(word)
+
           lookup_lemma =
             if lemma do
               String.downcase(lemma)
@@ -410,7 +455,10 @@ defmodule LanglerWeb.StudyLive.Index do
                     %{item | word: updated_word}
 
                   {:error, reason} ->
-                    Logger.warning("StudyLive: failed to store conjugations for word_id=#{word.id}: #{inspect(reason)}")
+                    Logger.warning(
+                      "StudyLive: failed to store conjugations for word_id=#{word.id}: #{inspect(reason)}"
+                    )
+
                     item
                 end
 
@@ -418,6 +466,7 @@ defmodule LanglerWeb.StudyLive.Index do
                 Logger.warning(
                   "StudyLive: failed to fetch conjugations for #{lookup_lemma}: #{inspect(reason)}"
                 )
+
                 item
             end
           else
@@ -464,18 +513,37 @@ defmodule LanglerWeb.StudyLive.Index do
     ArgumentError -> :good
   end
 
-  defp filter_items(items, filter) do
+  defp filter_items(items, filter, query \\ "") do
     now = DateTime.utc_now()
     end_of_day = end_of_day(now)
+    downcased_query = String.downcase(query || "")
 
-    Enum.filter(items, fn item ->
+    items
+    |> Enum.filter(fn item ->
       case filter do
         :now -> due_now?(item, now)
         :today -> due_today?(item, end_of_day)
         :all -> true
       end
     end)
+    |> Enum.filter(fn item ->
+      cond do
+        downcased_query == "" -> true
+        match_query?(item.word, downcased_query) -> true
+        true -> false
+      end
+    end)
   end
+
+  defp match_query?(%Word{} = word, query) do
+    lemma = word.lemma || ""
+    normalized = word.normalized_form || ""
+
+    String.contains?(String.downcase(lemma), query) or
+      String.contains?(String.downcase(normalized), query)
+  end
+
+  defp match_query?(_, _), do: false
 
   defp build_stats(items) do
     now = DateTime.utc_now()
@@ -549,7 +617,10 @@ defmodule LanglerWeb.StudyLive.Index do
           {:ok, item}
 
         true ->
-          Logger.debug("StudyLive: fetching definitions for #{inspect(term)} (word_id=#{word.id}) needs_defs=#{needs_definitions} needs_pos=#{needs_pos}")
+          Logger.debug(
+            "StudyLive: fetching definitions for #{inspect(term)} (word_id=#{word.id}) needs_defs=#{needs_definitions} needs_pos=#{needs_pos}"
+          )
+
           started_at = System.monotonic_time(:millisecond)
 
           {:ok, entry} = Dictionary.lookup(term, language: word.language, target: "en")
@@ -563,19 +634,31 @@ defmodule LanglerWeb.StudyLive.Index do
 
           # Update definitions if stale, update part_of_speech if missing
           updates = %{}
-          updates = if needs_definitions && new_defs != [], do: Map.put(updates, :definitions, new_defs), else: updates
-          updates = if needs_pos && new_pos, do: Map.put(updates, :part_of_speech, new_pos), else: updates
+
+          updates =
+            if needs_definitions && new_defs != [],
+              do: Map.put(updates, :definitions, new_defs),
+              else: updates
+
+          updates =
+            if needs_pos && new_pos, do: Map.put(updates, :part_of_speech, new_pos), else: updates
 
           if map_size(updates) == 0 do
             {:ok, item}
           else
             case word |> Word.changeset(updates) |> Repo.update() do
               {:ok, updated_word} ->
-                Logger.debug("StudyLive: stored updates for word_id=#{word.id}: #{inspect(Map.keys(updates))}")
+                Logger.debug(
+                  "StudyLive: stored updates for word_id=#{word.id}: #{inspect(Map.keys(updates))}"
+                )
+
                 {:ok, %{item | word: updated_word}}
 
               {:error, reason} ->
-                Logger.warning("StudyLive: failed to store updates for word_id=#{word.id}: #{inspect(reason)}")
+                Logger.warning(
+                  "StudyLive: failed to store updates for word_id=#{word.id}: #{inspect(reason)}"
+                )
+
                 {:ok, item}
             end
           end
@@ -694,6 +777,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp render_conjugation_table(assigns, nil) do
     assigns = assign(assigns, :conjugations, nil)
+
     ~H"""
     <p class="text-sm text-base-content/70">Loading conjugations...</p>
     """
@@ -701,6 +785,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp render_conjugation_table(assigns, %{} = conjugations) when map_size(conjugations) == 0 do
     assigns = assign(assigns, :conjugations, conjugations)
+
     ~H"""
     <p class="text-sm text-base-content/70">Conjugations not available for this verb.</p>
     """
@@ -708,6 +793,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp render_conjugation_table(assigns, conjugations) when is_map(conjugations) do
     assigns = assign(assigns, :conjugations, conjugations)
+
     ~H"""
     <div class="space-y-6">
       <h3 class="text-lg font-semibold text-base-content">Conjugations</h3>
@@ -715,21 +801,21 @@ defmodule LanglerWeb.StudyLive.Index do
       <%= if Map.has_key?(@conjugations, "indicative") do %>
         <div class="space-y-3">
           <h4 class="text-md font-semibold text-base-content/80">Indicative</h4>
-          <%= render_mood(assigns, @conjugations["indicative"]) %>
+          {render_mood(assigns, @conjugations["indicative"])}
         </div>
       <% end %>
 
       <%= if Map.has_key?(@conjugations, "subjunctive") do %>
         <div class="space-y-3">
           <h4 class="text-md font-semibold text-base-content/80">Subjunctive</h4>
-          <%= render_mood(assigns, @conjugations["subjunctive"]) %>
+          {render_mood(assigns, @conjugations["subjunctive"])}
         </div>
       <% end %>
 
       <%= if Map.has_key?(@conjugations, "imperative") do %>
         <div class="space-y-3">
           <h4 class="text-md font-semibold text-base-content/80">Imperative</h4>
-          <%= render_mood(assigns, @conjugations["imperative"]) %>
+          {render_mood(assigns, @conjugations["imperative"])}
         </div>
       <% end %>
 
@@ -764,12 +850,13 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp render_mood(assigns, mood_conjugations) when is_map(mood_conjugations) do
     assigns = assign(assigns, :mood_conjugations, mood_conjugations)
+
     ~H"""
     <div class="space-y-4">
       <%= for {tense, forms} <- @mood_conjugations do %>
         <div class="space-y-2">
           <h5 class="text-sm font-semibold text-base-content/70 capitalize">{tense}</h5>
-          <%= render_two_column_conjugations(forms) %>
+          {render_two_column_conjugations(forms)}
         </div>
       <% end %>
     </div>
@@ -855,6 +942,7 @@ defmodule LanglerWeb.StudyLive.Index do
             case Regex.run(~r/[—–-]\s*(\w+)/i, def) do
               [_, possible_infinitive] ->
                 possible_lower = String.downcase(String.trim(possible_infinitive))
+
                 if String.ends_with?(possible_lower, ["ar", "er", "ir"]) &&
                      String.length(possible_lower) > 2 do
                   String.trim(possible_infinitive)

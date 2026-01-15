@@ -1350,7 +1350,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
         component_attr =
           if component_id do
-            {"data-component-id", Integer.to_string(component_id)}
+            {"data-component-id", "chat-drawer"}
           else
             nil
           end
