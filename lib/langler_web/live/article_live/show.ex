@@ -225,19 +225,20 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   def handle_event(
         "fetch_word_data",
-        %{
-          "word" => word,
-          "language" => language,
-          "sentence_id" => sentence_id,
-          "dom_id" => dom_id
-        } = params,
+        %{ "word" => word, "language" => language, "dom_id" => dom_id } = params,
         socket
       ) do
     word_id = Map.get(params, "word_id")
     trimmed_word = word |> to_string() |> String.trim()
     normalized = Vocabulary.normalize_form(trimmed_word)
-    sentence = Map.get(socket.assigns.sentence_lookup, sentence_id)
-    context = if sentence, do: sentence.content, else: nil
+    sentence_id = Map.get(params, "sentence_id")
+    sentence = sentence_id && Map.get(socket.assigns.sentence_lookup, sentence_id)
+    context =
+      cond do
+        is_binary(Map.get(params, "context")) -> params["context"]
+        sentence -> sentence.content
+        true -> nil
+      end
     {:ok, entry} = Dictionary.lookup(trimmed_word, language: language, target: "en")
     {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
 

@@ -6,7 +6,6 @@ defmodule LanglerWeb.ChatLive.Drawer do
   use LanglerWeb, :live_component
 
   alias Langler.Accounts.LlmConfig
-  alias Langler.Content
   alias Langler.Chat.Session
   alias Langler.LLM.Adapters.ChatGPT
   alias Langler.Study
@@ -40,6 +39,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
       |> assign_new(:messages, fn -> [] end)
       |> assign_new(:studied_word_ids, fn -> MapSet.new() end)
       |> assign_new(:studied_forms, fn -> MapSet.new() end)
+      |> assign_new(:llm_config_missing, fn -> false end)
       |> maybe_stream_messages()
 
     # Handle async updates from background task
@@ -105,8 +105,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
       <%!-- Chat Drawer --%>
       <div
-        :if={@chat_open}
-        class="fixed inset-0 z-50 flex bg-base-100"
+        class={[
+          "fixed inset-0 z-50 flex bg-base-100 transition-transform duration-300 ease-in-out",
+          @chat_open && "translate-x-0 opacity-100",
+          !@chat_open && "translate-x-full opacity-0 pointer-events-none"
+        ]}
+        aria-hidden={!@chat_open}
       >
         <%!-- Sidebar --%>
         <div class={[
@@ -274,7 +278,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
                             @current_session.target_language,
                             @studied_word_ids,
                             @studied_forms,
-                            id
+                            id,
+                            @myself.cid
                           )
                         )}
                       </div>
@@ -1277,7 +1282,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
   defp render_markdown(_), do: ""
 
-  defp add_word_tooltips(html, language, studied_word_ids, studied_forms, message_id)
+  defp add_word_tooltips(
+         html,
+         language,
+         studied_word_ids,
+         studied_forms,
+         message_id,
+         component_id
+       )
        when is_binary(html) do
     case Floki.parse_fragment(html) do
       {:ok, doc} ->
@@ -1288,7 +1300,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
             new_children =
               Enum.flat_map(children, fn
                 text when is_binary(text) ->
-                  tokenize_and_wrap(text, language, studied_word_ids, studied_forms, message_id)
+                  tokenize_and_wrap(
+                    text,
+                    language,
+                    studied_word_ids,
+                    studied_forms,
+                    message_id,
+                    component_id
+                  )
 
                 other ->
                   [other]
@@ -1306,9 +1325,16 @@ defmodule LanglerWeb.ChatLive.Drawer do
     end
   end
 
-  defp add_word_tooltips(html, _, _, _, _), do: html
+  defp add_word_tooltips(html, _, _, _, _, _), do: html
 
-  defp tokenize_and_wrap(text, language, _studied_word_ids, studied_forms, message_id) do
+  defp tokenize_and_wrap(
+         text,
+         language,
+         _studied_word_ids,
+         studied_forms,
+         message_id,
+         component_id
+       ) do
     @token_regex
     |> Regex.scan(text)
     |> Enum.map(&hd/1)
@@ -1322,17 +1348,27 @@ defmodule LanglerWeb.ChatLive.Drawer do
         studied? = normalized && MapSet.member?(studied_forms, normalized)
         token_id = "chat-word-#{message_id}-#{System.unique_integer([:positive])}"
 
-        {"span",
-         [
-           {"data-word", trimmed},
-           {"data-language", language},
-           {"data-component-id", "chat-drawer"},
-           {"phx-hook", "WordTooltip"},
-           {"id", token_id},
-           {"class",
-            "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40" <>
-              if(studied?, do: " bg-primary/5 text-primary", else: "")}
-         ], [token]}
+        component_attr =
+          if component_id do
+            {"data-component-id", Integer.to_string(component_id)}
+          else
+            nil
+          end
+
+        attrs =
+          [
+            {"data-word", trimmed},
+            {"data-language", language},
+            component_attr,
+            {"phx-hook", "WordTooltip"},
+            {"id", token_id},
+            {"class",
+             "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40" <>
+               if(studied?, do: " bg-primary/5 text-primary", else: "")}
+          ]
+          |> Enum.reject(&is_nil/1)
+
+        {"span", attrs, [token]}
       else
         token
       end
