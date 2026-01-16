@@ -108,3 +108,180 @@
 }
 
 /* This file is for your main application CSS */
+
+.article-meta {
+  transition: padding 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+  border-radius: 0;
+  border: none;
+}
+
+.article-meta__full {
+  transition: opacity 200ms ease;
+}
+
+.article-meta__sticky-title {
+  display: none;
+}
+
+.article-meta__actions {
+  flex: 1;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.article-meta__btn {
+  transition: all 150ms ease;
+}
+
+.article-meta__progress {
+  display: none;
+  padding: 0;
+}
+
+.article-meta__progress-track {
+  height: 4px;
+  width: 100%;
+  border-radius: 0;
+  background-color: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+  overflow: hidden;
+}
+
+.article-meta__progress-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 80%, transparent),
+    var(--color-primary)
+  );
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 120ms ease-out;
+}
+
+.article-meta--stuck {
+  position: sticky;
+  top: 0;
+  box-shadow: 0 20px 30px -15px rgba(15, 23, 42, 0.25);
+  z-index: 45;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-base-content) 5%, transparent);
+}
+
+.article-meta__sticky-title {
+  display: none;
+}
+
+.article-meta--stuck .card-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+}
+
+.article-meta--stuck .article-meta__full {
+  display: none !important;
+}
+
+.article-meta--stuck .article-meta__sticky-title {
+  display: block;
+  margin-right: auto;
+  max-width: clamp(12rem, 40vw, 28rem);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.article-meta--stuck .article-meta__button-label {
+  display: none;
+}
+
+.article-meta--stuck .article-meta__btn {
+  border-radius: 9999px;
+  padding: 0.35rem;
+  width: 2rem;
+  height: 2rem;
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.article-meta--stuck .article-meta__back {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.article-meta--stuck .article-meta__actions {
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.article-meta--stuck .article-meta__actions .tooltip {
+  display: inline-flex;
+}
+
+.article-meta--stuck .article-meta__progress {
+  display: block;
+}
+
+.primary-nav.nav--unpinned {
+  position: relative;
+  top: auto;
+  box-shadow: none;
+}
+
+.article-meta__controls {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .article-meta__controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .article-meta__actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+  }
+
+  .article-meta__back {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .article-meta__actions .article-meta__btn,
+  .article-meta__actions .tooltip {
+    flex: 0 0 auto;
+  }
+
+  .article-meta__actions .tooltip {
+    display: flex;
+    align-items: center;
+    --tooltip-offset: 0px;
+  }
+
+  .article-meta--stuck .card-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .article-meta--stuck .article-meta__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .article-meta--stuck .article-meta__sticky-title {
+    width: 100%;
+    order: -1;
+    margin-bottom: 0.1rem;
+  }
+}

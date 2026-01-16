@@ -1036,9 +1036,9 @@ defmodule LanglerWeb.ChatLive.Drawer do
               end
 
             messages =
-              [%{role: "system", content: base_system_message}]
-              ++ context_messages
-              ++ history_messages
+              [%{role: "system", content: base_system_message}] ++
+                context_messages ++
+                history_messages
 
             result = ChatGPT.chat(messages, decrypted_config)
 

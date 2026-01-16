@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/langler"
 import WordTooltip from "./hooks/word_tooltip"
 import CopyToClipboard from "./hooks/copy_to_clipboard"
+import ArticleStickyHeader from "./hooks/article_sticky_header"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -53,7 +54,7 @@ const WordCardToggle = {
   },
 }
 
-const hooks = {...colocatedHooks, WordTooltip, WordCardToggle, CopyToClipboard}
+const hooks = {...colocatedHooks, WordTooltip, WordCardToggle, CopyToClipboard, ArticleStickyHeader}
 
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

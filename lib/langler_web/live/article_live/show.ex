@@ -22,20 +22,35 @@ defmodule LanglerWeb.ArticleLive.Show do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto w-full max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-0">
-        <div class="card border border-base-200 bg-base-100/90 shadow-xl backdrop-blur">
+        <div
+          id="article-hero"
+          phx-hook="ArticleStickyHeader"
+          data-article-target="article-reader"
+          class="article-meta card w-full rounded-none bg-base-100/90 shadow-xl backdrop-blur"
+        >
           <div class="card-body gap-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div class="space-y-2">
-                <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
+                <p class="article-meta__full text-sm font-semibold uppercase tracking-widest text-base-content/60">
                   {humanize_source(@article)}
                 </p>
-                <h1 class="text-2xl font-bold text-base-content sm:text-3xl">
+                <h1 class="article-meta__full text-2xl font-bold text-base-content sm:text-3xl">
                   {display_title(@article)}
                 </h1>
-                <p class="text-sm text-base-content/70">
-                  Imported {format_timestamp(@article.inserted_at)}
+                <p class="article-meta__full text-sm text-base-content/70 flex flex-wrap items-center gap-2">
+                  <span>Imported {format_timestamp(@article.inserted_at)}</span>
+                  <span
+                    :if={@reading_time_minutes}
+                    class="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary/80"
+                  >
+                    <.icon name="hero-clock" class="h-4 w-4" />
+                    {@reading_time_minutes} min read
+                  </span>
                 </p>
-                <div :if={@article_topics != []} class="flex flex-wrap items-center gap-2">
+                <div
+                  :if={@article_topics != []}
+                  class="article-meta__full flex flex-wrap items-center gap-2"
+                >
                   <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
                     Topics
                   </span>
@@ -47,52 +62,75 @@ defmodule LanglerWeb.ArticleLive.Show do
                   </span>
                 </div>
               </div>
-              <span class="badge badge-lg badge-outline self-start uppercase tracking-wide text-base-content/80">
+              <span class="article-meta__full badge badge-lg badge-outline self-start uppercase tracking-wide text-base-content/80">
                 {@article.language}
               </span>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="article-meta__controls flex flex-wrap items-center justify-between gap-3">
               <.link
                 navigate={~p"/articles"}
-                class="btn btn-ghost btn-sm gap-2 text-base-content/80"
+                class="btn btn-ghost btn-sm gap-2 text-base-content/80 article-meta__back"
               >
-                <.icon name="hero-arrow-left" class="h-4 w-4" /> Back to library
+                <.icon name="hero-arrow-left" class="h-4 w-4" />
+                <span class="article-meta__button-label">Back to library</span>
               </.link>
 
-              <div class="flex flex-wrap items-center gap-2">
+              <p class="article-meta__sticky-title text-base font-semibold text-base-content">
+                {@article_short_title}
+              </p>
+
+              <div class="flex flex-wrap items-center gap-2 article-meta__actions">
                 <button
                   type="button"
-                  class="btn btn-primary btn-sm gap-2 text-white"
+                  class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
+                  aria-label="Practice with chat"
                   phx-click="start_article_chat"
                 >
-                  <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" /> Practice with chat
+                  <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
+                  <span class="article-meta__button-label">Practice with chat</span>
                 </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-sm gap-2 text-error"
-                  phx-click="archive_article"
-                  phx-disable-with="Archiving..."
-                  phx-confirm="Archive this article? Tracked words stay in your study deck."
+                <div
+                  class="tooltip tooltip-top"
+                  data-tip="Archived articles can be deleted from settings."
                 >
-                  <.icon name="hero-archive-box" class="h-4 w-4" /> Archive
-                </button>
+                  <button
+                    type="button"
+                    class="article-meta__btn btn btn-ghost btn-sm gap-2 text-error"
+                    aria-label="Archive article"
+                    phx-click="archive_article"
+                    phx-disable-with="Archiving..."
+                    phx-confirm="Archive this article? Tracked words stay in your study deck."
+                  >
+                    <.icon name="hero-archive-box" class="h-4 w-4" />
+                    <span class="article-meta__button-label">Archive</span>
+                  </button>
+                </div>
                 <button
                   type="button"
-                  class="btn btn-ghost btn-sm gap-2"
+                  class="article-meta__btn btn btn-ghost btn-sm gap-2"
+                  aria-label="Refresh article"
                   phx-click="refresh_article"
                   phx-disable-with="Refreshing..."
                 >
-                  <.icon name="hero-arrow-path" class="h-4 w-4" /> Refresh article
+                  <.icon name="hero-arrow-path" class="h-4 w-4" />
+                  <span class="article-meta__button-label">Refresh article</span>
                 </button>
                 <.link
                   href={@article.url}
                   target="_blank"
-                  class="btn btn-outline btn-sm gap-2"
+                  class="article-meta__btn btn btn-outline btn-sm gap-2"
+                  aria-label="View original article"
                 >
-                  View original <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
+                  <span class="article-meta__button-label">View original</span>
+                  <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
                 </.link>
               </div>
+            </div>
+          </div>
+          <div class="article-meta__progress" aria-hidden="true">
+            <div class="article-meta__progress-track">
+              <div class="article-meta__progress-fill" data-progress-fill></div>
             </div>
           </div>
         </div>
@@ -156,6 +194,8 @@ defmodule LanglerWeb.ArticleLive.Show do
     sentence_lookup =
       Map.new(sentences, fn sentence -> {Integer.to_string(sentence.id), sentence} end)
 
+    reading_time_minutes = calculate_reading_time(sentences)
+
     socket
     |> assign(:article, article)
     |> assign(:sentences, sentences)
@@ -164,7 +204,25 @@ defmodule LanglerWeb.ArticleLive.Show do
     |> assign(:studied_forms, studied_forms)
     |> assign(:study_items_by_word, study_items_by_word)
     |> assign(:article_topics, topics)
+    |> assign(:reading_time_minutes, reading_time_minutes)
+    |> assign(:article_short_title, truncated_title(article))
     |> assign(:page_title, article.title || humanize_source(article))
+  end
+
+  defp calculate_reading_time(sentences) do
+    total_words =
+      sentences
+      |> Enum.map(&String.split(&1.content || "", ~r/\s+/, trim: true))
+      |> Enum.map(&length/1)
+      |> Enum.sum()
+
+    minutes = Float.ceil(total_words / 200, 1)
+
+    if minutes > 0 do
+      minutes
+    else
+      nil
+    end
   end
 
   def handle_event(
@@ -674,6 +732,16 @@ defmodule LanglerWeb.ArticleLive.Show do
     cond do
       article.title && article.title != "" -> article.title
       true -> humanize_slug(article.url)
+    end
+  end
+
+  defp truncated_title(article) do
+    title = display_title(article) || "Article"
+
+    if String.length(title) > 60 do
+      String.slice(title, 0, 57) <> "..."
+    else
+      title
     end
   end
 

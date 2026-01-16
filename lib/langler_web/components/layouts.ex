@@ -35,7 +35,7 @@ defmodule LanglerWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50">
+    <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <.link
           navigate={~p"/articles"}
