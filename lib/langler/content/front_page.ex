@@ -32,7 +32,7 @@ defmodule Langler.Content.FrontPage do
   end
 
   defp fetch_front_page(url) do
-    case Req.get(url: url, headers: @default_headers, follow_redirects: true, cache: false) do
+    case Req.get(url: url, headers: @default_headers, redirect: true, cache: false) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 

@@ -69,6 +69,28 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                       {Topics.topic_name(article.language, topic.topic)}
                     </span>
                   </div>
+                  <% difficulty = difficulty_info(article) %>
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
+                    <span class="uppercase tracking-[0.2em] text-base-content/40">Difficulty</span>
+                    <div
+                      class="flex items-center gap-1"
+                      aria-label={"Difficulty #{difficulty.rating} of 4"}
+                    >
+                      <span
+                        :for={index <- 1..4}
+                        class={[
+                          "h-2 w-2 rounded-full",
+                          index <= difficulty.rating && "bg-primary",
+                          index > difficulty.rating && "bg-base-300"
+                        ]}
+                      >
+                      </span>
+                    </div>
+                    <span class="badge badge-sm badge-ghost">{difficulty.cefr}</span>
+                    <span class="text-[0.65rem] uppercase tracking-[0.2em] text-base-content/40">
+                      {difficulty.rating}/4
+                    </span>
+                  </div>
                 </div>
                 <p
                   :if={article.content && article.content != ""}
@@ -136,8 +158,105 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
 
   defp humanize_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)
   defp humanize_error(reason) when is_atom(reason), do: Phoenix.Naming.humanize(reason)
+  defp humanize_error(reason) when is_tuple(reason), do: inspect(reason)
   defp humanize_error(%{__struct__: _} = struct), do: inspect(struct)
   defp humanize_error(reason), do: to_string(reason)
+
+  defp difficulty_info(article) do
+    base_score = Map.get(article, :difficulty_score)
+    sentence_length = article_sentence_length(article)
+
+    adjusted_score =
+      case base_score do
+        nil -> estimate_score_from_sentence_length(sentence_length) || 5.0
+        score -> score + sentence_length_adjustment(sentence_length)
+      end
+
+    adjusted_score = clamp(adjusted_score, 0.0, 10.0)
+
+    %{
+      rating: score_to_rating(adjusted_score),
+      cefr: cefr_from_score(adjusted_score),
+      sentence_length: sentence_length
+    }
+  end
+
+  defp article_sentence_length(article) do
+    Map.get(article, :avg_sentence_length) ||
+      estimate_sentence_length(Map.get(article, :content))
+  end
+
+  defp estimate_sentence_length(content) when is_binary(content) do
+    trimmed = String.trim(content)
+
+    if trimmed == "" do
+      nil
+    else
+      lengths =
+        trimmed
+        |> String.split(~r/[.!?]+/, trim: true)
+        |> Enum.map(&word_count/1)
+        |> Enum.filter(&(&1 > 0))
+
+      if lengths == [] do
+        nil
+      else
+        Enum.sum(lengths) / length(lengths)
+      end
+    end
+  end
+
+  defp estimate_sentence_length(_), do: nil
+
+  defp word_count(sentence) do
+    sentence
+    |> String.split(~r/\s+/, trim: true)
+    |> length()
+  end
+
+  defp estimate_score_from_sentence_length(nil), do: nil
+
+  defp estimate_score_from_sentence_length(length) do
+    cond do
+      length < 10 -> 2.0
+      length < 15 -> 3.5
+      length < 20 -> 5.0
+      length < 25 -> 7.0
+      true -> 8.5
+    end
+  end
+
+  defp sentence_length_adjustment(nil), do: 0.0
+  defp sentence_length_adjustment(length) when length < 12, do: -0.4
+  defp sentence_length_adjustment(length) when length < 18, do: 0.0
+  defp sentence_length_adjustment(length) when length < 24, do: 0.4
+  defp sentence_length_adjustment(_length), do: 0.8
+
+  defp score_to_rating(score) do
+    cond do
+      score < 2.5 -> 1
+      score < 4.5 -> 2
+      score < 7.0 -> 3
+      true -> 4
+    end
+  end
+
+  defp cefr_from_score(score) do
+    cond do
+      score < 2.0 -> "A1"
+      score < 4.0 -> "A2"
+      score < 6.0 -> "B1"
+      score < 8.0 -> "B2"
+      score < 9.0 -> "C1"
+      true -> "C2"
+    end
+  end
+
+  defp clamp(value, min_value, max_value) do
+    value
+    |> max(min_value)
+    |> min(max_value)
+  end
 
   defp format_timestamp(nil), do: "recently"
 

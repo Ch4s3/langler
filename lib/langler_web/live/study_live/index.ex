@@ -473,7 +473,7 @@ defmodule LanglerWeb.StudyLive.Index do
       user_level = Study.get_user_vocabulary_level(socket.assigns.current_user.id)
 
       recommended_articles =
-        Content.get_recommended_articles_for_user(socket.assigns.current_user.id, limit: 5)
+        Content.get_recommended_articles_for_user(socket.assigns.current_user.id, 5)
 
       {:noreply,
        socket

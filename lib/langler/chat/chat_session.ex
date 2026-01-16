@@ -37,6 +37,8 @@ defmodule Langler.Chat.ChatSession do
     |> validate_required([:user_id, :llm_provider, :target_language, :native_language])
     |> validate_inclusion(
       :context_type,
-      ["general", "article", "vocabulary", "conjugation", "grammar"], allow_nil: true)
+      ["general", "article", "vocabulary", "conjugation", "grammar"],
+      allow_nil: true
+    )
   end
 end

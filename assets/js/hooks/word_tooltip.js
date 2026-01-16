@@ -233,10 +233,19 @@ const ratingButtons = [
 ]
 
 const renderCornerAction = entry => {
+  if (!entry.word_id && !entry.studied) {
+    return ""
+  }
+
+  const wrapperClasses =
+    "absolute right-3 top-3 flex h-9 min-w-[2.75rem] items-center justify-center"
+
   if (entry.studied) {
-    return `<div class="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-success/10 px-2 py-1 text-success">
-      <span class="text-xs font-semibold">Tracked</span>
-      <span class="text-base">✓</span>
+    return `<div class="${wrapperClasses}">
+      <div class="flex w-full items-center justify-center gap-1 rounded-full bg-success/10 px-2 py-1 text-success shadow">
+        <span class="text-xs font-semibold">Tracked</span>
+        <span class="text-base leading-none">✓</span>
+      </div>
     </div>`
   }
 
@@ -244,17 +253,19 @@ const renderCornerAction = entry => {
     return ""
   }
 
-  return `<button
-    class="absolute right-3 top-3 btn btn-circle btn-xs btn-primary text-white shadow"
-    data-action="add-to-study"
-    data-word-id="${entry.word_id}"
-    data-translations="${entry.translation || ""}"
-    data-definitions="${(entry.definitions || []).join("||")}"
-    aria-label="Add to study"
-    title="Add to study"
-  >
-    +
-  </button>`
+  return `<div class="${wrapperClasses}">
+    <button
+      class="btn btn-circle btn-xs btn-primary text-white shadow w-full h-full"
+      data-action="add-to-study"
+      data-word-id="${entry.word_id}"
+      data-translations="${entry.translation || ""}"
+      data-definitions="${(entry.definitions || []).join("||")}"
+      aria-label="Add to study"
+      title="Add to study"
+    >
+      +
+    </button>
+  </div>`
 }
 
 

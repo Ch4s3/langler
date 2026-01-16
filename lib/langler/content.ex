@@ -276,28 +276,19 @@ defmodule Langler.Content do
       end
 
     # Convert discovered articles to article-like maps
+    # Fetch titles for articles that don't have them
     discovered_article_maps =
-      Enum.map(discovered, fn da ->
+      discovered
+      |> Enum.map(fn da ->
         if da.article do
           # Already imported - use the article
-          article_to_map(da.article)
+          {da, article_to_map(da.article)}
         else
-          # Not yet imported - create map from discovered article
-          %{
-            id: nil,
-            title: da.title || da.url,
-            url: da.url,
-            source: da.source_site && da.source_site.name,
-            language: da.language || "spanish",
-            content: da.summary || "",
-            inserted_at: da.published_at || da.discovered_at || DateTime.utc_now(),
-            published_at: da.published_at || da.discovered_at,
-            article_topics: [],
-            discovered_article_id: da.id,
-            is_discovered: true
-          }
+          # Not yet imported - will fetch title if needed
+          {da, nil}
         end
       end)
+      |> fetch_titles_for_discovered_articles()
 
     # Convert regular articles to maps
     regular_article_maps = Enum.map(regular_articles, &article_to_map/1)
@@ -336,8 +327,133 @@ defmodule Langler.Content do
       published_at: article.inserted_at,
       article_topics: article.article_topics || [],
       discovered_article_id: nil,
-      is_discovered: false
+      is_discovered: false,
+      difficulty_score: article.difficulty_score,
+      avg_sentence_length: article.avg_sentence_length
     }
+  end
+
+  # Fetch titles for discovered articles that don't have them
+  defp fetch_titles_for_discovered_articles(discovered_with_maps) do
+    # Separate articles that need title fetching from those already mapped
+    # If article_map is nil, it always needs fetching (even if da.title exists)
+    {needs_fetch, already_mapped} =
+      Enum.split_with(discovered_with_maps, fn
+        {_da, article_map} when is_map(article_map) -> false
+        # nil article_map always needs fetching
+        {_da, nil} -> true
+        {da, _} -> is_nil(da.title) or da.title == ""
+      end)
+
+    # Fetch titles concurrently for articles that need them
+    fetched_titles =
+      if Enum.empty?(needs_fetch) do
+        %{}
+      else
+        needs_fetch
+        |> Enum.map(fn {da, _} -> da.url end)
+        |> Task.async_stream(
+          fn url ->
+            case fetch_title_from_url(url) do
+              {:ok, title} when is_binary(title) and title != "" -> {url, title}
+              _ -> {url, nil}
+            end
+          end,
+          max_concurrency: 5,
+          timeout: 5_000,
+          on_timeout: :kill_task
+        )
+        |> Enum.reduce(%{}, fn
+          {:ok, {url, title}}, acc when not is_nil(title) -> Map.put(acc, url, title)
+          _, acc -> acc
+        end)
+      end
+
+    # Update discovered articles with fetched titles
+    updated_needs_fetch =
+      needs_fetch
+      |> Enum.map(fn {da, _} ->
+        title = Map.get(fetched_titles, da.url) || da.title
+
+        %{
+          id: nil,
+          title: title || da.url,
+          url: da.url,
+          source: da.source_site && da.source_site.name,
+          language: da.language || "spanish",
+          content: da.summary || "",
+          inserted_at: da.published_at || da.discovered_at || DateTime.utc_now(),
+          published_at: da.published_at || da.discovered_at,
+          article_topics: [],
+          discovered_article_id: da.id,
+          is_discovered: true,
+          difficulty_score: da.difficulty_score,
+          avg_sentence_length: da.avg_sentence_length
+        }
+      end)
+
+    # Combine with already mapped articles
+    # Filter out any nil article_maps that might have slipped through
+    already_mapped_maps =
+      already_mapped
+      |> Enum.map(fn {_da, article_map} -> article_map end)
+      |> Enum.filter(&(not is_nil(&1)))
+
+    already_mapped_maps ++ updated_needs_fetch
+  end
+
+  # Fetch and extract title from a URL
+  defp fetch_title_from_url(url) do
+    req =
+      Req.new(
+        url: url,
+        method: :get,
+        redirect: :follow,
+        headers: [{"user-agent", "LanglerBot/0.1"}],
+        receive_timeout: 5_000
+      )
+
+    case Req.get(req) do
+      {:ok, %{status: status, body: body}} when status in 200..299 ->
+        extract_title_from_html(body)
+
+      _ ->
+        {:error, :fetch_failed}
+    end
+  end
+
+  # Extract title from HTML
+  defp extract_title_from_html(html) do
+    with {:ok, document} <- Floki.parse_document(html) do
+      # Try <title> tag first
+      title =
+        document
+        |> Floki.find("title")
+        |> Floki.text()
+        |> String.trim()
+
+      if title != "" do
+        {:ok, title}
+      else
+        # Try <h1> as fallback
+        h1_title =
+          document
+          |> Floki.find("h1")
+          |> Enum.at(0)
+          |> case do
+            nil -> nil
+            h1 -> Floki.text(h1) |> String.trim()
+          end
+
+        if h1_title && h1_title != "" do
+          {:ok, h1_title}
+        else
+          {:error, :no_title}
+        end
+      end
+    else
+      _ -> {:error, :parse_failed}
+    end
   end
 
   ## Source Sites
@@ -496,11 +612,44 @@ defmodule Langler.Content do
         )
       end
 
+    # Get articles from all sources, mixing them by discovery time
+    # This ensures we don't only show articles from the most recently discovered source
     query
     |> preload([:source_site, :article])
-    |> order_by([da], desc: da.discovered_at)
+    |> order_by([da], desc: da.discovered_at, desc: da.id)
     |> limit(^limit)
     |> Repo.all()
+    |> mix_by_source()
+  end
+
+  # Mix articles from different sources to ensure diversity
+  defp mix_by_source(articles) do
+    # Group by source site
+    by_source =
+      articles
+      |> Enum.group_by(fn da ->
+        if Ecto.assoc_loaded?(da.source_site) && da.source_site do
+          da.source_site.id
+        else
+          :unknown
+        end
+      end)
+
+    # If we only have one source, return as-is
+    if map_size(by_source) <= 1 do
+      articles
+    else
+      # Round-robin: take one from each source in turn
+      sources = Map.keys(by_source)
+      max_per_source = div(length(articles), length(sources)) + 1
+
+      sources
+      |> Enum.flat_map(fn source_id ->
+        by_source[source_id]
+        |> Enum.take(max_per_source)
+      end)
+      |> Enum.take(length(articles))
+    end
   end
 
   ## Discovered Article Users

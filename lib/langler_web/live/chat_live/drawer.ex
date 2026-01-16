@@ -11,6 +11,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
   alias Langler.Study
   alias Langler.External.Dictionary
   alias Langler.Vocabulary
+  alias Langler.Content
+  alias Ecto.NoResultsError
 
   require Logger
   import Phoenix.HTML
@@ -547,6 +549,46 @@ defmodule LanglerWeb.ChatLive.Drawer do
   end
 
   @impl true
+  def handle_event(
+        "remove_from_study",
+        %{"word_id" => word_id} = params,
+        %{assigns: %{current_scope: scope}} = socket
+      ) do
+    with {:ok, word} <- fetch_word(word_id),
+         {:ok, _} <- Study.remove_item(scope.user.id, word.id) do
+      studied_word_ids = MapSet.delete(socket.assigns.studied_word_ids, word.id)
+
+      studied_forms =
+        case normalized_form_from_word(word) do
+          nil -> socket.assigns.studied_forms
+          form -> MapSet.delete(socket.assigns.studied_forms, form)
+        end
+
+      messages =
+        if socket.assigns.current_session do
+          Session.get_decrypted_messages(socket.assigns.current_session)
+        else
+          []
+        end
+
+      {:noreply,
+       socket
+       |> assign(:studied_word_ids, studied_word_ids)
+       |> assign(:studied_forms, studied_forms)
+       |> stream(:messages, messages,
+         reset: true,
+         dom_id: fn msg ->
+           "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
+         end
+       )
+       |> push_event("word-removed", %{word_id: word.id, dom_id: Map.get(params, "dom_id")})}
+    else
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Unable to remove word: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
   def handle_event("switch_session", %{"session-id" => session_id}, socket) do
     session_id = String.to_integer(session_id)
     user = socket.assigns.current_scope.user
@@ -821,6 +863,51 @@ defmodule LanglerWeb.ChatLive.Drawer do
     """
   end
 
+  defp article_context_messages(%{context_type: "article"} = session, history_messages) do
+    excerpt_already_present? =
+      Enum.any?(history_messages, fn
+        %{role: "system", content: content} -> String.contains?(content, "Article excerpt:")
+        _ -> false
+      end)
+
+    cond do
+      excerpt_already_present? ->
+        []
+
+      is_nil(session.context_id) ->
+        []
+
+      true ->
+        with {:ok, article} <- fetch_article(session.context_id) do
+          topics =
+            article.id
+            |> Content.list_topics_for_article()
+            |> Enum.map(& &1.topic)
+
+          prompt =
+            build_article_prompt(%{
+              article_language: article.language,
+              article_topics: topics,
+              article_content: article.content
+            })
+
+          [%{role: "system", content: prompt}]
+        else
+          _ -> []
+        end
+    end
+  end
+
+  defp article_context_messages(_, _), do: []
+
+  defp fetch_article(article_id) when is_integer(article_id) do
+    {:ok, Content.get_article!(article_id)}
+  rescue
+    NoResultsError -> :error
+  end
+
+  defp fetch_article(_), do: :error
+
   defp refresh_chat_with_session(socket, session, opts \\ []) do
     messages = Session.get_decrypted_messages(session)
     total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
@@ -924,19 +1011,34 @@ defmodule LanglerWeb.ChatLive.Drawer do
                 ""
               end
 
-            # Build messages for LLM
-            messages = [
-              %{
-                role: "system",
-                content: """
-                You are a helpful language learning assistant.
-                The user is learning #{session.target_language} and speaks #{session.native_language}.
-                Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed.#{practice_words_text}
-                When returning verb conjugations, format them as a table using the customary format for the language.
-                """
-              },
-              %{role: "user", content: user_message}
-            ]
+            base_system_message = """
+            You are a helpful language learning assistant.
+            The user is learning #{session.target_language} and speaks #{session.native_language}.
+            Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed.#{practice_words_text}
+            When returning verb conjugations, format them as a table using the customary format for the language.
+            """
+
+            history_messages =
+              session
+              |> Session.get_decrypted_messages()
+              |> Enum.map(fn message -> Map.take(message, [:role, :content]) end)
+
+            context_messages = article_context_messages(session, history_messages)
+
+            # Ensure the most recent user message is included even if history hasn't refreshed yet
+            history_messages =
+              if Enum.any?(history_messages, fn msg ->
+                   msg.role == "user" and msg.content == user_message
+                 end) do
+                history_messages
+              else
+                history_messages ++ [%{role: "user", content: user_message}]
+              end
+
+            messages =
+              [%{role: "system", content: base_system_message}]
+              ++ context_messages
+              ++ history_messages
 
             result = ChatGPT.chat(messages, decrypted_config)
 
@@ -1350,7 +1452,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
         component_attr =
           if component_id do
-            {"data-component-id", "chat-drawer"}
+            {"data-component-id", to_string(component_id)}
           else
             nil
           end

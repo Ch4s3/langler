@@ -422,11 +422,21 @@ defmodule Langler.Content.ArticleImporter do
         content
 
       false ->
-        :unicode.characters_to_binary(content, :utf8, {:replace, <<32>>})
+        # Use String.to_valid_utf8/2 which handles invalid UTF-8 sequences gracefully
+        String.to_valid_utf8(content, replacement: " ")
     end
   rescue
     ArgumentError ->
-      :unicode.characters_to_binary(to_string(content), :utf8, {:replace, <<32>>})
+      # If content is not a binary, convert to string first
+      content
+      |> to_string()
+      |> String.to_valid_utf8(replacement: " ")
+  end
+
+  defp ensure_utf8(content) when is_list(content) do
+    content
+    |> IO.iodata_to_binary()
+    |> ensure_utf8()
   end
 
   defp ensure_utf8(_), do: ""
