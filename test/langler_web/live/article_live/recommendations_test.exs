@@ -23,81 +23,72 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
     %{importer: @importer_req}
   end
 
-  describe "mount" do
-    test "renders page title and description", %{conn: conn} do
-      user = Langler.AccountsFixtures.user_fixture()
-      conn = log_in_user(conn, user)
+  describe "render" do
+    test "renders page title and description" do
+      html = render_recommendations()
+      document = document(html)
 
-      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
+      assert text_for(document, "h1.section-header__title") =~ "Suggested for you"
 
-      assert html =~ "Suggested for you"
-      assert html =~ "Articles recommended based on your reading preferences"
+      assert text_for(document, "p.section-header__lede") =~
+               "Articles recommended based on your reading preferences."
     end
 
-    test "shows empty state when no recommendations available", %{conn: conn} do
-      user = Langler.AccountsFixtures.user_fixture()
-      conn = log_in_user(conn, user)
+    test "shows empty state when no recommendations available" do
+      html = render_recommendations()
+      document = document(html)
 
-      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
-
-      assert html =~ "No recommendations available yet"
-      assert html =~ "Import some articles to get personalized suggestions"
+      empty_text = text_for(document, "div.border-dashed")
+      assert empty_text =~ "No recommendations available yet."
+      assert empty_text =~ "Import some articles to get personalized suggestions."
     end
 
-    test "displays discovered articles as recommendations", %{conn: conn} do
-      user = Langler.AccountsFixtures.user_fixture()
-      conn = log_in_user(conn, user)
-
-      # Create a source site
-      {:ok, source_site} =
-        %SourceSite{}
-        |> SourceSite.changeset(%{
-          name: "Test Site",
-          url: "https://example.com",
-          discovery_method: "rss",
-          language: "spanish",
-          is_active: true
-        })
-        |> Repo.insert()
-
-      # Create discovered articles
+    test "displays discovered articles as recommendations" do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      discovered_articles = [
+      articles = [
         %{
-          source_site_id: source_site.id,
-          url: "https://example.com/article1",
+          id: nil,
           title: "Test Article 1",
-          summary: "This is a test article summary",
+          url: "https://example.com/article1",
+          source: "Test Site",
           language: "spanish",
-          status: "new",
-          discovered_at: now,
+          content: "This is a test article summary",
           inserted_at: now,
-          updated_at: now
+          published_at: now,
+          is_discovered: true,
+          difficulty_score: nil,
+          avg_sentence_length: 12.0
         },
         %{
-          source_site_id: source_site.id,
-          url: "https://example.com/article2",
+          id: nil,
           title: "Test Article 2",
-          summary: "Another test article",
+          url: "https://example.com/article2",
+          source: "Test Site",
           language: "spanish",
-          status: "new",
-          discovered_at: now,
+          content: "Another test article",
           inserted_at: now,
-          updated_at: now
+          published_at: now,
+          is_discovered: true,
+          difficulty_score: nil,
+          avg_sentence_length: 12.0
         }
       ]
 
-      Repo.insert_all(DiscoveredArticle, discovered_articles)
+      html = render_recommendations(%{recommended_articles: articles})
+      document = document(html)
 
-      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
+      title_text = text_for(document, "p.text-lg")
+      summary_text = text_for(document, "p.line-clamp-3")
 
-      assert html =~ "Test Article 1"
-      assert html =~ "Test Article 2"
-      assert html =~ "This is a test article summary"
-      assert html =~ "Another test article"
+      assert title_text =~ "Test Article 1"
+      assert title_text =~ "Test Article 2"
+      assert summary_text =~ "This is a test article summary"
+      assert summary_text =~ "Another test article"
     end
+  end
 
+  describe "mount" do
     test "displays regular articles not imported by user", %{conn: conn} do
       user = Langler.AccountsFixtures.user_fixture()
       other_user = Langler.AccountsFixtures.user_fixture()
@@ -240,83 +231,75 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
   end
 
   describe "article display" do
-    test "displays article metadata correctly", %{conn: conn} do
-      user = Langler.AccountsFixtures.user_fixture()
-      conn = log_in_user(conn, user)
-
-      # Create a source site
-      {:ok, source_site} =
-        %SourceSite{}
-        |> SourceSite.changeset(%{
-          name: "El País",
-          url: "https://elpais.com",
-          discovery_method: "rss",
-          language: "spanish",
-          is_active: true
-        })
-        |> Repo.insert()
-
-      # Create discovered article with metadata
+    test "displays article metadata correctly" do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
       published_at = DateTime.add(now, -2, :day) |> DateTime.truncate(:second)
 
-      {:ok, _discovered_article} =
-        %DiscoveredArticle{}
-        |> DiscoveredArticle.changeset(%{
-          source_site_id: source_site.id,
-          url: "https://elpais.com/article",
-          title: "Test Article with Metadata",
-          summary: "This is a longer summary that should be displayed in the recommendations",
-          language: "spanish",
-          status: "new",
-          discovered_at: now,
-          published_at: published_at
-        })
-        |> Repo.insert()
+      article = %{
+        id: nil,
+        title: "Test Article with Metadata",
+        url: "https://elpais.com/article",
+        source: "El País",
+        language: "spanish",
+        content: "This is a longer summary that should be displayed in the recommendations",
+        inserted_at: now,
+        published_at: published_at,
+        is_discovered: true,
+        difficulty_score: nil,
+        avg_sentence_length: 16.0
+      }
 
-      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
+      html = render_recommendations(%{recommended_articles: [article]})
+      document = document(html)
 
-      assert html =~ "Test Article with Metadata"
-      assert html =~ "El País"
-      assert html =~ "This is a longer summary"
-      assert html =~ "spanish"
+      card_text = text_for(document, ".card-body")
+
+      assert card_text =~ "Test Article with Metadata"
+      assert card_text =~ "El País"
+      assert card_text =~ "This is a longer summary"
+      assert card_text =~ "spanish"
     end
 
-    test "displays 'New' badge for discovered articles", %{conn: conn} do
-      user = Langler.AccountsFixtures.user_fixture()
-      conn = log_in_user(conn, user)
-
-      # Create a source site
-      {:ok, source_site} =
-        %SourceSite{}
-        |> SourceSite.changeset(%{
-          name: "Test Site",
-          url: "https://example.com",
-          discovery_method: "rss",
-          language: "spanish",
-          is_active: true
-        })
-        |> Repo.insert()
-
-      # Create discovered article
+    test "displays 'New' badge for discovered articles" do
       now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-      {:ok, _discovered_article} =
-        %DiscoveredArticle{}
-        |> DiscoveredArticle.changeset(%{
-          source_site_id: source_site.id,
-          url: "https://example.com/new-article",
-          title: "New Article",
-          summary: "A new article",
-          language: "spanish",
-          status: "new",
-          discovered_at: now
-        })
-        |> Repo.insert()
+      article = %{
+        id: nil,
+        title: "New Article",
+        url: "https://example.com/new-article",
+        source: "Test Site",
+        language: "spanish",
+        content: "A new article",
+        inserted_at: now,
+        published_at: now,
+        is_discovered: true,
+        difficulty_score: nil,
+        avg_sentence_length: 12.0
+      }
 
-      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
+      html = render_recommendations(%{recommended_articles: [article]})
+      document = document(html)
 
-      assert html =~ "New"
+      assert text_for(document, "span.badge") =~ "New"
     end
+  end
+
+  defp render_recommendations(assigns \\ %{}) do
+    assigns =
+      assigns
+      |> Map.put_new(:flash, %{})
+      |> Map.put_new(:current_scope, nil)
+      |> Map.put_new(:importing, false)
+      |> Map.put_new(:recommended_articles, [])
+
+    render_component(&LanglerWeb.ArticleLive.Recommendations.render/1, assigns)
+  end
+
+  defp document(html), do: LazyHTML.from_fragment(html)
+
+  defp text_for(document, selector) do
+    document
+    |> LazyHTML.query(selector)
+    |> LazyHTML.text()
   end
 end

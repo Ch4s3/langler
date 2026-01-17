@@ -104,8 +104,14 @@ defmodule LanglerWeb.StudyLive.Index do
 
             <div class="flex flex-wrap gap-3 text-sm font-semibold">
               <.link
-                navigate={~p"/articles"}
+                navigate={~p"/study/session"}
                 class="btn btn-sm btn-primary text-white shadow transition hover:-translate-y-0.5"
+              >
+                <.icon name="hero-play" class="h-4 w-4" /> Start Study Session
+              </.link>
+              <.link
+                navigate={~p"/articles"}
+                class="btn btn-sm btn-ghost border border-dashed border-base-300"
               >
                 Go to library
               </.link>
@@ -250,10 +256,10 @@ defmodule LanglerWeb.StudyLive.Index do
                 >
                   <% flipped = MapSet.member?(@flipped_cards, item.id) %>
                   <% definitions = item.word && (item.word.definitions || []) %>
-                  <div class="relative" style="min-height: 16rem;">
+                  <div class="relative min-h-[16rem]">
                     <div class={[
                       "space-y-4 transition-opacity duration-300",
-                      flipped && "opacity-0 pointer-events-none absolute inset-0"
+                      flipped && "hidden"
                     ]}>
                       <div class="flex flex-wrap items-start justify-between gap-4">
                         <div class="flex flex-col gap-1">
@@ -319,9 +325,9 @@ defmodule LanglerWeb.StudyLive.Index do
                     </div>
 
                     <div class={[
-                      "absolute inset-0 flex h-full flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
-                      flipped && "opacity-100",
-                      !flipped && "opacity-0 pointer-events-none"
+                      "flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
+                      flipped && "block",
+                      !flipped && "hidden"
                     ]}>
                       <p class="text-sm font-semibold uppercase tracking-widest text-primary/70">
                         Definition

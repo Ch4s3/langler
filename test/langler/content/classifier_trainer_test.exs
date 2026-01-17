@@ -1,36 +1,22 @@
 defmodule Langler.Content.ClassifierTrainerTest do
   use Langler.DataCase, async: true
 
-  alias Langler.AccountsFixtures
+  alias Langler.Content.Article
   alias Langler.Content.ArticleTopic
   alias Langler.Content.ClassifierTrainer
-  alias Langler.ContentFixtures
   alias Langler.Repo
 
   describe "train_from_existing_articles/2" do
     test "trains model when sufficient articles exist" do
-      user = AccountsFixtures.user_fixture()
-
-      # Create enough articles with high-confidence topics
-      for i <- 1..60 do
-        article =
-          ContentFixtures.article_fixture(%{
-            user: user,
-            content: "Article #{i} about science and research.",
-            language: "spanish"
-          })
-
-        {:ok, _} =
-          Repo.insert(%ArticleTopic{
-            article_id: article.id,
-            topic: "ciencia",
-            confidence: Decimal.new("0.85"),
-            language: "spanish"
-          })
-      end
-
-      # Only test if NIF is available
       if nif_available?() do
+        insert_articles_with_topics(55,
+          language: "spanish",
+          topic: "ciencia",
+          title_prefix: "Article",
+          url_prefix: "science",
+          content_prefix: "Article about science and research."
+        )
+
         case ClassifierTrainer.train_from_existing_articles("spanish", 50) do
           {:ok, model_json} ->
             assert is_binary(model_json)
@@ -50,27 +36,15 @@ defmodule Langler.Content.ClassifierTrainerTest do
     end
 
     test "returns error when insufficient articles exist" do
-      user = AccountsFixtures.user_fixture()
-
-      # Create only a few articles
-      for i <- 1..10 do
-        article =
-          ContentFixtures.article_fixture(%{
-            user: user,
-            content: "Article #{i}.",
-            language: "spanish"
-          })
-
-        {:ok, _} =
-          Repo.insert(%ArticleTopic{
-            article_id: article.id,
-            topic: "ciencia",
-            confidence: Decimal.new("0.85"),
-            language: "spanish"
-          })
-      end
-
       if nif_available?() do
+        insert_articles_with_topics(5,
+          language: "spanish",
+          topic: "ciencia",
+          title_prefix: "Article",
+          url_prefix: "few",
+          content_prefix: "Article"
+        )
+
         assert {:error, :insufficient_data} =
                  ClassifierTrainer.train_from_existing_articles("spanish", 50)
       else
@@ -81,27 +55,15 @@ defmodule Langler.Content.ClassifierTrainerTest do
 
   describe "retrain_if_needed/2" do
     test "retrains when enough new articles exist" do
-      user = AccountsFixtures.user_fixture()
-
-      # Create enough articles
-      for i <- 1..120 do
-        article =
-          ContentFixtures.article_fixture(%{
-            user: user,
-            content: "Article #{i} about science.",
-            language: "spanish"
-          })
-
-        {:ok, _} =
-          Repo.insert(%ArticleTopic{
-            article_id: article.id,
-            topic: "ciencia",
-            confidence: Decimal.new("0.85"),
-            language: "spanish"
-          })
-      end
-
       if nif_available?() do
+        insert_articles_with_topics(105,
+          language: "spanish",
+          topic: "ciencia",
+          title_prefix: "Article",
+          url_prefix: "retrain",
+          content_prefix: "Article about science."
+        )
+
         result = ClassifierTrainer.retrain_if_needed("spanish", 100)
 
         # Should retrain or return ok
@@ -112,29 +74,56 @@ defmodule Langler.Content.ClassifierTrainerTest do
     end
 
     test "does not retrain when insufficient articles exist" do
-      user = AccountsFixtures.user_fixture()
-
-      # Create only a few articles
-      for i <- 1..20 do
-        article =
-          ContentFixtures.article_fixture(%{
-            user: user,
-            content: "Article #{i}.",
-            language: "spanish"
-          })
-
-        {:ok, _} =
-          Repo.insert(%ArticleTopic{
-            article_id: article.id,
-            topic: "ciencia",
-            confidence: Decimal.new("0.85"),
-            language: "spanish"
-          })
-      end
+      insert_articles_with_topics(5,
+        language: "spanish",
+        topic: "ciencia",
+        title_prefix: "Article",
+        url_prefix: "insufficient",
+        content_prefix: "Article"
+      )
 
       # Should return :ok without retraining
       assert :ok = ClassifierTrainer.retrain_if_needed("spanish", 100)
     end
+  end
+
+  defp insert_articles_with_topics(count, attrs) do
+    attrs =
+      case attrs do
+        attrs when is_list(attrs) -> Map.new(attrs)
+        attrs when is_map(attrs) -> attrs
+      end
+
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    unique = System.unique_integer([:positive])
+
+    articles =
+      Enum.map(1..count, fn i ->
+        %{
+          title: "#{attrs.title_prefix} #{i}",
+          url: "https://example.test/#{attrs.url_prefix}-#{unique}-#{i}",
+          language: attrs.language,
+          content: "#{attrs.content_prefix} #{i}",
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    {_, inserted} = Repo.insert_all(Article, articles, returning: [:id])
+
+    topics =
+      Enum.map(inserted, fn article ->
+        %{
+          article_id: article.id,
+          topic: attrs.topic,
+          confidence: Decimal.new("0.85"),
+          language: attrs.language,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(ArticleTopic, topics)
   end
 
   defp nif_available? do

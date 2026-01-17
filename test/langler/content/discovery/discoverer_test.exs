@@ -7,7 +7,7 @@ defmodule Langler.Content.Discovery.DiscovererTest do
 
   setup do
     original = Req.default_options()
-    Req.default_options(plug: {Req.Test, __MODULE__})
+    Req.default_options(plug: {Req.Test, __MODULE__}, retry: false)
 
     on_exit(fn ->
       Req.default_options(original)

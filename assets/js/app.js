@@ -28,6 +28,7 @@ import CopyToClipboard from "./hooks/copy_to_clipboard"
 import ArticleStickyHeader from "./hooks/article_sticky_header"
 import ChatAutoScroll from "./hooks/chat_auto_scroll"
 import ChatMenuDropdown from "./hooks/chat_menu_dropdown"
+import StudySession from "./hooks/study_session"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -82,6 +83,7 @@ const hooks = {
   ArticleStickyHeader,
   ChatAutoScroll,
   ChatMenuDropdown,
+  StudySession,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

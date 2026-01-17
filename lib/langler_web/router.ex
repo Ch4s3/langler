@@ -63,6 +63,7 @@ defmodule LanglerWeb.Router do
       live "/articles/recommendations", ArticleLive.Recommendations, :index
       live "/articles/:id", ArticleLive.Show, :show
       live "/study", StudyLive.Index, :index
+      live "/study/session", StudyLive.Session, :index
 
       # Admin routes
       live "/admin/source-sites", Admin.SourceSitesLive.Index, :index
