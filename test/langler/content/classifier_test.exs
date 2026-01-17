@@ -123,7 +123,7 @@ defmodule Langler.Content.ClassifierTest do
     end
 
     test "uses ML classifier when model is available" do
-      # Mock training data
+      # Mock training data (>= 10 items to satisfy training requirements)
       training_data = [
         %{
           "content" =>
@@ -138,6 +138,34 @@ defmodule Langler.Content.ClassifierTest do
         %{
           "content" => "La economía crece. El mercado financiero está estable.",
           "topics" => ["economía"]
+        },
+        %{
+          "content" => "La investigación científica avanza con nuevos descubrimientos.",
+          "topics" => ["ciencia"]
+        },
+        %{
+          "content" => "Los partidos políticos debatieron reformas en el congreso.",
+          "topics" => ["política"]
+        },
+        %{
+          "content" => "El banco central ajustó las tasas y el mercado reaccionó.",
+          "topics" => ["economía"]
+        },
+        %{
+          "content" => "Nuevos estudios en biología revelan datos sobre la genética.",
+          "topics" => ["ciencia"]
+        },
+        %{
+          "content" => "Las elecciones locales impulsaron cambios en el gobierno.",
+          "topics" => ["política"]
+        },
+        %{
+          "content" => "La inflación bajó y el consumo aumentó en la economía.",
+          "topics" => ["economía"]
+        },
+        %{
+          "content" => "Científicos probaron un nuevo método para analizar datos.",
+          "topics" => ["ciencia"]
         }
       ]
 
@@ -157,9 +185,7 @@ defmodule Langler.Content.ClassifierTest do
             :ok
 
           {:error, reason} ->
-            # Other error, log but don't fail test
-            IO.puts("ML training failed: #{inspect(reason)}")
-            :ok
+            flunk("Training failed: #{inspect(reason)}")
         end
       else
         # NIF not available, skip ML test

@@ -88,9 +88,6 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                         >
                         </span>
                       </div>
-                      <span class="text-[0.65rem] uppercase tracking-[0.2em] text-base-content/40">
-                        {difficulty.rating}/4
-                      </span>
                     </div>
                   </div>
                   <p

@@ -16,6 +16,13 @@ defmodule LanglerWeb.ChatLive.Drawer do
   alias Langler.Quizzes.State
   alias Langler.Study
   alias Langler.Vocabulary
+
+  import LanglerWeb.ChatLive.ChatHeader
+  import LanglerWeb.ChatLive.ChatInput
+  import LanglerWeb.ChatLive.EmptyState
+  import LanglerWeb.ChatLive.SessionItem
+  import LanglerWeb.ChatLive.SpecialCharactersKeyboard
+
   alias Phoenix.HTML.Engine, as: HtmlEngine
 
   require Logger
@@ -45,6 +52,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> assign_new(:chat_open, fn -> false end)
     |> assign_new(:sidebar_open, fn -> false end)
     |> assign_new(:keyboard_open, fn -> false end)
+    |> assign_new(:fullscreen, fn -> false end)
     |> assign_new(:current_session, fn -> nil end)
     |> assign_new(:sessions, fn -> [] end)
     |> assign_new(:session_search, fn -> "" end)
@@ -55,6 +63,9 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> assign_new(:studied_word_ids, fn -> MapSet.new() end)
     |> assign_new(:studied_forms, fn -> MapSet.new() end)
     |> assign_new(:llm_config_missing, fn -> false end)
+    |> assign_new(:renaming_session_id, fn -> nil end)
+    |> assign_new(:rename_input_value, fn -> nil end)
+    |> assign_new(:open_menu_id, fn -> nil end)
     |> State.init()
   end
 
@@ -146,7 +157,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
       phx-component="chat-drawer"
       class={[
         "fixed bottom-0 right-0 z-[60]",
-        @chat_open && "chat-open"
+        @chat_open && "chat-open",
+        @fullscreen && "chat-fullscreen"
       ]}
     >
       <%!-- Floating Chat Button --%>
@@ -167,7 +179,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
           "chat-drawer-panel fixed inset-y-0 right-0 flex bg-base-100/70 backdrop-blur-md transition-transform duration-300 ease-in-out",
           "lg:bg-transparent lg:backdrop-blur-0",
           @chat_open && "translate-x-0 opacity-100",
-          !@chat_open && "translate-x-full opacity-0 pointer-events-none"
+          !@chat_open && "translate-x-full opacity-0 pointer-events-none",
+          @fullscreen && "chat-drawer-fullscreen"
         ]}
         aria-hidden={!@chat_open}
       >
@@ -175,21 +188,22 @@ defmodule LanglerWeb.ChatLive.Drawer do
         <div
           id="chat-drawer-sidebar"
           class={[
-            "flex flex-col border-r border-base-200 bg-base-200/70 transition-all duration-300",
+            "flex flex-col border-r border-base-200 bg-base-200/70 transition-all duration-300 relative",
             if(@sidebar_open, do: "w-64", else: "w-0 overflow-hidden")
           ]}
         >
-          <div class="flex h-full flex-col">
+          <div class="flex h-full flex-col overflow-hidden">
             <%!-- New Chat Button --%>
-            <button
-              type="button"
-              phx-click="new_session"
-              phx-target={@myself}
-              class="m-2 btn btn-primary btn-sm gap-2"
-            >
-              <.icon name="hero-plus" class="h-4 w-4" />
-              <span :if={@sidebar_open}>New Chat</span>
-            </button>
+            <div :if={@sidebar_open} class="p-2">
+              <button
+                type="button"
+                phx-click="new_session"
+                phx-target={@myself}
+                class="w-full btn btn-primary btn-sm gap-2"
+              >
+                <.icon name="hero-plus" class="h-4 w-4" /> New Chat
+              </button>
+            </div>
 
             <%!-- Search Input --%>
             <div :if={@sidebar_open} class="px-2 mb-2">
@@ -210,44 +224,20 @@ defmodule LanglerWeb.ChatLive.Drawer do
             </div>
 
             <%!-- Chat List --%>
-            <div :if={@sidebar_open} class="flex-1 px-2">
+            <div :if={@sidebar_open} class="flex-1 px-2 flex flex-col">
               <div class="text-xs font-semibold uppercase tracking-wider text-base-content/60 px-2 py-1 mb-1">
                 Your Chats
               </div>
-              <div class="space-y-1 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1">
-                <div
+              <div class="flex-1 space-y-1 overflow-y-auto pr-1">
+                <.session_item
                   :for={session <- filtered_sessions(@sessions, @session_search)}
-                  class={[
-                    "group flex items-start gap-2 rounded-lg border border-base-300/70 bg-base-100 px-3 py-3 transition-all relative",
-                    if(@current_session && session.id == @current_session.id,
-                      do: "border-primary/50 bg-primary/5 shadow-sm",
-                      else: "hover:border-base-400"
-                    )
-                  ]}
-                >
-                  <button
-                    type="button"
-                    phx-click="switch_session"
-                    phx-value-session-id={session.id}
-                    phx-target={@myself}
-                    class="flex-1 text-left"
-                  >
-                    <p class="text-sm font-semibold text-base-content truncate">
-                      {session.title || "Untitled Chat"}
-                    </p>
-                    <p class="text-xs text-base-content/60">{format_date(session.inserted_at)}</p>
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="delete_session"
-                    phx-value-session-id={session.id}
-                    phx-target={@myself}
-                    class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 right-2"
-                    aria-label="Delete chat"
-                  >
-                    <.icon name="hero-trash" class="h-4 w-4 text-error" />
-                  </button>
-                </div>
+                  session={session}
+                  is_current={@current_session && session.id == @current_session.id}
+                  is_renaming={@renaming_session_id == session.id}
+                  rename_value={@rename_input_value}
+                  menu_open={@open_menu_id == session.id}
+                  myself={@myself}
+                />
               </div>
               <div
                 :if={filtered_sessions(@sessions, @session_search) == []}
@@ -260,75 +250,17 @@ defmodule LanglerWeb.ChatLive.Drawer do
         </div>
 
         <%!-- Main Chat Area --%>
-        <div class="chat-drawer-main min-w-0">
+        <div class={[
+          "chat-drawer-main min-w-0",
+          @fullscreen && "chat-drawer-fullscreen"
+        ]}>
           <%!-- Header --%>
-          <div class="chat-drawer-header">
-            <div class="flex items-center gap-3">
-              <button
-                type="button"
-                phx-click="toggle_sidebar"
-                phx-target={@myself}
-                class="btn btn-ghost btn-sm btn-square"
-                aria-label="Toggle sidebar"
-              >
-                <.icon name="hero-bars-3" class="h-5 w-5" />
-              </button>
-              <div class="flex items-center gap-2">
-                <.icon name="hero-chat-bubble-left-right" class="h-5 w-5 text-primary" />
-                <h3 class="text-base font-semibold text-base-content">
-                  {if @current_session,
-                    do: @current_session.title || "New Chat",
-                    else: "Chat Assistant"}
-                </h3>
-              </div>
-            </div>
-            <div class="chat-drawer-actions">
-              <button
-                type="button"
-                phx-click="toggle_keyboard"
-                phx-target={@myself}
-                class="btn btn-ghost btn-sm chat-pill-button"
-              >
-                <.icon name="hero-language" class="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                phx-click="toggle_chat"
-                phx-target={@myself}
-                class="btn btn-ghost btn-sm btn-circle"
-                aria-label="Close chat"
-              >
-                <.icon name="hero-x-mark" class="h-5 w-5" />
-              </button>
-            </div>
-          </div>
+          <.chat_header current_session={@current_session} myself={@myself} fullscreen={@fullscreen} />
 
           <%!-- Messages Area --%>
           <div id="chat-main-area" class="chat-main-area" phx-hook="ChatAutoScroll">
             <%= if @current_session == nil do %>
-              <div class="flex h-full flex-col items-center justify-center gap-4 text-center">
-                <.icon name="hero-chat-bubble-left-right" class="h-16 w-16 text-base-content/20" />
-                <div>
-                  <h4 class="text-lg font-semibold text-base-content">Start a conversation</h4>
-                  <p class="text-sm text-base-content/60">
-                    Practice your target language with AI assistance
-                  </p>
-                </div>
-
-                <%= if @llm_config_missing do %>
-                  <div class="alert alert-warning max-w-md">
-                    <.icon name="hero-exclamation-triangle" class="h-5 w-5" />
-                    <div class="text-left">
-                      <p class="font-semibold">LLM Configuration Required</p>
-                      <p class="text-sm">
-                        Please configure your LLM provider in
-                        <.link navigate={~p"/users/settings/llm"} class="link">settings</.link>
-                        to start chatting.
-                      </p>
-                    </div>
-                  </div>
-                <% end %>
-              </div>
+              <.empty_state llm_config_missing={@llm_config_missing} />
             <% else %>
               <div class="space-y-4" id="chat-messages" phx-update="stream">
                 <div
@@ -386,85 +318,20 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
           <%!-- Input Area --%>
           <div class="border-t border-base-200 bg-base-200/50">
-            <%!-- Special Characters Keyboard --%>
-            <div
-              :if={@keyboard_open && @current_session}
-              id="chat-keyboard"
-              class="border-b border-base-200 bg-base-100 p-3"
-            >
-              <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-semibold text-base-content/60 uppercase tracking-wider">
-                  Special Characters
-                </span>
-                <button
-                  type="button"
-                  phx-click="toggle_keyboard"
-                  phx-target={@myself}
-                  class="btn btn-ghost btn-xs btn-square"
-                  aria-label="Hide keyboard"
-                >
-                  <.icon name="hero-chevron-down" class="h-4 w-4" />
-                </button>
-              </div>
-              <div class="flex flex-wrap gap-1.5 justify-center">
-                <button
-                  :for={char <- get_special_chars(@current_session.target_language)}
-                  type="button"
-                  phx-click="insert_char"
-                  phx-value-char={char}
-                  phx-target={@myself}
-                  class="kbd kbd-sm hover:bg-primary hover:text-primary-content transition-colors cursor-pointer"
-                >
-                  {char}
-                </button>
-              </div>
-            </div>
-            <div :if={!@keyboard_open && @current_session} class="px-4 pt-2">
-              <button
-                type="button"
-                phx-click="toggle_keyboard"
-                phx-target={@myself}
-                class="btn btn-ghost btn-xs gap-1"
-                aria-label="Show keyboard"
-              >
-                <.icon name="hero-chevron-up" class="h-4 w-4" />
-                <span class="text-xs">Special Characters</span>
-              </button>
-            </div>
-            <div class="p-4">
-              <form phx-submit="send_message" phx-target={@myself} class="flex gap-2">
-                <input
-                  type="text"
-                  name="message"
-                  value={@input_value}
-                  phx-change="update_input"
-                  phx-target={@myself}
-                  placeholder="Type your message..."
-                  class="input input-bordered flex-1"
-                  autocomplete="off"
-                  autocorrect="off"
-                  autocapitalize="off"
-                  spellcheck="false"
-                  disabled={@llm_config_missing || @sending}
-                />
-                <button
-                  type="submit"
-                  class="btn btn-primary"
-                  disabled={@llm_config_missing || @input_value == "" || @sending}
-                >
-                  <%= if @sending do %>
-                    <span class="loading loading-spinner loading-sm"></span>
-                  <% else %>
-                    <.icon name="hero-paper-airplane" class="h-5 w-5" />
-                  <% end %>
-                </button>
-              </form>
-
-              <%!-- Token count display --%>
-              <div :if={@current_session} class="mt-2 text-right">
-                <span class="text-xs text-base-content/40">{@total_tokens} tokens</span>
-              </div>
-            </div>
+            <.special_characters_keyboard
+              :if={@current_session}
+              target_language={@current_session.target_language}
+              myself={@myself}
+              is_open={@keyboard_open}
+            />
+            <.chat_input
+              input_value={@input_value}
+              sending={@sending}
+              llm_config_missing={@llm_config_missing}
+              total_tokens={@total_tokens}
+              show_tokens={@current_session != nil}
+              myself={@myself}
+            />
           </div>
         </div>
       </div>
@@ -499,6 +366,11 @@ defmodule LanglerWeb.ChatLive.Drawer do
   @impl true
   def handle_event("toggle_keyboard", _params, socket) do
     {:noreply, assign(socket, :keyboard_open, !socket.assigns.keyboard_open)}
+  end
+
+  @impl true
+  def handle_event("toggle_fullscreen", _params, socket) do
+    {:noreply, assign(socket, :fullscreen, !socket.assigns.fullscreen)}
   end
 
   @impl true
@@ -689,6 +561,113 @@ defmodule LanglerWeb.ChatLive.Drawer do
               Logger.error("Failed to delete session: #{inspect(reason)}")
               socket
           end
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("rename_session", %{"session-id" => session_id}, socket) do
+    session_id = String.to_integer(session_id)
+    session = find_session_by_id(socket.assigns.sessions, session_id)
+
+    socket =
+      if session do
+        socket
+        |> assign(:renaming_session_id, session_id)
+        |> assign(:rename_input_value, session.title || "")
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("save_rename", %{"session-id" => session_id, "title" => title}, socket) do
+    session_id = String.to_integer(session_id)
+    user = socket.assigns.current_scope.user
+    session = find_session_by_id(socket.assigns.sessions, session_id)
+
+    socket =
+      if session do
+        case Session.update_session_title(session, title, 60) do
+          {:ok, _updated_session} ->
+            sessions = Session.list_user_sessions(user.id, limit: 20)
+
+            socket
+            |> assign(:sessions, sessions)
+            |> assign(:renaming_session_id, nil)
+            |> assign(:rename_input_value, nil)
+            |> assign(:open_menu_id, nil)
+
+          {:error, reason} ->
+            Logger.error("Failed to rename session: #{inspect(reason)}")
+
+            socket
+            |> put_flash(:error, "Failed to rename chat")
+            |> assign(:open_menu_id, nil)
+        end
+      else
+        socket
+      end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("cancel_rename", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:renaming_session_id, nil)
+     |> assign(:rename_input_value, nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_chat_menu", params, socket) do
+    session_id = params |> Map.get("session-id") |> String.to_integer()
+    current_menu_id = socket.assigns.open_menu_id
+
+    open_menu_id =
+      if current_menu_id == session_id do
+        nil
+      else
+        session_id
+      end
+
+    {:noreply, assign(socket, :open_menu_id, open_menu_id)}
+  end
+
+  @impl true
+  def handle_event("close_chat_menu", _params, socket) do
+    {:noreply, assign(socket, :open_menu_id, nil)}
+  end
+
+  @impl true
+  def handle_event("toggle_pin_session", %{"session-id" => session_id}, socket) do
+    session_id = String.to_integer(session_id)
+    user = socket.assigns.current_scope.user
+    session = find_session_by_id(socket.assigns.sessions, session_id)
+
+    socket =
+      if session do
+        case Session.toggle_pin(session) do
+          {:ok, _updated_session} ->
+            sessions = Session.list_user_sessions(user.id, limit: 20)
+
+            socket
+            |> assign(:sessions, sessions)
+            |> assign(:open_menu_id, nil)
+
+          {:error, reason} ->
+            Logger.error("Failed to toggle pin: #{inspect(reason)}")
+
+            socket
+            |> put_flash(:error, "Failed to pin/unpin chat")
+            |> assign(:open_menu_id, nil)
+        end
+      else
+        socket
       end
 
     {:noreply, socket}
@@ -1432,21 +1411,6 @@ defmodule LanglerWeb.ChatLive.Drawer do
     send_complete_update(parent_pid)
   end
 
-  defp format_date(%DateTime{} = datetime) do
-    now = DateTime.utc_now()
-    diff_seconds = DateTime.diff(now, datetime, :second)
-
-    cond do
-      diff_seconds < 60 -> "Just now"
-      diff_seconds < 3600 -> "#{div(diff_seconds, 60)}m ago"
-      diff_seconds < 86_400 -> "#{div(diff_seconds, 3600)}h ago"
-      diff_seconds < 604_800 -> "#{div(diff_seconds, 86_400)}d ago"
-      true -> Calendar.strftime(datetime, "%b %d, %Y")
-    end
-  end
-
-  defp format_date(_), do: "Unknown"
-
   defp filtered_sessions(sessions, search) when is_binary(search) do
     search = String.trim(String.downcase(search))
 
@@ -1461,103 +1425,6 @@ defmodule LanglerWeb.ChatLive.Drawer do
   end
 
   defp filtered_sessions(sessions, _), do: sessions
-
-  defp get_special_chars("spanish"),
-    do: ["á", "é", "í", "ó", "ú", "ñ", "ü", "¿", "¡", "Á", "É", "Í", "Ó", "Ú", "Ñ", "Ü"]
-
-  defp get_special_chars("french"),
-    do: [
-      "à",
-      "â",
-      "ä",
-      "é",
-      "è",
-      "ê",
-      "ë",
-      "î",
-      "ï",
-      "ô",
-      "ö",
-      "ù",
-      "û",
-      "ü",
-      "ÿ",
-      "ç",
-      "À",
-      "Â",
-      "Ä",
-      "É",
-      "È",
-      "Ê",
-      "Ë",
-      "Î",
-      "Ï",
-      "Ô",
-      "Ö",
-      "Ù",
-      "Û",
-      "Ü",
-      "Ÿ",
-      "Ç"
-    ]
-
-  defp get_special_chars("german"), do: ["ä", "ö", "ü", "ß", "Ä", "Ö", "Ü"]
-
-  defp get_special_chars("portuguese"),
-    do: [
-      "á",
-      "à",
-      "â",
-      "ã",
-      "é",
-      "ê",
-      "í",
-      "ó",
-      "ô",
-      "õ",
-      "ú",
-      "ü",
-      "ç",
-      "Á",
-      "À",
-      "Â",
-      "Ã",
-      "É",
-      "Ê",
-      "Í",
-      "Ó",
-      "Ô",
-      "Õ",
-      "Ú",
-      "Ü",
-      "Ç"
-    ]
-
-  defp get_special_chars("italian"),
-    do: [
-      "à",
-      "è",
-      "é",
-      "ì",
-      "í",
-      "î",
-      "ò",
-      "ó",
-      "ù",
-      "ú",
-      "À",
-      "È",
-      "É",
-      "Ì",
-      "Í",
-      "Î",
-      "Ò",
-      "Ó",
-      "Ù",
-      "Ú"
-    ]
-
-  defp get_special_chars(_), do: []
 
   @dialyzer {:nowarn_function, render_markdown: 1}
   defp render_markdown(content) when is_binary(content) do

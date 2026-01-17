@@ -27,6 +27,7 @@ import WordTooltip from "./hooks/word_tooltip"
 import CopyToClipboard from "./hooks/copy_to_clipboard"
 import ArticleStickyHeader from "./hooks/article_sticky_header"
 import ChatAutoScroll from "./hooks/chat_auto_scroll"
+import ChatMenuDropdown from "./hooks/chat_menu_dropdown"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -55,6 +56,24 @@ const WordCardToggle = {
   },
 }
 
+const ChatShortcut = {
+  mounted() {
+    this.onKeyDown = event => {
+      const isModifier = event.metaKey || event.ctrlKey
+      if (!isModifier) return
+      if (event.key.toLowerCase() !== "k") return
+      if (this.el.classList.contains("chat-open")) return
+      event.preventDefault()
+      this.pushEvent("toggle_chat", {})
+    }
+
+    window.addEventListener("keydown", this.onKeyDown)
+  },
+  destroyed() {
+    window.removeEventListener("keydown", this.onKeyDown)
+  },
+}
+
 const hooks = {
   ...colocatedHooks,
   WordTooltip,
@@ -62,6 +81,7 @@ const hooks = {
   CopyToClipboard,
   ArticleStickyHeader,
   ChatAutoScroll,
+  ChatMenuDropdown,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -83,6 +103,39 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
+
+const shouldIgnoreShortcut = target => {
+  if (!target) return false
+  const tag = target.tagName
+  const isEditable = tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable
+  const closestEditable =
+    typeof target.closest === "function"
+      ? target.closest("input, textarea, [contenteditable=\"true\"]")
+      : null
+  return isEditable || Boolean(closestEditable)
+}
+
+window.addEventListener("keydown", event => {
+  const modifierHeld = event.metaKey || event.ctrlKey
+  if (!modifierHeld) return
+  if (event.key.toLowerCase() !== "k") return
+  if (shouldIgnoreShortcut(event.target)) return
+
+  const drawer = document.getElementById("chat-drawer-container")
+  if (!drawer) return
+
+  const openButton = drawer.querySelector("button[aria-label='Open chat']")
+  const closeButton = drawer.querySelector("button[aria-label='Close chat']")
+  if (!openButton && !closeButton) return
+
+  event.preventDefault()
+  if (drawer.classList.contains("chat-open") && closeButton) {
+    closeButton.click()
+    return
+  }
+
+  openButton?.click()
+})
 
 // The lines below enable quality of life phoenix_live_reload
 // development features:

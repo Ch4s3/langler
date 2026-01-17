@@ -15,6 +15,7 @@ defmodule Langler.Chat.ChatSession do
     field :llm_model, :string
     field :target_language, :string
     field :native_language, :string
+    field :pinned, :boolean, default: false
 
     has_many :messages, Langler.Chat.ChatMessage, foreign_key: :chat_session_id
 
@@ -34,7 +35,8 @@ defmodule Langler.Chat.ChatSession do
       :llm_provider,
       :llm_model,
       :target_language,
-      :native_language
+      :native_language,
+      :pinned
     ])
     |> validate_required([:user_id, :llm_provider, :target_language, :native_language])
     |> validate_inclusion(

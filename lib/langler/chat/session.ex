@@ -52,6 +52,7 @@ defmodule Langler.Chat.Session do
 
   @doc """
   Lists recent chat sessions for a user.
+  Pinned sessions appear first, then ordered by most recent.
   """
   @spec list_user_sessions(integer(), keyword()) :: list(ChatSession.t())
   def list_user_sessions(user_id, opts \\ []) do
@@ -59,7 +60,7 @@ defmodule Langler.Chat.Session do
 
     ChatSession
     |> where(user_id: ^user_id)
-    |> order_by([s], desc: s.inserted_at)
+    |> order_by([s], desc: s.pinned, desc: s.inserted_at)
     |> limit(^limit)
     |> Repo.all()
   end
@@ -159,8 +160,27 @@ defmodule Langler.Chat.Session do
   @spec update_session_title(ChatSession.t(), String.t()) ::
           {:ok, ChatSession.t()} | {:error, term()}
   def update_session_title(%ChatSession{} = session, title) do
+    update_session_title(session, title, 50)
+  end
+
+  @doc """
+  Updates a session title with a custom max length.
+  """
+  @spec update_session_title(ChatSession.t(), String.t(), integer()) ::
+          {:ok, ChatSession.t()} | {:error, term()}
+  def update_session_title(%ChatSession{} = session, title, max_length) do
     session
-    |> ChatSession.changeset(%{title: String.slice(title, 0, 50)})
+    |> ChatSession.changeset(%{title: String.slice(title, 0, max_length)})
+    |> Repo.update()
+  end
+
+  @doc """
+  Toggles the pinned status of a chat session.
+  """
+  @spec toggle_pin(ChatSession.t()) :: {:ok, ChatSession.t()} | {:error, term()}
+  def toggle_pin(%ChatSession{} = session) do
+    session
+    |> ChatSession.changeset(%{pinned: not session.pinned})
     |> Repo.update()
   end
 
