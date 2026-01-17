@@ -1,5 +1,7 @@
 defmodule Langler.Content.SourceSite do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for source sites.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset
@@ -23,6 +25,8 @@ defmodule Langler.Content.SourceSite do
 
     timestamps(type: :utc_datetime)
   end
+
+  @type t :: %__MODULE__{}
 
   @doc false
   def changeset(source_site, attrs) do

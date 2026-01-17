@@ -1,5 +1,7 @@
 defmodule Langler.External.Dictionary.CacheLoader do
-  @moduledoc false
+  @moduledoc """
+  GenServer for loading dictionary cache entries from the database.
+  """
 
   use GenServer
   require Logger

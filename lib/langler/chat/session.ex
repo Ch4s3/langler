@@ -1,12 +1,15 @@
 defmodule Langler.Chat.Session do
   @moduledoc """
-  Context module for managing chat sessions.
+  Context module for managing encrypted chat sessions.
+
+  Provides functions for creating, updating, and querying chat sessions
+  with encrypted message content for language learning conversations.
   """
 
   import Ecto.Query
+  alias Langler.Accounts.{LlmConfig, User}
+  alias Langler.Chat.{ChatMessage, ChatSession}
   alias Langler.Repo
-  alias Langler.Chat.{ChatSession, ChatMessage}
-  alias Langler.Accounts.{User, LlmConfig}
 
   @doc """
   Creates a new chat session for a user.

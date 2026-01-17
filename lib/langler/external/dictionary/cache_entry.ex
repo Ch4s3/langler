@@ -1,5 +1,7 @@
 defmodule Langler.External.Dictionary.CacheEntry do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for dictionary cache entries.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

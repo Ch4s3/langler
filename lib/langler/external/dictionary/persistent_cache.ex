@@ -1,9 +1,14 @@
 defmodule Langler.External.Dictionary.PersistentCache do
-  @moduledoc false
+  @moduledoc """
+  Persistent cache implementation for dictionary entries using Ecto.
+
+  Provides database-backed caching for dictionary lookups, allowing cache
+  entries to persist across application restarts for improved performance.
+  """
 
   import Ecto.Query
-  alias Langler.Repo
   alias Langler.External.Dictionary.CacheEntry
+  alias Langler.Repo
 
   def fetch(table, key) do
     table_name = table |> to_string()

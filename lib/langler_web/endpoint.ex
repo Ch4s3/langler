@@ -1,4 +1,8 @@
 defmodule LanglerWeb.Endpoint do
+  @moduledoc """
+  Endpoint configuration for HTTP and WebSocket traffic.
+  """
+
   use Phoenix.Endpoint, otp_app: :langler
 
   # The session will be stored in the cookie and signed,

@@ -1,5 +1,7 @@
 defmodule Langler.Content.Sentence do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for article sentences.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

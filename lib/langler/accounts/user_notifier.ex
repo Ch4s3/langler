@@ -1,5 +1,7 @@
 defmodule Langler.Accounts.UserNotifier do
-  @moduledoc false
+  @moduledoc """
+  Email notifications for user account events.
+  """
 
   import Swoosh.Email
 

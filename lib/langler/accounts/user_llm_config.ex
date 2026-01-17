@@ -18,6 +18,8 @@ defmodule Langler.Accounts.UserLlmConfig do
     timestamps(type: :utc_datetime)
   end
 
+  @type t :: %__MODULE__{}
+
   @doc false
   def changeset(user_llm_config, attrs) do
     user_llm_config

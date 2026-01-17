@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserSessionController do
+  @moduledoc """
+  Handles user session creation and deletion.
+  """
+
   use LanglerWeb, :controller
 
   alias Langler.Accounts

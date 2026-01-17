@@ -1,6 +1,9 @@
 defmodule Langler.Content.Readability do
   @moduledoc """
-  Wrapper around the Readability Rust NIF. Falls back to a noop parser in dev/test until the NIF ships.
+  Wrapper around the Readability Rust NIF for extracting article content.
+
+  Falls back to a noop parser in dev/test until the NIF ships. Provides
+  a consistent interface for extracting readable content from HTML.
   """
 
   alias Langler.Content.ReadabilityNif

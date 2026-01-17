@@ -1,5 +1,7 @@
 defmodule Langler.Accounts.UserTopicPreference do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for user topic preferences.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset
@@ -11,6 +13,8 @@ defmodule Langler.Accounts.UserTopicPreference do
 
     timestamps(type: :utc_datetime)
   end
+
+  @type t :: %__MODULE__{}
 
   @doc false
   def changeset(user_topic_preference, attrs) do

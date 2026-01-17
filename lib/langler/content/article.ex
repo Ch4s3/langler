@@ -1,5 +1,7 @@
 defmodule Langler.Content.Article do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for articles.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

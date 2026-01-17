@@ -1,6 +1,9 @@
 defmodule Langler.Vocabulary do
   @moduledoc """
-  Vocabulary + occurrences domain.
+  Vocabulary and word occurrence management domain.
+
+  Handles vocabulary words, their frequency ranks, and tracking word occurrences
+  in articles for language learning purposes.
   """
 
   import Ecto.Query, warn: false

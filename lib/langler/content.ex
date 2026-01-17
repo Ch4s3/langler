@@ -1,20 +1,24 @@
 defmodule Langler.Content do
   @moduledoc """
-  Content ingestion domain (articles, user associations, sentences).
+  Content ingestion domain for managing articles and related data.
+
+  Handles articles, user associations, sentences, topics, and discovered articles
+  for the language learning platform.
   """
 
   import Ecto.Query, warn: false
-  alias Langler.Repo
 
   alias Langler.Content.{
     Article,
-    ArticleUser,
     ArticleTopic,
-    Sentence,
-    SourceSite,
+    ArticleUser,
     DiscoveredArticle,
-    DiscoveredArticleUser
+    DiscoveredArticleUser,
+    Sentence,
+    SourceSite
   }
+
+  alias Langler.Repo
 
   def list_articles do
     Repo.all(from a in Article, order_by: [desc: a.inserted_at])
@@ -335,71 +339,76 @@ defmodule Langler.Content do
 
   # Fetch titles for discovered articles that don't have them
   defp fetch_titles_for_discovered_articles(discovered_with_maps) do
-    # Separate articles that need title fetching from those already mapped
-    # If article_map is nil, it always needs fetching (even if da.title exists)
-    {needs_fetch, already_mapped} =
-      Enum.split_with(discovered_with_maps, fn
-        {_da, article_map} when is_map(article_map) -> false
-        # nil article_map always needs fetching
-        {_da, nil} -> true
-        {da, _} -> is_nil(da.title) or da.title == ""
-      end)
+    {needs_fetch, already_mapped} = separate_articles_by_fetch_needs(discovered_with_maps)
 
-    # Fetch titles concurrently for articles that need them
-    fetched_titles =
-      if Enum.empty?(needs_fetch) do
-        %{}
-      else
-        needs_fetch
-        |> Enum.map(fn {da, _} -> da.url end)
-        |> Task.async_stream(
-          fn url ->
-            case fetch_title_from_url(url) do
-              {:ok, title} when is_binary(title) and title != "" -> {url, title}
-              _ -> {url, nil}
-            end
-          end,
-          max_concurrency: 5,
-          timeout: 5_000,
-          on_timeout: :kill_task
-        )
-        |> Enum.reduce(%{}, fn
-          {:ok, {url, title}}, acc when not is_nil(title) -> Map.put(acc, url, title)
-          _, acc -> acc
-        end)
-      end
-
-    # Update discovered articles with fetched titles
-    updated_needs_fetch =
-      needs_fetch
-      |> Enum.map(fn {da, _} ->
-        title = Map.get(fetched_titles, da.url) || da.title
-
-        %{
-          id: nil,
-          title: title || da.url,
-          url: da.url,
-          source: da.source_site && da.source_site.name,
-          language: da.language || "spanish",
-          content: da.summary || "",
-          inserted_at: da.published_at || da.discovered_at || DateTime.utc_now(),
-          published_at: da.published_at || da.discovered_at,
-          article_topics: [],
-          discovered_article_id: da.id,
-          is_discovered: true,
-          difficulty_score: da.difficulty_score,
-          avg_sentence_length: da.avg_sentence_length
-        }
-      end)
-
-    # Combine with already mapped articles
-    # Filter out any nil article_maps that might have slipped through
-    already_mapped_maps =
-      already_mapped
-      |> Enum.map(fn {_da, article_map} -> article_map end)
-      |> Enum.filter(&(not is_nil(&1)))
+    fetched_titles = fetch_titles_if_needed(needs_fetch)
+    updated_needs_fetch = build_article_maps_from_fetched(needs_fetch, fetched_titles)
+    already_mapped_maps = extract_valid_article_maps(already_mapped)
 
     already_mapped_maps ++ updated_needs_fetch
+  end
+
+  defp fetch_titles_if_needed([]), do: %{}
+  defp fetch_titles_if_needed(needs_fetch), do: fetch_titles_concurrently(needs_fetch)
+
+  defp build_article_maps_from_fetched(needs_fetch, fetched_titles) do
+    Enum.map(needs_fetch, fn {da, _} ->
+      build_article_map_from_discovered(da, fetched_titles)
+    end)
+  end
+
+  defp build_article_map_from_discovered(da, fetched_titles) do
+    title = Map.get(fetched_titles, da.url) || da.title
+
+    %{
+      id: nil,
+      title: title || da.url,
+      url: da.url,
+      source: da.source_site && da.source_site.name,
+      language: da.language || "spanish",
+      content: da.summary || "",
+      inserted_at: da.published_at || da.discovered_at || DateTime.utc_now(),
+      published_at: da.published_at || da.discovered_at,
+      article_topics: [],
+      discovered_article_id: da.id,
+      is_discovered: true,
+      difficulty_score: da.difficulty_score,
+      avg_sentence_length: da.avg_sentence_length
+    }
+  end
+
+  defp extract_valid_article_maps(already_mapped) do
+    already_mapped
+    |> Enum.map(fn {_da, article_map} -> article_map end)
+    |> Enum.filter(&(not is_nil(&1)))
+  end
+
+  defp separate_articles_by_fetch_needs(discovered_with_maps) do
+    Enum.split_with(discovered_with_maps, fn
+      {_da, article_map} when is_map(article_map) -> false
+      {_da, nil} -> true
+      {da, _} -> is_nil(da.title) or da.title == ""
+    end)
+  end
+
+  defp fetch_titles_concurrently(needs_fetch) do
+    needs_fetch
+    |> Enum.map(fn {da, _} -> da.url end)
+    |> Task.async_stream(
+      fn url ->
+        case fetch_title_from_url(url) do
+          {:ok, title} when is_binary(title) and title != "" -> {url, title}
+          _ -> {url, nil}
+        end
+      end,
+      max_concurrency: 5,
+      timeout: 5_000,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {url, title}}, acc when not is_nil(title) -> Map.put(acc, url, title)
+      _, acc -> acc
+    end)
   end
 
   # Fetch and extract title from a URL
@@ -424,37 +433,43 @@ defmodule Langler.Content do
 
   # Extract title from HTML
   defp extract_title_from_html(html) do
-    with {:ok, document} <- Floki.parse_document(html) do
-      # Try <title> tag first
-      title =
-        document
-        |> Floki.find("title")
-        |> Floki.text()
-        |> String.trim()
-
-      if title != "" do
-        {:ok, title}
-      else
-        # Try <h1> as fallback
-        h1_title =
-          document
-          |> Floki.find("h1")
-          |> Enum.at(0)
-          |> case do
-            nil -> nil
-            h1 -> Floki.text(h1) |> String.trim()
-          end
-
-        if h1_title && h1_title != "" do
-          {:ok, h1_title}
-        else
-          {:error, :no_title}
-        end
-      end
-    else
+    case Floki.parse_document(html) do
+      {:ok, document} -> extract_title_from_document(document)
       _ -> {:error, :parse_failed}
     end
   end
+
+  defp extract_title_from_document(document) do
+    title = extract_title_tag(document)
+
+    if title != "" do
+      {:ok, title}
+    else
+      h1_title = extract_h1_from_document(document)
+      extract_h1_title(h1_title)
+    end
+  end
+
+  defp extract_title_tag(document) do
+    document
+    |> Floki.find("title")
+    |> Floki.text()
+    |> String.trim()
+  end
+
+  defp extract_h1_from_document(document) do
+    document
+    |> Floki.find("h1")
+    |> Enum.at(0)
+    |> case do
+      nil -> nil
+      h1 -> Floki.text(h1) |> String.trim()
+    end
+  end
+
+  defp extract_h1_title(nil), do: {:error, :no_title}
+  defp extract_h1_title(""), do: {:error, :no_title}
+  defp extract_h1_title(title), do: {:ok, title}
 
   ## Source Sites
 
@@ -520,38 +535,7 @@ defmodule Langler.Content do
 
     entries =
       Enum.map(articles, fn attrs ->
-        discovered_at =
-          if attrs[:discovered_at] || attrs["discovered_at"] do
-            discovered = attrs[:discovered_at] || attrs["discovered_at"]
-
-            if is_struct(discovered, DateTime),
-              do: DateTime.truncate(discovered, :second),
-              else: now
-          else
-            now
-          end
-
-        published_at =
-          if attrs[:published_at] || attrs["published_at"] do
-            pub = attrs[:published_at] || attrs["published_at"]
-            if is_struct(pub, DateTime), do: DateTime.truncate(pub, :second), else: nil
-          else
-            nil
-          end
-
-        %{
-          source_site_id: source_site_id,
-          url: attrs[:url] || attrs["url"],
-          canonical_url: attrs[:canonical_url] || attrs["canonical_url"],
-          title: attrs[:title] || attrs["title"],
-          summary: attrs[:summary] || attrs["summary"],
-          published_at: published_at,
-          discovered_at: discovered_at,
-          status: attrs[:status] || attrs["status"] || "new",
-          language: attrs[:language] || attrs["language"],
-          inserted_at: now,
-          updated_at: now
-        }
+        build_discovered_article_entry(attrs, source_site_id, now)
       end)
 
     # Use on_conflict to update title and summary if they're missing or changed
@@ -559,6 +543,45 @@ defmodule Langler.Content do
       on_conflict: {:replace_all_except, [:id, :inserted_at, :article_id, :status]},
       conflict_target: [:source_site_id, :url]
     )
+  end
+
+  defp build_discovered_article_entry(attrs, source_site_id, now) do
+    discovered_at = normalize_discovered_at(attrs, now)
+    published_at = normalize_published_at(attrs)
+
+    %{
+      source_site_id: source_site_id,
+      url: attrs[:url] || attrs["url"],
+      canonical_url: attrs[:canonical_url] || attrs["canonical_url"],
+      title: attrs[:title] || attrs["title"],
+      summary: attrs[:summary] || attrs["summary"],
+      published_at: published_at,
+      discovered_at: discovered_at,
+      status: attrs[:status] || attrs["status"] || "new",
+      language: attrs[:language] || attrs["language"],
+      inserted_at: now,
+      updated_at: now
+    }
+  end
+
+  defp normalize_discovered_at(attrs, default) do
+    discovered = attrs[:discovered_at] || attrs["discovered_at"]
+
+    if discovered do
+      if is_struct(discovered, DateTime), do: DateTime.truncate(discovered, :second), else: default
+    else
+      default
+    end
+  end
+
+  defp normalize_published_at(attrs) do
+    pub = attrs[:published_at] || attrs["published_at"]
+
+    if pub do
+      if is_struct(pub, DateTime), do: DateTime.truncate(pub, :second), else: nil
+    else
+      nil
+    end
   end
 
   def get_discovered_article!(id), do: Repo.get!(DiscoveredArticle, id)
@@ -733,10 +756,21 @@ defmodule Langler.Content do
       |> select([s], s.content)
       |> Repo.all()
 
-    avg_sentence_length =
-      if Enum.empty?(sentences) do
-        nil
-      else
+    avg_sentence_length = calculate_avg_sentence_length(sentences)
+
+    update_article(article, %{
+      difficulty_score: difficulty_score,
+      unique_word_count: unique_word_count,
+      avg_word_frequency: avg_word_frequency,
+      avg_sentence_length: avg_sentence_length
+    })
+  end
+
+  defp calculate_avg_sentence_length(sentences) do
+    if Enum.empty?(sentences) do
+      nil
+    else
+      lengths =
         sentences
         |> Enum.map(fn content ->
           content
@@ -744,19 +778,8 @@ defmodule Langler.Content do
           |> Enum.filter(&(&1 != ""))
           |> length()
         end)
-        |> then(fn lengths ->
-          if lengths == [], do: nil, else: Enum.sum(lengths) / length(lengths)
-        end)
-      end
 
-    case update_article(article, %{
-           difficulty_score: difficulty_score,
-           unique_word_count: unique_word_count,
-           avg_word_frequency: avg_word_frequency,
-           avg_sentence_length: avg_sentence_length
-         }) do
-      {:ok, updated} -> {:ok, updated}
-      error -> error
+      if lengths == [], do: nil, else: Enum.sum(lengths) / length(lengths)
     end
   end
 

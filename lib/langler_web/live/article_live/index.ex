@@ -1,4 +1,8 @@
 defmodule LanglerWeb.ArticleLive.Index do
+  @moduledoc """
+  LiveView for listing and importing articles.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Content
@@ -242,30 +246,8 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   def handle_event("random_from_source", %{"source" => source_id}, socket) do
     case find_source_by_id(source_id) do
-      nil ->
-        {:noreply, put_flash(socket, :error, "Unknown source")}
-
-      source ->
-        socket = assign(socket, importing: true, selected_source: source)
-
-        case FrontPage.random_article(source) do
-          {:ok, url} ->
-            flash = "Imported a #{source.label} article from the front page."
-
-            case import_article(socket, url, flash: flash) do
-              {:ok, new_socket} ->
-                {:noreply, new_socket}
-
-              {:error, new_socket} ->
-                {:noreply, new_socket}
-            end
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> assign(:importing, false)
-             |> put_flash(:error, random_error_message(source, reason))}
-        end
+      nil -> {:noreply, put_flash(socket, :error, "Unknown source")}
+      source -> handle_random_article_import(socket, source)
     end
   end
 
@@ -306,6 +288,31 @@ defmodule LanglerWeb.ArticleLive.Index do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Unable to delete: #{inspect(reason)}")}
     end
+  end
+
+  defp handle_random_article_import(socket, source) do
+    socket = assign(socket, importing: true, selected_source: source)
+
+    case FrontPage.random_article(source) do
+      {:ok, url} -> import_random_article(socket, source, url)
+      {:error, reason} -> handle_random_article_error(socket, source, reason)
+    end
+  end
+
+  defp import_random_article(socket, source, url) do
+    flash = "Imported a #{source.label} article from the front page."
+
+    case import_article(socket, url, flash: flash) do
+      {:ok, new_socket} -> {:noreply, new_socket}
+      {:error, new_socket} -> {:noreply, new_socket}
+    end
+  end
+
+  defp handle_random_article_error(socket, source, reason) do
+    {:noreply,
+     socket
+     |> assign(:importing, false)
+     |> put_flash(:error, random_error_message(source, reason))}
   end
 
   defp humanize_error(%Ecto.Changeset{} = changeset), do: inspect(changeset.errors)
@@ -359,32 +366,41 @@ defmodule LanglerWeb.ArticleLive.Index do
     if trimmed == "" do
       {:error, put_flash(socket, :error, "Please provide a URL.")}
     else
-      user = socket.assigns.current_user
-      socket = assign(socket, importing: true)
-
-      case ArticleImporter.import_from_url(user, trimmed) do
-        {:ok, article, status} ->
-          count_delta = if status == :new, do: 1, else: 0
-          form_payload = if opts[:keep_url], do: %{"url" => trimmed}, else: %{"url" => ""}
-          flash_message = opts[:flash] || "Imported #{article.title || article.url}"
-
-          {:ok,
-           socket
-           |> put_flash(:info, flash_message)
-           |> assign(
-             importing: false,
-             form: to_form(form_payload, as: :article),
-             articles_count: socket.assigns.articles_count + count_delta
-           )
-           |> stream_insert(:articles, article, at: 0)}
-
-        {:error, reason} ->
-          {:error,
-           socket
-           |> put_flash(:error, humanize_error(reason))
-           |> assign(importing: false)}
-      end
+      process_article_import(socket, trimmed, opts)
     end
+  end
+
+  defp process_article_import(socket, trimmed, opts) do
+    user = socket.assigns.current_user
+    socket = assign(socket, importing: true)
+
+    case ArticleImporter.import_from_url(user, trimmed) do
+      {:ok, article, status} -> handle_successful_import(socket, article, status, trimmed, opts)
+      {:error, reason} -> handle_import_error(socket, reason)
+    end
+  end
+
+  defp handle_successful_import(socket, article, status, trimmed, opts) do
+    count_delta = if status == :new, do: 1, else: 0
+    form_payload = if opts[:keep_url], do: %{"url" => trimmed}, else: %{"url" => ""}
+    flash_message = opts[:flash] || "Imported #{article.title || article.url}"
+
+    {:ok,
+     socket
+     |> put_flash(:info, flash_message)
+     |> assign(
+       importing: false,
+       form: to_form(form_payload, as: :article),
+       articles_count: socket.assigns.articles_count + count_delta
+     )
+     |> stream_insert(:articles, article, at: 0)}
+  end
+
+  defp handle_import_error(socket, reason) do
+    {:error,
+     socket
+     |> put_flash(:error, humanize_error(reason))
+     |> assign(importing: false)}
   end
 
   defp url_input_classes(nil), do: "w-full input"
@@ -449,6 +465,7 @@ defmodule LanglerWeb.ArticleLive.Index do
     "Unable to reach #{source.label} (status #{status}). Try again in a bit."
   end
 
+  @dialyzer {:nowarn_function, random_error_message: 2}
   defp random_error_message(source, :no_matches) do
     "No article links found on #{source.label}'s front page."
   end

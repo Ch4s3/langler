@@ -1,6 +1,9 @@
 defmodule Langler.Content.Discovery.UrlNormalizer do
   @moduledoc """
-  Normalizes URLs for discovery: strips tracking params, normalizes scheme, resolves relative URLs.
+  Normalizes URLs for article discovery.
+
+  Strips tracking parameters, normalizes scheme (http/https), and resolves
+  relative URLs to ensure consistent URL handling across the discovery system.
   """
 
   @doc """

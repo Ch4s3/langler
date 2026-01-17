@@ -1,6 +1,9 @@
 defmodule Langler.External.Dictionary.Google do
   @moduledoc """
-  Lightweight wrapper around Google Translate's dictionary data.
+  Lightweight wrapper around Google Translate's dictionary API.
+
+  Provides translations and definitions from Google Translate with caching
+  support for improved performance.
   """
 
   alias Langler.External.Dictionary.Cache
@@ -20,10 +23,7 @@ defmodule Langler.External.Dictionary.Google do
 
     Cache.get_or_store(table, cache_key, [ttl: ttl()], fn ->
       endpoint = dictionary_endpoint()
-
-      with {:ok, response} <- request_dictionary(endpoint, term, source_language, target_language) do
-        {:ok, response}
-      end
+      request_dictionary(endpoint, term, source_language, target_language)
     end)
   end
 
@@ -40,7 +40,7 @@ defmodule Langler.External.Dictionary.Google do
       {"q", term}
     ]
 
-    case Req.get(url: endpoint, params: params, retry: false) do
+    case Req.get([url: endpoint, params: params, retry: false] ++ req_options()) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, parse_dictionary_response(body)}
 
@@ -55,8 +55,7 @@ defmodule Langler.External.Dictionary.Google do
   defp parse_dictionary_response(%{"sentences" => sentences} = body) do
     translation =
       sentences
-      |> Enum.map(&Map.get(&1, "trans", ""))
-      |> Enum.join(" ")
+      |> Enum.map_join(" ", &Map.get(&1, "trans", ""))
       |> String.trim()
       |> blank_to_nil()
 
@@ -78,7 +77,7 @@ defmodule Langler.External.Dictionary.Google do
     }
   end
 
-  defp format_dictionary_entry(%{"entry" => entries, "pos" => pos} = dict) do
+  defp format_dictionary_entry(%{"entry" => entries, "pos" => pos}) do
     entries
     |> Enum.take(5)
     |> Enum.map(fn entry ->
@@ -90,7 +89,7 @@ defmodule Langler.External.Dictionary.Google do
         render_pos(pos),
         render_reverse(reverse)
       ]
-      |> Enum.reject(&is_nil_or_blank/1)
+      |> Enum.reject(&nil_or_blank?/1)
       |> Enum.join(" ")
     end)
     |> Enum.reject(&(&1 == ""))
@@ -104,8 +103,7 @@ defmodule Langler.External.Dictionary.Google do
   defp capitalize_word(word) do
     word
     |> String.split(" ", parts: 2)
-    |> Enum.map(&String.capitalize/1)
-    |> Enum.join(" ")
+    |> Enum.map_join(" ", &String.capitalize/1)
   end
 
   defp render_pos(nil), do: nil
@@ -124,11 +122,12 @@ defmodule Langler.External.Dictionary.Google do
     end
   end
 
+  @dialyzer {:nowarn_function, blank_to_nil: 1}
   defp blank_to_nil(value), do: value
 
-  defp is_nil_or_blank(value) when is_binary(value), do: String.trim(value) == ""
-  defp is_nil_or_blank(nil), do: true
-  defp is_nil_or_blank(_), do: false
+  defp nil_or_blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp nil_or_blank?(nil), do: true
+  defp nil_or_blank?(_), do: false
 
   defp dictionary_endpoint do
     config = Application.get_env(:langler, __MODULE__, [])
@@ -153,5 +152,10 @@ defmodule Langler.External.Dictionary.Google do
   defp ttl do
     config = Application.get_env(:langler, __MODULE__, [])
     Keyword.get(config, :ttl, :timer.hours(6))
+  end
+
+  defp req_options do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :req_options, [])
   end
 end

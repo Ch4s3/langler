@@ -1,0 +1,2 @@
+# dialyzer_ignore.exs
+[]

@@ -2,10 +2,26 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
   use LanglerWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Req.Test, only: [set_req_test_from_context: 1]
   import Langler.ContentFixtures
   alias Langler.Content
   alias Langler.Content.{DiscoveredArticle, SourceSite}
   alias Langler.Repo
+
+  @importer_req Langler.Content.ArticleImporterReq
+
+  setup :set_req_test_from_context
+  setup {Req.Test, :verify_on_exit!}
+
+  setup do
+    Application.put_env(:langler, Langler.Content.ArticleImporter,
+      req_options: [plug: {Req.Test, @importer_req}, retry: false]
+    )
+
+    on_exit(fn -> Application.delete_env(:langler, Langler.Content.ArticleImporter) end)
+
+    %{importer: @importer_req}
+  end
 
   describe "mount" do
     test "renders page title and description", %{conn: conn} do
@@ -22,7 +38,7 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
       user = Langler.AccountsFixtures.user_fixture()
       conn = log_in_user(conn, user)
 
-      {:ok, view, html} = live(conn, ~p"/articles/recommendations")
+      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
 
       assert html =~ "No recommendations available yet"
       assert html =~ "Import some articles to get personalized suggestions"
@@ -74,7 +90,7 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
 
       Repo.insert_all(DiscoveredArticle, discovered_articles)
 
-      {:ok, view, html} = live(conn, ~p"/articles/recommendations")
+      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
 
       assert html =~ "Test Article 1"
       assert html =~ "Test Article 2"
@@ -87,11 +103,11 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
       other_user = Langler.AccountsFixtures.user_fixture()
 
       # Create an article for another user (should appear in recommendations)
-      article = article_fixture(%{user: other_user, title: "Shared Article"})
+      _article = article_fixture(%{user: other_user, title: "Shared Article"})
 
       conn = log_in_user(conn, user)
 
-      {:ok, view, html} = live(conn, ~p"/articles/recommendations")
+      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
 
       assert html =~ "Shared Article"
     end
@@ -100,11 +116,11 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
       user = Langler.AccountsFixtures.user_fixture()
 
       # Create an article for this user (should NOT appear in recommendations)
-      article = article_fixture(%{user: user, title: "My Article"})
+      _article = article_fixture(%{user: user, title: "My Article"})
 
       conn = log_in_user(conn, user)
 
-      {:ok, view, html} = live(conn, ~p"/articles/recommendations")
+      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
 
       refute html =~ "My Article"
     end
@@ -143,17 +159,19 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
         })
         |> Repo.insert()
 
-      %{conn: conn, user: user, discovered_article: discovered_article}
+      %{conn: conn, user: user, discovered_article: discovered_article, importer: @importer_req}
     end
 
     test "imports article and removes it from recommendations", %{
       conn: conn,
-      user: user,
-      discovered_article: discovered_article
+      user: _user,
+      discovered_article: discovered_article,
+      importer: importer
     } do
-      bypass = Bypass.open()
+      Req.Test.expect(importer, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/test-article"
 
-      Bypass.expect_once(bypass, "GET", "/test-article", fn conn ->
         body = """
         <html>
           <body>
@@ -162,10 +180,10 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
         </html>
         """
 
-        resp(conn, 200, body)
+        Req.Test.html(conn, body)
       end)
 
-      url = "http://localhost:#{bypass.port}/test-article"
+      url = "https://article-importer.test/test-article"
 
       # Update discovered article with bypass URL
       discovered_article
@@ -173,6 +191,7 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
       |> Repo.update()
 
       {:ok, view, _html} = live(conn, ~p"/articles/recommendations")
+      Req.Test.allow(importer, self(), view.pid)
 
       # Verify article is in recommendations
       assert render(view) =~ "Test Article to Import"
@@ -182,8 +201,7 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
       |> element("button[phx-click='import_recommended'][phx-value-url='#{url}']")
       |> render_click()
 
-      # Verify flash message
-      assert render(view) =~ "Imported"
+      assert %Content.Article{} = Content.get_article_by_url(url)
 
       # Verify article is removed from recommendations
       refute render(view) =~ "Test Article to Import"
@@ -191,19 +209,24 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
 
     test "handles import errors gracefully", %{
       conn: conn,
-      discovered_article: discovered_article
+      discovered_article: discovered_article,
+      importer: importer
     } do
-      bypass = Bypass.open()
+      Req.Test.stub(importer, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/error-article"
+        Req.Test.transport_error(conn, :econnrefused)
+      end)
 
-      # Update discovered article with bypass URL that will fail
-      url = "http://localhost:#{bypass.port}/error-article"
-      Bypass.down(bypass)
+      # Update discovered article with URL that will fail
+      url = "https://article-importer.test/error-article"
 
       discovered_article
       |> DiscoveredArticle.changeset(%{url: url})
       |> Repo.update()
 
       {:ok, view, _html} = live(conn, ~p"/articles/recommendations")
+      Req.Test.allow(importer, self(), view.pid)
 
       # Try to import - should handle error gracefully
       view
@@ -251,7 +274,7 @@ defmodule LanglerWeb.ArticleLive.RecommendationsTest do
         })
         |> Repo.insert()
 
-      {:ok, view, html} = live(conn, ~p"/articles/recommendations")
+      {:ok, _view, html} = live(conn, ~p"/articles/recommendations")
 
       assert html =~ "Test Article with Metadata"
       assert html =~ "El País"

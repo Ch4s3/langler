@@ -1,27 +1,35 @@
 defmodule Langler.External.DictionaryTest do
   use Langler.DataCase, async: false
 
+  import Req.Test, only: [set_req_test_from_context: 1]
+
   alias Langler.External.Dictionary
   alias Langler.External.Dictionary.CacheEntry
 
-  setup do
-    google = Bypass.open()
-    wiktionary = Bypass.open()
-    languagetool = Bypass.open()
+  @google_req Langler.External.Dictionary.GoogleReq
+  @wiktionary_req Langler.External.Dictionary.WiktionaryReq
+  @languagetool_req Langler.External.Dictionary.LanguageToolReq
 
+  setup :set_req_test_from_context
+  setup {Req.Test, :verify_on_exit!}
+
+  setup do
     Application.put_env(:langler, Langler.External.Dictionary.Google,
-      dictionary_endpoint: "http://localhost:#{google.port}/dictionary",
-      cache_table: :google_dictionary_test_cache
+      dictionary_endpoint: "https://google.test/dictionary",
+      cache_table: :google_dictionary_test_cache,
+      req_options: [plug: {Req.Test, @google_req}]
     )
 
     Application.put_env(:langler, Langler.External.Dictionary.Wiktionary,
-      base_url: "http://localhost:#{wiktionary.port}/wiki",
-      cache_table: :wiktionary_dictionary_test_cache
+      base_url: "https://wiktionary.test/wiki",
+      cache_table: :wiktionary_dictionary_test_cache,
+      req_options: [plug: {Req.Test, @wiktionary_req}]
     )
 
     Application.put_env(:langler, Langler.External.Dictionary.LanguageTool,
-      endpoint: "http://localhost:#{languagetool.port}/check",
-      cache_table: :languagetool_dictionary_test_cache
+      endpoint: "https://languagetool.test/check",
+      cache_table: :languagetool_dictionary_test_cache,
+      req_options: [plug: {Req.Test, @languagetool_req}]
     )
 
     cleanup_tables([
@@ -44,7 +52,7 @@ defmodule Langler.External.DictionaryTest do
       Application.delete_env(:langler, Langler.External.Dictionary.LanguageTool)
     end)
 
-    {:ok, google: google, wiktionary: wiktionary, languagetool: languagetool}
+    {:ok, google: @google_req, wiktionary: @wiktionary_req, languagetool: @languagetool_req}
   end
 
   test "prefers Google dictionary definitions and translation", %{
@@ -52,7 +60,10 @@ defmodule Langler.External.DictionaryTest do
     wiktionary: wiktionary,
     languagetool: languagetool
   } do
-    Bypass.expect(google, "GET", "/dictionary", fn conn ->
+    Req.Test.expect(google, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/dictionary"
+
       response = %{
         "sentences" => [
           %{"trans" => "hello", "orig" => "hola"}
@@ -70,22 +81,26 @@ defmodule Langler.External.DictionaryTest do
         ]
       }
 
-      conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      Req.Test.json(conn, response)
     end)
 
     # Wiktionary isn't needed when Google dictionary succeeds
-    Bypass.expect_once(wiktionary, "GET", "/wiki/hola", fn conn ->
-      Plug.Conn.resp(conn, 404, "not found")
-    end)
-
-    Bypass.expect(languagetool, "POST", "/check", fn conn ->
-      response = %{"matches" => []}
+    Req.Test.expect(wiktionary, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/wiki/hola"
 
       conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      |> Plug.Conn.put_status(404)
+      |> Req.Test.text("not found")
+    end)
+
+    Req.Test.expect(languagetool, fn conn ->
+      assert conn.method == "POST"
+      assert conn.request_path == "/check"
+
+      response = %{"matches" => []}
+
+      Req.Test.json(conn, response)
     end)
 
     {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
@@ -102,22 +117,31 @@ defmodule Langler.External.DictionaryTest do
     wiktionary: wiktionary,
     languagetool: languagetool
   } do
-    Bypass.expect(google, "GET", "/dictionary", fn conn ->
+    Req.Test.expect(google, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/dictionary"
+
       conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(500, "error")
+      |> Plug.Conn.put_status(500)
+      |> Req.Test.text("error")
     end)
 
-    Bypass.expect(wiktionary, "GET", "/wiki/hola", fn conn ->
-      Plug.Conn.resp(conn, 404, "not found")
+    Req.Test.expect(wiktionary, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/wiki/hola"
+
+      conn
+      |> Plug.Conn.put_status(404)
+      |> Req.Test.text("not found")
     end)
 
-    Bypass.expect(languagetool, "POST", "/check", fn conn ->
+    Req.Test.expect(languagetool, fn conn ->
+      assert conn.method == "POST"
+      assert conn.request_path == "/check"
+
       response = %{"matches" => []}
 
-      conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      Req.Test.json(conn, response)
     end)
 
     {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
@@ -134,7 +158,10 @@ defmodule Langler.External.DictionaryTest do
     wiktionary: wiktionary,
     languagetool: languagetool
   } do
-    Bypass.expect(google, "GET", "/dictionary", fn conn ->
+    Req.Test.expect(google, 2, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/dictionary"
+
       conn = Plug.Conn.fetch_query_params(conn)
 
       response =
@@ -159,16 +186,22 @@ defmodule Langler.External.DictionaryTest do
             }
         end
 
+      Req.Test.json(conn, response)
+    end)
+
+    Req.Test.expect(wiktionary, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/wiki/hablando"
+
       conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      |> Plug.Conn.put_status(404)
+      |> Req.Test.text("not found")
     end)
 
-    Bypass.expect_once(wiktionary, "GET", "/wiki/hablando", fn conn ->
-      Plug.Conn.resp(conn, 404, "not found")
-    end)
+    Req.Test.expect(languagetool, fn conn ->
+      assert conn.method == "POST"
+      assert conn.request_path == "/check"
 
-    Bypass.expect(languagetool, "POST", "/check", fn conn ->
       response = %{
         "matches" => [
           %{
@@ -178,9 +211,7 @@ defmodule Langler.External.DictionaryTest do
         ]
       }
 
-      conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      Req.Test.json(conn, response)
     end)
 
     {:ok, entry} = Dictionary.lookup("hablando", language: "spanish", target: "en")
@@ -193,7 +224,10 @@ defmodule Langler.External.DictionaryTest do
     wiktionary: wiktionary,
     languagetool: languagetool
   } do
-    Bypass.expect(google, "GET", "/dictionary", fn conn ->
+    Req.Test.expect(google, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/dictionary"
+
       response = %{
         "sentences" => [%{"trans" => "hello", "orig" => "hola"}],
         "dict" => [
@@ -204,22 +238,26 @@ defmodule Langler.External.DictionaryTest do
         ]
       }
 
-      conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      Req.Test.json(conn, response)
     end)
 
     # ensure Wiktionary isn't used during first fetch
-    Bypass.expect_once(wiktionary, "GET", "/wiki/hola", fn conn ->
-      Plug.Conn.resp(conn, 404, "not found")
-    end)
-
-    Bypass.expect(languagetool, "POST", "/check", fn conn ->
-      response = %{"matches" => []}
+    Req.Test.expect(wiktionary, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/wiki/hola"
 
       conn
-      |> Plug.Conn.put_resp_header("content-type", "application/json")
-      |> Plug.Conn.resp(200, Jason.encode!(response))
+      |> Plug.Conn.put_status(404)
+      |> Req.Test.text("not found")
+    end)
+
+    Req.Test.expect(languagetool, fn conn ->
+      assert conn.method == "POST"
+      assert conn.request_path == "/check"
+
+      response = %{"matches" => []}
+
+      Req.Test.json(conn, response)
     end)
 
     {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
@@ -227,7 +265,7 @@ defmodule Langler.External.DictionaryTest do
 
     :ets.delete(:dictionary_entry_cache)
 
-    Bypass.stub(google, "GET", "/dictionary", fn _conn ->
+    Req.Test.stub(google, fn _conn ->
       flunk("dictionary API should not be hit when loading from persistent cache")
     end)
 

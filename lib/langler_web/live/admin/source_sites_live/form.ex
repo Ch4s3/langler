@@ -1,4 +1,8 @@
 defmodule LanglerWeb.Admin.SourceSitesLive.Form do
+  @moduledoc """
+  Admin LiveView for creating and editing source sites.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Content

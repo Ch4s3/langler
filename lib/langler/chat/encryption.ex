@@ -21,20 +21,18 @@ defmodule Langler.Chat.Encryption do
   """
   @spec encrypt_message(integer(), String.t()) :: {:ok, binary()} | {:error, term()}
   def encrypt_message(user_id, content) when is_integer(user_id) and is_binary(content) do
-    try do
-      key = derive_key(user_id)
-      iv = :crypto.strong_rand_bytes(12)
+    key = derive_key(user_id)
+    iv = :crypto.strong_rand_bytes(12)
 
-      {ciphertext, tag} = :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, content, @aad, true)
+    {ciphertext, tag} = :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, content, @aad, true)
 
-      # Format: iv (12 bytes) || tag (16 bytes) || ciphertext
-      encrypted = iv <> tag <> ciphertext
+    # Format: iv (12 bytes) || tag (16 bytes) || ciphertext
+    encrypted = iv <> tag <> ciphertext
 
-      {:ok, encrypted}
-    rescue
-      error ->
-        {:error, {:encryption_failed, error}}
-    end
+    {:ok, encrypted}
+  rescue
+    error ->
+      {:error, {:encryption_failed, error}}
   end
 
   @doc """
@@ -51,23 +49,21 @@ defmodule Langler.Chat.Encryption do
   @spec decrypt_message(integer(), binary()) :: {:ok, String.t()} | {:error, term()}
   def decrypt_message(user_id, encrypted_content)
       when is_integer(user_id) and is_binary(encrypted_content) do
-    try do
-      key = derive_key(user_id)
+    key = derive_key(user_id)
 
-      # Extract iv (12 bytes), tag (16 bytes), and ciphertext
-      <<iv::binary-size(12), tag::binary-size(16), ciphertext::binary>> = encrypted_content
+    # Extract iv (12 bytes), tag (16 bytes), and ciphertext
+    <<iv::binary-size(12), tag::binary-size(16), ciphertext::binary>> = encrypted_content
 
-      case :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, ciphertext, @aad, tag, false) do
-        plaintext when is_binary(plaintext) ->
-          {:ok, plaintext}
+    case :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, ciphertext, @aad, tag, false) do
+      plaintext when is_binary(plaintext) ->
+        {:ok, plaintext}
 
-        :error ->
-          {:error, :decryption_failed}
-      end
-    rescue
-      error ->
-        {:error, {:decryption_failed, error}}
+      :error ->
+        {:error, :decryption_failed}
     end
+  rescue
+    error ->
+      {:error, {:decryption_failed, error}}
   end
 
   @doc """

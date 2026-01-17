@@ -1,5 +1,7 @@
 defmodule Langler.Content.ArticleTopic do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for article topics.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset
@@ -12,6 +14,8 @@ defmodule Langler.Content.ArticleTopic do
 
     timestamps(type: :utc_datetime)
   end
+
+  @type t :: %__MODULE__{}
 
   @doc false
   def changeset(article_topic, attrs) do

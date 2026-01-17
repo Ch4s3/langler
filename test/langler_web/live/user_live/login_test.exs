@@ -9,7 +9,7 @@ defmodule LanglerWeb.UserLive.LoginTest do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
       assert html =~ "Log in"
-      assert html =~ "Register"
+      assert html =~ "Sign up"
       assert html =~ "Log in with email"
     end
   end
@@ -85,7 +85,7 @@ defmodule LanglerWeb.UserLive.LoginTest do
         |> render_click()
         |> follow_redirect(conn, ~p"/users/register")
 
-      assert login_html =~ "Register"
+      assert login_html =~ "Register for an account"
     end
   end
 
@@ -99,7 +99,7 @@ defmodule LanglerWeb.UserLive.LoginTest do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
       assert html =~ "You need to reauthenticate"
-      refute html =~ "Register"
+      refute html =~ "Sign up"
       assert html =~ "Log in with email"
 
       assert html =~

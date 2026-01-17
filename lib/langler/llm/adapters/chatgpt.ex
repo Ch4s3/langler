@@ -1,8 +1,9 @@
 defmodule Langler.LLM.Adapters.ChatGPT do
   @moduledoc """
-  OpenAI ChatGPT adapter implementation.
+  OpenAI ChatGPT adapter implementation for language learning.
 
-  Implements the LLM.Adapter behavior for OpenAI's ChatGPT API.
+  Implements the LLM.Adapter behavior for OpenAI's ChatGPT API, providing
+  chat functionality with support for multiple languages and conversation contexts.
   """
 
   @behaviour Langler.LLM.Adapter
@@ -43,24 +44,22 @@ defmodule Langler.LLM.Adapters.ChatGPT do
 
   @impl true
   def validate_config(config) when is_map(config) do
-    cond do
-      !Map.has_key?(config, :api_key) or is_nil(config.api_key) or config.api_key == "" ->
-        {:error, "API key is required"}
+    if !Map.has_key?(config, :api_key) or is_nil(config.api_key) or config.api_key == "" do
+      {:error, "API key is required"}
+    else
+      model = Map.get(config, :model, @default_model)
+      # Validate and correct model name
+      validated_model = validate_model(model)
 
-      true ->
-        model = Map.get(config, :model, @default_model)
-        # Validate and correct model name
-        validated_model = validate_model(model)
+      validated = %{
+        api_key: String.trim(config.api_key),
+        model: validated_model,
+        temperature: Map.get(config, :temperature, @default_temperature),
+        max_tokens: Map.get(config, :max_tokens, @default_max_tokens),
+        base_url: Map.get(config, :base_url, @default_base_url)
+      }
 
-        validated = %{
-          api_key: String.trim(config.api_key),
-          model: validated_model,
-          temperature: Map.get(config, :temperature, @default_temperature),
-          max_tokens: Map.get(config, :max_tokens, @default_max_tokens),
-          base_url: Map.get(config, :base_url, @default_base_url)
-        }
-
-        {:ok, validated}
+      {:ok, validated}
     end
   end
 

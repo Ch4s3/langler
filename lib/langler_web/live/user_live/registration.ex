@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserLive.Registration do
+  @moduledoc """
+  LiveView for user registration.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Accounts

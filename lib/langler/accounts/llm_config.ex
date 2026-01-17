@@ -4,10 +4,10 @@ defmodule Langler.Accounts.LlmConfig do
   """
 
   import Ecto.Query
-  alias Langler.Repo
-  alias Langler.Accounts.{User, UserLlmConfig, LlmProvider}
+  alias Langler.Accounts.{LlmProvider, User, UserLlmConfig}
   alias Langler.Chat.Encryption
   alias Langler.LLM.Adapters.ChatGPT
+  alias Langler.Repo
 
   @doc """
   Gets all LLM configs for a user.

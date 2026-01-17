@@ -16,10 +16,9 @@ defmodule Langler.MixProject do
       assay: [
         dialyzer: [
           # Analyze project apps + dependencies
-          apps: :project_plus_deps,
+          apps: [:project_plus_deps, :crypto],
           # Only show warnings for project apps
-          warning_apps: :project,
-          plt_add_apps: [:crypto]
+          warning_apps: :project
         ]
       ]
     ]
@@ -90,7 +89,6 @@ defmodule Langler.MixProject do
       {:rustler, ">= 0.32.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:assay, "~> 0.3", only: [:dev, :test], runtime: false},
-      {:bypass, "~> 2.1", only: :test},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 0.26"},

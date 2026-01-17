@@ -1,5 +1,7 @@
 defmodule Langler.Study.FSRSItem do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for FSRS study items.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

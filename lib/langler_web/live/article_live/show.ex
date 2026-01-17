@@ -1,4 +1,8 @@
 defmodule LanglerWeb.ArticleLive.Show do
+  @moduledoc """
+  LiveView for reading and studying an article.
+  """
+
   use LanglerWeb, :live_view
   require Logger
 
@@ -21,12 +25,12 @@ defmodule LanglerWeb.ArticleLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto w-full max-w-4xl space-y-8 px-4 py-8 sm:px-6 lg:px-0">
+      <div class="space-y-8">
         <div
           id="article-hero"
           phx-hook="ArticleStickyHeader"
           data-article-target="article-reader"
-          class="article-meta card w-full rounded-none bg-base-100/90 shadow-xl backdrop-blur"
+          class="article-meta section-card card w-full rounded-3xl bg-base-100/90"
         >
           <div class="card-body gap-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -474,132 +478,110 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   defp tokenize_sentence(content, occurrences)
        when is_binary(content) and is_list(occurrences) do
-    occurrence_map =
-      occurrences
-      |> Enum.reduce(%{}, fn occurrence, acc ->
-        case occurrence.word do
-          nil -> acc
-          word -> Map.put(acc, occurrence.position, word)
-        end
-      end)
+    occurrence_map = build_occurrence_map(occurrences)
 
-    tokens =
-      @token_regex
-      |> Regex.scan(content)
-      |> Enum.map(&hd/1)
-      |> Enum.reject(&(&1 == ""))
-
-    # First pass: trim spaces from punctuation tokens and split them into separate tokens
-    # This preserves spaces while keeping words and punctuation separate
-    cleaned_tokens =
-      tokens
-      |> Enum.flat_map(fn text ->
-        cond do
-          # Punctuation token with spaces (like " , ") - split into space, punctuation, space
-          String.match?(text, ~r/^\s+[^\p{L}\s]+\s+$/u) ->
-            trimmed = String.trim(text)
-            trimmed_leading = String.trim_leading(text)
-            trimmed_trailing = String.trim_trailing(text)
-
-            leading_len = String.length(text) - String.length(trimmed_leading)
-            trailing_start = String.length(trimmed_trailing)
-            text_len = String.length(text)
-
-            leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
-
-            trailing_space =
-              if trailing_start < text_len,
-                do: String.slice(text, trailing_start, text_len - trailing_start),
-                else: ""
-
-            result = []
-            result = if leading_space != "", do: [leading_space | result], else: result
-            result = if trimmed != "", do: [trimmed | result], else: result
-            result = if trailing_space != "", do: [trailing_space | result], else: result
-            Enum.reverse(result) |> Enum.filter(&(&1 != ""))
-
-          # Punctuation token with leading/trailing spaces - split them
-          String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) ->
-            trimmed = String.trim(text)
-            trimmed_leading = String.trim_leading(text)
-            trimmed_trailing = String.trim_trailing(text)
-
-            leading_len = String.length(text) - String.length(trimmed_leading)
-            trailing_start = String.length(trimmed_trailing)
-            text_len = String.length(text)
-
-            leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
-
-            trailing_space =
-              if trailing_start < text_len,
-                do: String.slice(text, trailing_start, text_len - trailing_start),
-                else: ""
-
-            result = []
-            result = if leading_space != "", do: [leading_space | result], else: result
-            result = if trimmed != "", do: [trimmed | result], else: result
-            result = if trailing_space != "", do: [trailing_space | result], else: result
-            Enum.reverse(result) |> Enum.filter(&(&1 != ""))
-
-          # Other tokens (words, spaces) - keep as-is
-          true ->
-            [text]
-        end
-      end)
-      |> Enum.reject(&(&1 == ""))
-
-    # Second pass: attach spaces to words and punctuation tokens
-    # Strategy:
-    # - Keep words and punctuation as completely separate tokens (for translation)
-    # - Attach spaces to words or punctuation tokens to preserve natural spacing
-    # - Use CSS to handle visual spacing between word and punctuation spans
-    cleaned_tokens
-    |> Enum.reduce([], fn token, acc ->
-      is_word = String.match?(token, ~r/^\p{L}/u)
-      is_punct = String.match?(token, ~r/^[^\p{L}\s]+$/u)
-      is_space = String.match?(token, ~r/^\s+$/u)
-
-      cond do
-        # Word token - add as new token
-        is_word ->
-          [token | acc]
-
-        # Punctuation token - keep separate, don't merge with words
-        is_punct ->
-          [token | acc]
-
-        # Space token - attach to previous token if it's a word or punctuation
-        is_space ->
-          case acc do
-            [prev | rest] ->
-              prev_is_word = String.match?(prev, ~r/^\p{L}/u)
-              prev_is_punct = String.match?(prev, ~r/^[^\p{L}\s]+$/u)
-
-              if prev_is_word || prev_is_punct do
-                # Attach space to previous word or punctuation
-                [prev <> token | rest]
-              else
-                # No previous word/punctuation - keep space separate
-                [token | acc]
-              end
-
-            _ ->
-              # Empty acc - keep space separate
-              [token | acc]
-          end
-
-        # Other - keep as-is
-        true ->
-          [token | acc]
-      end
-    end)
-    |> Enum.reverse()
+    content
+    |> extract_tokens()
+    |> normalize_tokens()
+    |> attach_spaces_to_tokens()
     |> Enum.with_index()
     |> Enum.map(fn {text, idx} ->
       # Map word occurrences - try to find matching word from original position
       word = Map.get(occurrence_map, idx)
       %{id: idx, text: text, lexical?: lexical_token?(text), word: word}
     end)
+  end
+
+  defp build_occurrence_map(occurrences) do
+    Enum.reduce(occurrences, %{}, fn occurrence, acc ->
+      case occurrence.word do
+        nil -> acc
+        word -> Map.put(acc, occurrence.position, word)
+      end
+    end)
+  end
+
+  defp extract_tokens(content) do
+    @token_regex
+    |> Regex.scan(content)
+    |> Enum.map(&hd/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp normalize_tokens(tokens) do
+    tokens
+    |> Enum.flat_map(&split_punctuation_token/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp split_punctuation_token(text) do
+    cond do
+      String.match?(text, ~r/^\s+[^\p{L}\s]+\s+$/u) ->
+        split_with_spaces(text)
+
+      String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) ->
+        split_with_spaces(text)
+
+      true ->
+        [text]
+    end
+  end
+
+  defp split_with_spaces(text) do
+    trimmed = String.trim(text)
+    trimmed_leading = String.trim_leading(text)
+    trimmed_trailing = String.trim_trailing(text)
+
+    leading_len = String.length(text) - String.length(trimmed_leading)
+    trailing_start = String.length(trimmed_trailing)
+    text_len = String.length(text)
+
+    leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
+
+    trailing_space =
+      if trailing_start < text_len,
+        do: String.slice(text, trailing_start, text_len - trailing_start),
+        else: ""
+
+    result = []
+    result = if leading_space != "", do: [leading_space | result], else: result
+    result = if trimmed != "", do: [trimmed | result], else: result
+    result = if trailing_space != "", do: [trailing_space | result], else: result
+    Enum.reverse(result) |> Enum.filter(&(&1 != ""))
+  end
+
+  defp attach_spaces_to_tokens(tokens) do
+    tokens
+    |> Enum.reduce([], &attach_space_token/2)
+    |> Enum.reverse()
+  end
+
+  defp attach_space_token(token, acc) do
+    case token_kind(token) do
+      :word -> [token | acc]
+      :punct -> [token | acc]
+      :space -> attach_space_to_prev(token, acc)
+      :other -> [token | acc]
+    end
+  end
+
+  defp attach_space_to_prev(space, []), do: [space]
+
+  defp attach_space_to_prev(space, [prev | rest]) do
+    case token_kind(prev) do
+      :word -> [prev <> space | rest]
+      :punct -> [prev <> space | rest]
+      _ -> [space, prev | rest]
+    end
+  end
+
+  defp token_kind(token) do
+    cond do
+      String.match?(token, ~r/^\p{L}/u) -> :word
+      String.match?(token, ~r/^[^\p{L}\s]+$/u) -> :punct
+      String.match?(token, ~r/^\s+$/u) -> :space
+      true -> :other
+    end
   end
 
   defp lexical_token?(text) do
@@ -729,9 +711,10 @@ defmodule LanglerWeb.ArticleLive.Show do
   end
 
   defp display_title(article) do
-    cond do
-      article.title && article.title != "" -> article.title
-      true -> humanize_slug(article.url)
+    if article.title && article.title != "" do
+      article.title
+    else
+      humanize_slug(article.url)
     end
   end
 

@@ -1,14 +1,17 @@
 defmodule Langler.Content.ArticleImporter do
   @moduledoc """
-  Fetches remote articles, extracts readable content, and seeds sentences + background jobs.
+  Fetches remote articles and processes them for language learning.
+
+  Extracts readable content using Readability, seeds sentences for vocabulary
+  extraction, and enqueues background jobs for word occurrence tracking.
   """
 
   @dialyzer {:nowarn_function, remove_spaces_before_punctuation: 1}
 
   alias Langler.Accounts
   alias Langler.Content
-  alias Langler.Content.Readability
   alias Langler.Content.Classifier
+  alias Langler.Content.Readability
   alias Langler.Content.Workers.ExtractWordsWorker
   alias Langler.Repo
   alias Oban
@@ -36,11 +39,13 @@ defmodule Langler.Content.ArticleImporter do
           end
 
         nil ->
-          with {:ok, article} <- persist_article(user, normalized_url, html, parsed) do
-            enqueue_word_extraction(article)
-            {:ok, article, :new}
-          else
-            {:error, _} = error -> error
+          case persist_article(user, normalized_url, html, parsed) do
+            {:ok, article} ->
+              enqueue_word_extraction(article)
+              {:ok, article, :new}
+
+            {:error, _} = error ->
+              error
           end
       end
     end
@@ -70,6 +75,7 @@ defmodule Langler.Content.ArticleImporter do
         headers: [{"user-agent", "LanglerBot/0.1"}],
         receive_timeout: 10_000
       )
+      |> Req.merge(req_options())
 
     case Req.get(req) do
       {:ok, %{status: status, body: body}} when status in 200..299 ->
@@ -99,9 +105,14 @@ defmodule Langler.Content.ArticleImporter do
            content: html,
            excerpt: nil,
            author: nil,
-           length: html && String.length(html)
+           length: if(html, do: String.length(html), else: nil)
          }}
     end
+  end
+
+  defp req_options do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :req_options, [])
   end
 
   defp persist_article(user, url, html, parsed) do
@@ -125,6 +136,7 @@ defmodule Langler.Content.ArticleImporter do
     Content.tag_article(article, topics)
   end
 
+  @dialyzer {:nowarn_function, classify_and_tag_article: 2}
   defp classify_and_tag_article(_article, _), do: :ok
 
   defp refresh_article(article, user, url, html, parsed) do
@@ -176,6 +188,7 @@ defmodule Langler.Content.ArticleImporter do
     end
   end
 
+  @dialyzer {:nowarn_function, html_title: 1}
   defp html_title(_), do: nil
 
   defp create_article(parsed, html, url, user) do
@@ -422,15 +435,15 @@ defmodule Langler.Content.ArticleImporter do
         content
 
       false ->
-        # Use String.to_valid_utf8/2 which handles invalid UTF-8 sequences gracefully
-        String.to_valid_utf8(content, replacement: " ")
+        # Normalize invalid sequences to spaces to avoid raising
+        String.replace_invalid(content, " ")
     end
   rescue
     ArgumentError ->
       # If content is not a binary, convert to string first
       content
       |> to_string()
-      |> String.to_valid_utf8(replacement: " ")
+      |> String.replace_invalid(" ")
   end
 
   defp ensure_utf8(content) when is_list(content) do

@@ -1,4 +1,8 @@
 defmodule LanglerWeb.ArticleLive.Recommendations do
+  @moduledoc """
+  LiveView for article recommendations.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Content
@@ -21,102 +25,100 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 lg:px-0">
-        <div>
-          <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
-            Discover
-          </p>
-          <h1 class="text-3xl font-semibold text-base-content">Suggested for you</h1>
-          <p class="mt-2 text-sm text-base-content/70">
-            Articles recommended based on your reading preferences.
-          </p>
-        </div>
-
-        <div
-          :if={length(@recommended_articles) == 0}
-          class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur"
-        >
-          <div class="card-body">
-            <div class="alert border border-dashed border-base-300 text-base-content/70">
-              No recommendations available yet. Import some articles to get personalized suggestions.
-            </div>
+      <div class="page-shell space-y-8">
+        <div class="section-card p-8">
+          <div class="section-header">
+            <p class="section-header__eyebrow">Discover</p>
+            <h1 class="section-header__title">Suggested for you</h1>
+            <p class="section-header__lede">
+              Articles recommended based on your reading preferences.
+            </p>
           </div>
-        </div>
 
-        <div :if={length(@recommended_articles) > 0} class="grid gap-4 md:grid-cols-2">
-          <div :for={article <- @recommended_articles} class="relative group">
-            <div class="card border border-base-200 bg-base-100/80 shadow hover:shadow-xl transition">
-              <div class="card-body gap-5">
-                <div class="space-y-2">
-                  <p class="text-lg font-semibold text-base-content">
-                    {article.title || article.url}
-                  </p>
-                  <p class="text-xs uppercase tracking-[0.2em] text-base-content/50">
-                    {article.source || URI.parse(article.url).host}
-                  </p>
-                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/70">
-                    <span class="badge badge-sm badge-primary badge-outline uppercase tracking-wide">
-                      {article.language}
-                    </span>
-                    <span :if={article.is_discovered} class="badge badge-sm badge-info/80 text-white">
-                      New
-                    </span>
-                    <span
-                      :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
-                      :if={article.id}
-                      class="badge badge-sm badge-ghost"
-                    >
-                      {Topics.topic_name(article.language, topic.topic)}
-                    </span>
-                  </div>
-                  <% difficulty = difficulty_info(article) %>
-                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
-                    <span class="uppercase tracking-[0.2em] text-base-content/40">Difficulty</span>
-                    <div
-                      class="flex items-center gap-1"
-                      aria-label={"Difficulty #{difficulty.rating} of 4"}
-                    >
+          <div
+            :if={length(@recommended_articles) == 0}
+            class="mt-6 rounded-2xl border border-dashed border-base-200 bg-base-50/80 p-6 text-base-content/70"
+          >
+            No recommendations available yet. Import some articles to get personalized suggestions.
+          </div>
+
+          <div :if={length(@recommended_articles) > 0} class="grid gap-4 md:grid-cols-2">
+            <div :for={article <- @recommended_articles} class="relative group">
+              <div class="section-card card bg-base-100/90 shadow hover:-translate-y-1 hover:shadow-2xl transition">
+                <div class="card-body gap-5">
+                  <div class="space-y-2">
+                    <p class="text-lg font-semibold text-base-content">
+                      {article.title || article.url}
+                    </p>
+                    <p class="text-xs uppercase tracking-[0.2em] text-base-content/50">
+                      {article.source || URI.parse(article.url).host}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/70">
+                      <span class="badge badge-sm badge-primary badge-outline uppercase tracking-wide">
+                        {article.language}
+                      </span>
                       <span
-                        :for={index <- 1..4}
-                        class={[
-                          "h-2 w-2 rounded-full",
-                          index <= difficulty.rating && "bg-primary",
-                          index > difficulty.rating && "bg-base-300"
-                        ]}
+                        :if={article.is_discovered}
+                        class="badge badge-sm badge-info/80 text-white"
                       >
+                        New
+                      </span>
+                      <span
+                        :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
+                        :if={article.id}
+                        class="badge badge-sm badge-ghost"
+                      >
+                        {Topics.topic_name(article.language, topic.topic)}
                       </span>
                     </div>
-                    <span class="badge badge-sm badge-ghost">{difficulty.cefr}</span>
-                    <span class="text-[0.65rem] uppercase tracking-[0.2em] text-base-content/40">
-                      {difficulty.rating}/4
-                    </span>
+                    <% difficulty = difficulty_info(article) %>
+                    <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
+                      <span class="uppercase tracking-[0.2em] text-base-content/40">Difficulty</span>
+                      <div
+                        class="flex items-center gap-1"
+                        aria-label={"Difficulty #{difficulty.rating} of 4"}
+                      >
+                        <span
+                          :for={index <- 1..4}
+                          class={[
+                            "h-2 w-2 rounded-full",
+                            index <= difficulty.rating && "bg-primary",
+                            index > difficulty.rating && "bg-base-300"
+                          ]}
+                        >
+                        </span>
+                      </div>
+                      <span class="text-[0.65rem] uppercase tracking-[0.2em] text-base-content/40">
+                        {difficulty.rating}/4
+                      </span>
+                    </div>
                   </div>
-                </div>
-                <p
-                  :if={article.content && article.content != ""}
-                  class="line-clamp-3 text-sm text-base-content/70"
-                >
-                  {article.content |> String.slice(0, 220)}
-                  {if String.length(article.content || "") > 220, do: "…"}
-                </p>
-                <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
-                  <span class="text-xs text-base-content/60">
-                    {if article.published_at do
-                      "Published #{format_timestamp(article.published_at)}"
-                    else
-                      "Discovered #{format_timestamp(article.inserted_at)}"
-                    end}
-                  </span>
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-primary"
-                    phx-click="import_recommended"
-                    phx-value-url={article.url}
-                    phx-disable-with="Importing..."
-                    disabled={@importing}
+                  <p
+                    :if={article.content && article.content != ""}
+                    class="line-clamp-3 text-sm text-base-content/70"
                   >
-                    <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import
-                  </button>
+                    {article.content |> String.slice(0, 220)}
+                    {if String.length(article.content || "") > 220, do: "…"}
+                  </p>
+                  <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <span class="text-xs text-base-content/60">
+                      {if article.published_at do
+                        "Published #{format_timestamp(article.published_at)}"
+                      else
+                        "Discovered #{format_timestamp(article.inserted_at)}"
+                      end}
+                    </span>
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-primary"
+                      phx-click="import_recommended"
+                      phx-value-url={article.url}
+                      phx-disable-with="Importing..."
+                      disabled={@importing}
+                    >
+                      <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

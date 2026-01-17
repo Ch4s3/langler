@@ -1,10 +1,12 @@
 defmodule Langler.External.Dictionary do
   @moduledoc """
-  Dictionary lookups combining Wiktionary definitions, Google Translate fallback,
-  and LanguageTool for lemma/part-of-speech analysis.
+  Dictionary lookup service combining multiple data sources.
+
+  Integrates Wiktionary definitions, Google Translate fallback, and LanguageTool
+  for lemma/part-of-speech analysis to provide comprehensive dictionary entries.
   """
 
-  alias Langler.External.Dictionary.{Google, LanguageTool, Wiktionary, Cache}
+  alias Langler.External.Dictionary.{Cache, Google, LanguageTool, Wiktionary}
 
   @entry_cache_version 2
 
@@ -37,67 +39,8 @@ defmodule Langler.External.Dictionary do
         {:ok, cached}
 
       :miss ->
-        google_data = fetch_google_data(term, language, target)
-
-        wiktionary_entry =
-          case Wiktionary.lookup(term, language) do
-            {:ok, entry} -> entry
-            {:error, _} -> nil
-          end
-
-        {part_of_speech, lemma_candidate} =
-          case LanguageTool.analyze(term, language: language) do
-            {:ok, %{part_of_speech: pos, lemma: lem}} ->
-              {pos, lem}
-
-            {:error, _} ->
-              {nil, nil}
-          end
-
-        lemma = normalize_lemma(lemma_candidate, term)
-        lemma_query = lemma_candidate && String.trim(lemma_candidate)
-
-        lemma_google_data =
-          if needs_lemma_lookup?(google_data, lemma_query, term) do
-            fetch_google_data(lemma_query, language, target)
-          else
-            nil
-          end
-
-        definitions =
-          cond do
-            google_data.definitions != [] ->
-              google_data.definitions
-
-            lemma_google_data && lemma_google_data.definitions != [] ->
-              lemma_google_data.definitions
-
-            wiktionary_entry && wiktionary_entry.definitions != [] ->
-              wiktionary_entry.definitions
-
-            google_data.translation ->
-              [google_data.translation]
-
-            lemma_google_data && lemma_google_data.translation ->
-              [lemma_google_data.translation]
-
-            true ->
-              []
-          end
-
-        entry = %{
-          word: term,
-          lemma: lemma,
-          language: language,
-          part_of_speech:
-            part_of_speech ||
-              (wiktionary_entry && wiktionary_entry.part_of_speech),
-          pronunciation: wiktionary_entry && wiktionary_entry.pronunciation,
-          definitions: definitions,
-          translation:
-            google_data.translation || (lemma_google_data && lemma_google_data.translation),
-          source_url: wiktionary_entry && wiktionary_entry.source_url
-        }
+        sources = fetch_all_sources(term, language, target)
+        entry = build_entry(term, language, sources)
 
         Cache.put(entry_cache, entry_key, entry, ttl: ttl(:entry))
         {:ok, entry}
@@ -129,6 +72,125 @@ defmodule Langler.External.Dictionary do
     end
   end
 
+  defp fetch_all_sources(term, language, target) do
+    google_data = fetch_google_data(term, language, target)
+
+    wiktionary_entry =
+      case Wiktionary.lookup(term, language) do
+        {:ok, entry} -> entry
+        {:error, _} -> nil
+      end
+
+    {part_of_speech, lemma_candidate} = fetch_language_tool_data(term, language)
+    lemma = normalize_lemma(lemma_candidate, term)
+    lemma_query = lemma_candidate && String.trim(lemma_candidate)
+
+    lemma_google_data =
+      if needs_lemma_lookup?(google_data, lemma_query, term) do
+        fetch_google_data(lemma_query, language, target)
+      else
+        nil
+      end
+
+    %{
+      google_data: google_data,
+      lemma_google_data: lemma_google_data,
+      wiktionary_entry: wiktionary_entry,
+      part_of_speech: part_of_speech,
+      lemma: lemma
+    }
+  end
+
+  defp fetch_language_tool_data(term, language) do
+    case LanguageTool.analyze(term, language: language) do
+      {:ok, %{part_of_speech: pos, lemma: lem}} ->
+        {pos, lem}
+
+      {:error, _} ->
+        {nil, nil}
+    end
+  end
+
+  defp build_entry(term, language, sources) do
+    definitions = build_definitions(sources)
+    translation = get_translation(sources)
+
+    %{
+      word: term,
+      lemma: sources.lemma,
+      language: language,
+      part_of_speech: get_part_of_speech(sources),
+      pronunciation: get_pronunciation(sources),
+      definitions: definitions,
+      translation: translation,
+      source_url: get_source_url(sources)
+    }
+  end
+
+  defp build_definitions(sources) do
+    build_definitions_from_sources(sources) || build_definitions_from_translations(sources) || []
+  end
+
+  defp build_definitions_from_sources(sources) do
+    cond do
+      sources.google_data.definitions != [] ->
+        sources.google_data.definitions
+
+      has_lemma_definitions?(sources) ->
+        sources.lemma_google_data.definitions
+
+      has_wiktionary_definitions?(sources) ->
+        sources.wiktionary_entry.definitions
+
+      true ->
+        nil
+    end
+  end
+
+  defp build_definitions_from_translations(sources) do
+    cond do
+      sources.google_data.translation ->
+        [sources.google_data.translation]
+
+      has_lemma_translation?(sources) ->
+        [sources.lemma_google_data.translation]
+
+      true ->
+        nil
+    end
+  end
+
+  defp has_lemma_definitions?(sources) do
+    sources.lemma_google_data && sources.lemma_google_data.definitions != []
+  end
+
+  defp has_wiktionary_definitions?(sources) do
+    sources.wiktionary_entry && sources.wiktionary_entry.definitions != []
+  end
+
+  defp has_lemma_translation?(sources) do
+    sources.lemma_google_data && sources.lemma_google_data.translation
+  end
+
+  defp get_translation(sources) do
+    sources.google_data.translation ||
+      (sources.lemma_google_data && sources.lemma_google_data.translation)
+  end
+
+  defp get_part_of_speech(sources) do
+    sources.part_of_speech ||
+      (sources.wiktionary_entry && sources.wiktionary_entry.part_of_speech)
+  end
+
+  defp get_pronunciation(sources) do
+    sources.wiktionary_entry && sources.wiktionary_entry.pronunciation
+  end
+
+  defp get_source_url(sources) do
+    sources.wiktionary_entry && sources.wiktionary_entry.source_url
+  end
+
+  @dialyzer {:nowarn_function, needs_lemma_lookup?: 3}
   defp needs_lemma_lookup?(google_data, lemma_query, term) do
     google_data.definitions == [] and
       is_binary(lemma_query) and lemma_query != "" and

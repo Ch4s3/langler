@@ -1,6 +1,9 @@
 defmodule Langler.External.Dictionary.Cache do
   @moduledoc """
   ETS-backed cache with optional persistent storage for dictionary lookups.
+
+  Provides high-performance caching for dictionary entries using ETS tables
+  with the ability to persist cache entries to the database for durability.
   """
 
   alias Langler.External.Dictionary.PersistentCache

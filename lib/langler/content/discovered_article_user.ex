@@ -1,5 +1,7 @@
 defmodule Langler.Content.DiscoveredArticleUser do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for discovered article user associations.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

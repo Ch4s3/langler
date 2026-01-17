@@ -16,22 +16,23 @@ defmodule Langler.Content.Discovery.WebScraper do
   """
   @spec scrape(String.t(), String.t(), map()) :: {:ok, list(map())} | {:error, term()}
   def scrape(html, base_url, config \\ %{}) do
-    with {:ok, document} <- Floki.parse_document(html) do
-      list_selector = Map.get(config, "list_selector") || "body"
-      link_selector = Map.get(config, "link_selector") || "a[href]"
+    case Floki.parse_document(html) do
+      {:ok, document} ->
+        list_selector = Map.get(config, "list_selector") || "body"
+        link_selector = Map.get(config, "link_selector") || "a[href]"
 
-      entries =
-        document
-        |> Floki.find(list_selector)
-        |> Enum.flat_map(fn container ->
-          Floki.find(container, link_selector)
-          |> Enum.map(&extract_link(&1, base_url, config))
-        end)
-        |> Enum.filter(&(!is_nil(&1)))
-        |> Enum.uniq_by(& &1.url)
+        entries =
+          document
+          |> Floki.find(list_selector)
+          |> Enum.flat_map(fn container ->
+            Floki.find(container, link_selector)
+            |> Enum.map(&extract_link(&1, base_url, config))
+          end)
+          |> Enum.filter(&(!is_nil(&1)))
+          |> Enum.uniq_by(& &1.url)
 
-      {:ok, entries}
-    else
+        {:ok, entries}
+
       {:error, reason} ->
         Logger.warning("Web scraping failed: #{inspect(reason)}")
         {:error, reason}

@@ -1,14 +1,18 @@
 defmodule LanglerWeb.StudyLive.Index do
+  @moduledoc """
+  LiveView for spaced repetition study sessions.
+  """
+
   use LanglerWeb, :live_view
 
+  alias Langler.Content
+  alias Langler.External.Dictionary
+  alias Langler.External.Dictionary.Wiktionary.Conjugations
+  alias Langler.Repo
   alias Langler.Study
   alias Langler.Study.FSRS
   alias Langler.Vocabulary
   alias Langler.Vocabulary.Word
-  alias Langler.Repo
-  alias Langler.External.Dictionary
-  alias Langler.External.Dictionary.Wiktionary.Conjugations
-  alias Langler.Content
   alias MapSet
   require Logger
 
@@ -54,15 +58,13 @@ defmodule LanglerWeb.StudyLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-5xl space-y-8 py-8">
-        <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+      <div class="space-y-8">
+        <div class="card section-card bg-base-100/95">
           <div class="card-body gap-6">
-            <div class="flex flex-col gap-2">
-              <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
-                Study overview
-              </p>
-              <h1 class="text-3xl font-bold text-base-content">Stay consistent with your deck</h1>
-              <p class="text-sm text-base-content/70">
+            <div class="section-header">
+              <p class="section-header__eyebrow">Study overview</p>
+              <h1 class="section-header__title">Stay consistent with your deck</h1>
+              <p class="section-header__lede">
                 Track upcoming reviews and keep tabs on due cards with quick filters.
               </p>
             </div>
@@ -153,7 +155,7 @@ defmodule LanglerWeb.StudyLive.Index do
             <%!-- Recommended Articles Section --%>
             <div
               :if={@recommended_articles != [] && @filter == :now}
-              class="card bg-base-100 shadow-lg"
+              class="card section-card bg-base-100/95"
             >
               <div class="card-body">
                 <h2 class="card-title">
@@ -345,7 +347,7 @@ defmodule LanglerWeb.StudyLive.Index do
                 <div
                   :if={
                     item.word &&
-                      (is_verb?(item.word.part_of_speech) || looks_like_spanish_verb?(item.word))
+                      (verb?(item.word.part_of_speech) || looks_like_spanish_verb?(item.word))
                   }
                   class="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4"
                 >
@@ -463,7 +465,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   def handle_event("import_article", %{"id" => discovered_article_id_str}, socket) do
     with {discovered_article_id, ""} <- Integer.parse(discovered_article_id_str),
-         discovered_article <- Content.get_discovered_article(discovered_article_id),
+         _discovered_article <- Content.get_discovered_article(discovered_article_id),
          {:ok, _} <-
            Content.mark_discovered_article_imported(
              discovered_article_id,
@@ -486,20 +488,11 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query
-  defp extract_search_query(%{"search-query" => query}) when is_binary(query), do: query
-  defp extract_search_query(_), do: ""
-
   def handle_event("toggle_card", %{"id" => id}, socket) do
     with {item_id, ""} <- Integer.parse(to_string(id)),
          {:ok, item} <- find_item(socket.assigns.all_items, item_id),
          {:ok, ensured_item} <- ensure_word_definitions(item) do
-      flipped =
-        if MapSet.member?(socket.assigns.flipped_cards, item_id) do
-          MapSet.delete(socket.assigns.flipped_cards, item_id)
-        else
-          MapSet.put(socket.assigns.flipped_cards, item_id)
-        end
+      flipped = toggle_set_member(socket.assigns.flipped_cards, item_id)
 
       updated_items = replace_item(socket.assigns.all_items, ensured_item)
       flipped_state = MapSet.member?(flipped, item_id)
@@ -518,76 +511,27 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   def handle_event("toggle_conjugations", %{"word-id" => word_id_str}, socket) do
-    with {word_id, ""} <- Integer.parse(to_string(word_id_str)),
-         {:ok, item} <- find_item_by_word_id(socket.assigns.all_items, word_id),
-         true <- not is_nil(item.word) do
-      word = item.word
+    case fetch_conjugation_item(socket.assigns.all_items, word_id_str) do
+      {:ok, word_id, item} ->
+        updated_item = maybe_update_conjugations(item)
+        expanded = toggle_set_member(socket.assigns.expanded_conjugations, word_id)
+        updated_items = replace_item(socket.assigns.all_items, updated_item)
+        dom_id = "items-#{updated_item.id}"
 
-      # Check if conjugations already exist
-      conjugations = word.conjugations
+        {:noreply,
+         socket
+         |> assign(:all_items, updated_items)
+         |> assign(:expanded_conjugations, expanded)
+         |> stream_insert(:items, updated_item, dom_id: dom_id)}
 
-      updated_item =
-        if is_nil(conjugations) or conjugations == %{} do
-          # Fetch conjugations - try to get infinitive form
-          lemma = extract_infinitive_lemma(word)
-
-          lookup_lemma =
-            if lemma do
-              String.downcase(lemma)
-            else
-              nil
-            end
-
-          if lookup_lemma do
-            case Conjugations.fetch_conjugations(lookup_lemma, word.language) do
-              {:ok, conjugations_map} ->
-                case Vocabulary.update_word_conjugations(word, conjugations_map) do
-                  {:ok, updated_word} ->
-                    Logger.debug("StudyLive: stored conjugations for word_id=#{word.id}")
-                    %{item | word: updated_word}
-
-                  {:error, reason} ->
-                    Logger.warning(
-                      "StudyLive: failed to store conjugations for word_id=#{word.id}: #{inspect(reason)}"
-                    )
-
-                    item
-                end
-
-              {:error, reason} ->
-                Logger.warning(
-                  "StudyLive: failed to fetch conjugations for #{lookup_lemma}: #{inspect(reason)}"
-                )
-
-                item
-            end
-          else
-            item
-          end
-        else
-          item
-        end
-
-      # Toggle expanded state
-      expanded =
-        if MapSet.member?(socket.assigns.expanded_conjugations, word_id) do
-          MapSet.delete(socket.assigns.expanded_conjugations, word_id)
-        else
-          MapSet.put(socket.assigns.expanded_conjugations, word_id)
-        end
-
-      updated_items = replace_item(socket.assigns.all_items, updated_item)
-      dom_id = "items-#{updated_item.id}"
-
-      {:noreply,
-       socket
-       |> assign(:all_items, updated_items)
-       |> assign(:expanded_conjugations, expanded)
-       |> stream_insert(:items, updated_item, dom_id: dom_id)}
-    else
-      _ -> {:noreply, socket}
+      :error ->
+        {:noreply, socket}
     end
   end
+
+  defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query
+  defp extract_search_query(%{"search-query" => query}) when is_binary(query), do: query
+  defp extract_search_query(_), do: ""
 
   defp parse_filter(value) do
     case value do
@@ -610,20 +554,17 @@ defmodule LanglerWeb.StudyLive.Index do
     end_of_day = end_of_day(now)
     downcased_query = String.downcase(query || "")
 
-    items
-    |> Enum.filter(fn item ->
-      case filter do
-        :now -> due_now?(item, now)
-        :today -> due_today?(item, end_of_day)
-        :all -> true
-      end
-    end)
-    |> Enum.filter(fn item ->
-      cond do
-        downcased_query == "" -> true
-        match_query?(item.word, downcased_query) -> true
-        true -> false
-      end
+    Enum.filter(items, fn item ->
+      matches_filter =
+        case filter do
+          :now -> due_now?(item, now)
+          :today -> due_today?(item, end_of_day)
+          :all -> true
+        end
+
+      matches_query = downcased_query == "" or match_query?(item.word, downcased_query)
+
+      matches_filter and matches_query
     end)
   end
 
@@ -645,9 +586,10 @@ defmodule LanglerWeb.StudyLive.Index do
     total = length(items)
 
     completion =
-      cond do
-        total == 0 -> 100
-        true -> Float.round((total - due_now) / total * 100, 0)
+      if total == 0 do
+        100
+      else
+        Float.round((total - due_now) / total * 100, 0)
       end
 
     %{
@@ -682,81 +624,190 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
-  defp ensure_word_definitions(%{word: nil} = item), do: {:ok, item}
+  defp toggle_set_member(set, id) do
+    if MapSet.member?(set, id), do: MapSet.delete(set, id), else: MapSet.put(set, id)
+  end
 
-  defp ensure_word_definitions(%{word: word} = item) do
-    defs = word.definitions || []
-    needs_definitions = definitions_stale?(defs)
-    needs_pos = is_nil(word.part_of_speech)
+  defp fetch_conjugation_item(items, word_id_str) do
+    with {word_id, ""} <- Integer.parse(to_string(word_id_str)),
+         {:ok, item} <- find_item_by_word_id(items, word_id),
+         true <- not is_nil(item.word) do
+      {:ok, word_id, item}
+    else
+      _ -> :error
+    end
+  end
 
-    # Fetch if definitions are stale OR part_of_speech is missing
-    if needs_definitions || needs_pos do
-      term =
-        cond do
-          is_binary(word.lemma) && String.trim(word.lemma) != "" ->
-            String.trim(word.lemma)
+  defp maybe_update_conjugations(%{word: nil} = item), do: item
 
-          is_binary(word.normalized_form) ->
-            String.trim(word.normalized_form)
+  defp maybe_update_conjugations(%{word: word} = item) do
+    if missing_conjugations?(word) do
+      update_conjugations(item, word)
+    else
+      item
+    end
+  end
 
-          true ->
-            nil
-        end
+  defp missing_conjugations?(word) do
+    is_nil(word.conjugations) or word.conjugations == %{}
+  end
 
-      cond do
-        is_nil(term) or term == "" ->
-          Logger.debug("StudyLive: skipping definition fetch for word #{word.id} (blank term)")
-          {:ok, item}
+  defp update_conjugations(item, word) do
+    lookup_lemma = conjugation_lookup_lemma(word)
 
-        true ->
-          Logger.debug(
-            "StudyLive: fetching definitions for #{inspect(term)} (word_id=#{word.id}) needs_defs=#{needs_definitions} needs_pos=#{needs_pos}"
+    if lookup_lemma do
+      case fetch_and_store_conjugations(word, lookup_lemma) do
+        {:ok, updated_word} ->
+          %{item | word: updated_word}
+
+        {:error, :store, reason} ->
+          Logger.warning(
+            "StudyLive: failed to store conjugations for word_id=#{word.id}: #{inspect(reason)}"
           )
 
-          started_at = System.monotonic_time(:millisecond)
+          item
 
-          {:ok, entry} = Dictionary.lookup(term, language: word.language, target: "en")
-          duration = System.monotonic_time(:millisecond) - started_at
-          new_defs = entry.definitions || []
-          new_pos = entry.part_of_speech
-
-          Logger.debug(
-            "StudyLive: dictionary lookup complete word_id=#{word.id} defs=#{length(new_defs)} pos=#{inspect(new_pos)} duration_ms=#{duration}"
+        {:error, :fetch, reason} ->
+          Logger.warning(
+            "StudyLive: failed to fetch conjugations for #{lookup_lemma}: #{inspect(reason)}"
           )
 
-          # Update definitions if stale, update part_of_speech if missing
-          updates = %{}
-
-          updates =
-            if needs_definitions && new_defs != [],
-              do: Map.put(updates, :definitions, new_defs),
-              else: updates
-
-          updates =
-            if needs_pos && new_pos, do: Map.put(updates, :part_of_speech, new_pos), else: updates
-
-          if map_size(updates) == 0 do
-            {:ok, item}
-          else
-            case word |> Word.changeset(updates) |> Repo.update() do
-              {:ok, updated_word} ->
-                Logger.debug(
-                  "StudyLive: stored updates for word_id=#{word.id}: #{inspect(Map.keys(updates))}"
-                )
-
-                {:ok, %{item | word: updated_word}}
-
-              {:error, reason} ->
-                Logger.warning(
-                  "StudyLive: failed to store updates for word_id=#{word.id}: #{inspect(reason)}"
-                )
-
-                {:ok, item}
-            end
-          end
+          item
       end
     else
+      item
+    end
+  end
+
+  defp fetch_and_store_conjugations(word, lookup_lemma) do
+    case Conjugations.fetch_conjugations(lookup_lemma, word.language) do
+      {:ok, conjugations_map} ->
+        case Vocabulary.update_word_conjugations(word, conjugations_map) do
+          {:ok, updated_word} ->
+            Logger.debug("StudyLive: stored conjugations for word_id=#{word.id}")
+            {:ok, updated_word}
+
+          {:error, reason} ->
+            {:error, :store, reason}
+        end
+
+      {:error, reason} ->
+        {:error, :fetch, reason}
+    end
+  end
+
+  defp conjugation_lookup_lemma(word) do
+    lemma = extract_infinitive_lemma(word)
+
+    if lemma do
+      String.downcase(lemma)
+    else
+      nil
+    end
+  end
+
+  defp ensure_word_definitions(%{word: nil} = item), do: {:ok, item}
+
+  @dialyzer {:nowarn_function, ensure_word_definitions: 1}
+  defp ensure_word_definitions(%{word: word} = item) do
+    flags = definition_fetch_flags(word)
+
+    if needs_definition_fetch?(flags) do
+      maybe_fetch_and_update_definitions(item, word, flags)
+    else
       {:ok, item}
+    end
+  end
+
+  defp definition_fetch_flags(word) do
+    defs = word.definitions || []
+
+    %{
+      needs_definitions: definitions_stale?(defs),
+      needs_pos: is_nil(word.part_of_speech)
+    }
+  end
+
+  defp needs_definition_fetch?(%{needs_definitions: needs_definitions, needs_pos: needs_pos}) do
+    needs_definitions || needs_pos
+  end
+
+  defp maybe_fetch_and_update_definitions(item, word, flags) do
+    term = definition_lookup_term(word)
+
+    if blank_term?(term) do
+      Logger.debug("StudyLive: skipping definition fetch for word #{word.id} (blank term)")
+      {:ok, item}
+    else
+      Logger.debug(
+        "StudyLive: fetching definitions for #{inspect(term)} (word_id=#{word.id}) needs_defs=#{flags.needs_definitions} needs_pos=#{flags.needs_pos}"
+      )
+
+      {entry, duration} = lookup_dictionary_entry(term, word.language)
+
+      Logger.debug(
+        "StudyLive: dictionary lookup complete word_id=#{word.id} defs=#{length(entry.definitions || [])} pos=#{inspect(entry.part_of_speech)} duration_ms=#{duration}"
+      )
+
+      updates = build_definition_updates(flags, entry)
+      apply_word_updates(item, word, updates)
+    end
+  end
+
+  defp definition_lookup_term(word) do
+    cond do
+      is_binary(word.lemma) && String.trim(word.lemma) != "" ->
+        String.trim(word.lemma)
+
+      is_binary(word.normalized_form) ->
+        String.trim(word.normalized_form)
+
+      true ->
+        nil
+    end
+  end
+
+  defp blank_term?(term), do: is_nil(term) or term == ""
+
+  defp lookup_dictionary_entry(term, language) do
+    started_at = System.monotonic_time(:millisecond)
+    {:ok, entry} = Dictionary.lookup(term, language: language, target: "en")
+    duration = System.monotonic_time(:millisecond) - started_at
+    {entry, duration}
+  end
+
+  defp build_definition_updates(flags, entry) do
+    updates = %{}
+
+    updates =
+      if flags.needs_definitions && (entry.definitions || []) != [],
+        do: Map.put(updates, :definitions, entry.definitions),
+        else: updates
+
+    if flags.needs_pos && entry.part_of_speech,
+      do: Map.put(updates, :part_of_speech, entry.part_of_speech),
+      else: updates
+  end
+
+  defp apply_word_updates(item, word, updates) do
+    if map_size(updates) == 0 do
+      {:ok, item}
+    else
+      case word |> Word.changeset(updates) |> Repo.update() do
+        {:ok, updated_word} ->
+          Logger.debug(
+            "StudyLive: stored updates for word_id=#{word.id}: #{inspect(Map.keys(updates))}"
+          )
+
+          {:ok, %{item | word: updated_word}}
+
+        {:error, reason} ->
+          Logger.warning(
+            "StudyLive: failed to store updates for word_id=#{word.id}: #{inspect(reason)}"
+          )
+
+          {:ok, item}
+      end
     end
   end
 
@@ -835,9 +886,9 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  defp is_verb?(nil), do: false
-  defp is_verb?(pos) when is_binary(pos), do: String.downcase(pos) == "verb"
-  defp is_verb?(_), do: false
+  defp verb?(nil), do: false
+  defp verb?(pos) when is_binary(pos), do: String.downcase(pos) == "verb"
+  defp verb?(_), do: false
 
   defp looks_like_spanish_verb?(word) when is_nil(word), do: false
 
@@ -1012,42 +1063,52 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp extract_infinitive_lemma(word) do
-    # First, check if lemma already ends in -ar/-er/-ir (infinitive)
     lemma = word.lemma || word.normalized_form || ""
     lemma_trimmed = String.trim(lemma)
     lemma_lower = String.downcase(lemma_trimmed)
 
-    if String.ends_with?(lemma_lower, ["ar", "er", "ir"]) && String.length(lemma_lower) > 2 do
+    if infinitive_form?(lemma_lower) do
       lemma_trimmed
     else
-      # Try to extract infinitive from definitions
-      # Definitions often contain "(verb) — infinitive, ..."
-      infinitive_from_defs =
-        word.definitions
-        |> List.wrap()
-        |> Enum.find_value(fn def ->
-          # Look for patterns like "proceder" after "(verb)" or "—"
-          case Regex.run(~r/\(verb\)\s*[—–-]\s*(\w+)/i, def) do
-            [_, infinitive] -> String.trim(infinitive)
-            _ -> nil
-          end ||
-            case Regex.run(~r/[—–-]\s*(\w+)/i, def) do
-              [_, possible_infinitive] ->
-                possible_lower = String.downcase(String.trim(possible_infinitive))
+      extract_infinitive_from_definitions(word.definitions) || lemma_trimmed
+    end
+  end
 
-                if String.ends_with?(possible_lower, ["ar", "er", "ir"]) &&
-                     String.length(possible_lower) > 2 do
-                  String.trim(possible_infinitive)
-                else
-                  nil
-                end
+  defp infinitive_form?(lemma_lower) do
+    String.ends_with?(lemma_lower, ["ar", "er", "ir"]) && String.length(lemma_lower) > 2
+  end
 
-              _ ->
-                nil
-            end
-        end)
+  defp extract_infinitive_from_definitions(definitions) do
+    definitions
+    |> List.wrap()
+    |> Enum.find_value(&extract_infinitive_from_definition/1)
+  end
 
-      infinitive_from_defs || lemma_trimmed
+  defp extract_infinitive_from_definition(def) do
+    extract_verb_infinitive(def) || extract_dash_infinitive(def)
+  end
+
+  defp extract_verb_infinitive(def) do
+    case Regex.run(~r/\(verb\)\s*[—–-]\s*(\w+)/i, def) do
+      [_, infinitive] -> String.trim(infinitive)
+      _ -> nil
+    end
+  end
+
+  defp extract_dash_infinitive(def) do
+    case Regex.run(~r/[—–-]\s*(\w+)/i, def) do
+      [_, possible_infinitive] -> validate_infinitive(possible_infinitive)
+      _ -> nil
+    end
+  end
+
+  defp validate_infinitive(possible_infinitive) do
+    possible_lower = String.downcase(String.trim(possible_infinitive))
+
+    if infinitive_form?(possible_lower) do
+      String.trim(possible_infinitive)
+    else
+      nil
     end
   end
 end

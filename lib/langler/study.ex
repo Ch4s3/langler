@@ -1,6 +1,9 @@
 defmodule Langler.Study do
   @moduledoc """
-  Study mode context (FSRS items + helpers).
+  Study mode context for managing FSRS items and study sessions.
+
+  Provides functions for creating, updating, and querying study items
+  using the FSRS algorithm for spaced repetition learning.
   """
 
   import Ecto.Query, warn: false
@@ -150,6 +153,7 @@ defmodule Langler.Study do
     |> FSRS.item(overrides)
   end
 
+  @dialyzer {:nowarn_function, encode_state: 1}
   defp encode_state(nil), do: nil
   defp encode_state(state) when is_atom(state), do: Atom.to_string(state)
   defp encode_state(state) when is_binary(state), do: state

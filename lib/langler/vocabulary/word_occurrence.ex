@@ -1,5 +1,7 @@
 defmodule Langler.Vocabulary.WordOccurrence do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for word occurrences in articles.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

@@ -1,6 +1,9 @@
 defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
   @moduledoc """
   Scrapes Spanish verb conjugation tables from Wiktionary.
+
+  Extracts verb conjugations including present, past, future tenses and
+  non-finite forms (infinitive, gerund, past participle) for language learning.
   """
 
   alias Langler.External.Dictionary.Cache
@@ -29,35 +32,40 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
     table = cache_table()
 
     Cache.get_or_store(table, cache_key, [ttl: ttl()], fn ->
-      with {:ok, body, _url} <- fetch_page(lemma, normalized_language),
-           {:ok, doc} <- Floki.parse_document(body),
-           conjugations <- parse_conjugations(doc, normalized_language) do
-        if map_size(conjugations) > 0 do
-          {:ok, conjugations}
-        else
-          # Debug: log what we found
-          require Logger
-          language_section = find_language_section(doc, normalized_language)
-
-          tables_count =
-            if language_section do
-              language_section
-              |> Enum.flat_map(fn node -> Floki.find(node, "table") end)
-              |> length()
-            else
-              0
-            end
-
-          section_status = if language_section, do: "found", else: "not found"
-
-          Logger.warning(
-            "Wiktionary conjugations: no conjugations found for #{lemma}. Language section: #{section_status}, Tables: #{tables_count}"
-          )
-
-          {:error, :not_found}
-        end
-      end
+      fetch_and_parse_conjugations(lemma, normalized_language)
     end)
+  end
+
+  defp fetch_and_parse_conjugations(lemma, normalized_language) do
+    with {:ok, body, _url} <- fetch_page(lemma, normalized_language),
+         {:ok, doc} <- Floki.parse_document(body),
+         conjugations <- parse_conjugations(doc, normalized_language) do
+      if map_size(conjugations) > 0 do
+        {:ok, conjugations}
+      else
+        log_conjugation_not_found(lemma, doc, normalized_language)
+        {:error, :not_found}
+      end
+    end
+  end
+
+  defp log_conjugation_not_found(lemma, doc, normalized_language) do
+    require Logger
+    language_section = find_language_section(doc, normalized_language)
+    tables_count = count_tables_in_section(language_section)
+    section_status = if language_section, do: "found", else: "not found"
+
+    Logger.warning(
+      "Wiktionary conjugations: no conjugations found for #{lemma}. Language section: #{section_status}, Tables: #{tables_count}"
+    )
+  end
+
+  defp count_tables_in_section(nil), do: 0
+
+  defp count_tables_in_section(language_section) do
+    language_section
+    |> Enum.flat_map(fn node -> Floki.find(node, "table") end)
+    |> length()
   end
 
   defp fetch_page(lemma, language) do
@@ -146,27 +154,27 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
   end
 
   defp take_language_section(children, anchor) do
-    {_acc, _result} =
-      Enum.reduce(children, {false, []}, fn node, {found, acc} ->
+    {found, acc} =
+      Enum.reduce_while(children, {false, []}, fn node, {found, acc} ->
         cond do
           language_heading?(node, anchor) ->
-            {true, []}
+            {:cont, {true, []}}
 
           found && heading?(node) ->
-            throw({:done, Enum.reverse(acc)})
+            {:halt, {found, acc}}
 
           found ->
-            {found, [node | acc]}
+            {:cont, {found, [node | acc]}}
 
           true ->
-            {found, acc}
+            {:cont, {found, acc}}
         end
       end)
-  catch
-    {:done, acc} -> Enum.reverse(acc)
-  else
-    {false, _} -> nil
-    {_found, acc} -> Enum.reverse(acc)
+
+    case {found, acc} do
+      {false, _} -> nil
+      {_found, acc} -> Enum.reverse(acc)
+    end
   end
 
   defp language_heading?({"h2", _attrs, children}, anchor) do
@@ -198,87 +206,15 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
   defp heading?(_), do: false
 
   defp extract_non_finite(conjugations, section) do
-    # Look for non-finite forms (infinitive, gerund, past participle)
-    non_finite = %{}
-
-    # Try to find infinitive from the page title or Spanish heading
-    # Fallback: look for dl/dt/dd structure with infinitive
-    infinitive =
-      section
-      |> Enum.find_value(fn node ->
-        # Look for h2 with Spanish span
-        case node do
-          {"h2", _, children} ->
-            Enum.find_value(children, fn child ->
-              case child do
-                {"span", attrs, _} ->
-                  id = Enum.find_value(attrs, fn {k, v} -> if k == "id", do: v, else: nil end)
-
-                  if id == "Spanish" do
-                    # The infinitive is usually the text before the Spanish span
-                    nil
-                  else
-                    nil
-                  end
-
-                _ ->
-                  nil
-              end
-            end)
-
-          _ ->
-            nil
-        end
-      end) ||
-        section
-        |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd") end)
-        |> Enum.find_value(fn elem ->
-          text = Floki.text(elem) |> String.downcase()
-
-          if String.contains?(text, "infinitive") do
-            # Try to find the value
-            find_next_value(elem)
-          else
-            nil
-          end
-        end)
+    infinitive = extract_infinitive(section)
+    gerund = extract_gerund(section)
+    past_participle = extract_past_participle(section)
 
     non_finite =
-      if infinitive, do: Map.put(non_finite, "infinitive", infinitive), else: non_finite
-
-    # Look for gerund and past participle
-    gerund =
-      section
-      |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
-      |> Enum.find_value(fn elem ->
-        text = Floki.text(elem) |> String.downcase()
-
-        if String.contains?(text, "gerund") do
-          find_next_value(elem)
-        else
-          nil
-        end
-      end)
-
-    past_participle =
-      section
-      |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
-      |> Enum.find_value(fn elem ->
-        text = Floki.text(elem) |> String.downcase()
-
-        if String.contains?(text, "past participle") or String.contains?(text, "participle") do
-          find_next_value(elem)
-        else
-          nil
-        end
-      end)
-
-    non_finite =
-      non_finite
-      |> (fn nf -> if gerund, do: Map.put(nf, "gerund", gerund), else: nf end).()
-      |> (fn nf ->
-            if past_participle, do: Map.put(nf, "past_participle", past_participle), else: nf
-          end).()
+      %{}
+      |> maybe_put("infinitive", infinitive)
+      |> maybe_put("gerund", gerund)
+      |> maybe_put("past_participle", past_participle)
 
     if map_size(non_finite) > 0 do
       Map.put(conjugations, "non_finite", non_finite)
@@ -287,104 +223,193 @@ defmodule Langler.External.Dictionary.Wiktionary.Conjugations do
     end
   end
 
+  defp extract_infinitive(section) do
+    extract_infinitive_from_h2(section) || extract_infinitive_from_dl(section)
+  end
+
+  defp extract_infinitive_from_h2(section) do
+    section
+    |> Enum.find_value(fn node ->
+      case node do
+        {"h2", _, children} -> find_span_in_children(children)
+        _ -> nil
+      end
+    end)
+  end
+
+  defp find_span_in_children(children) do
+    Enum.find_value(children, fn child ->
+      case child do
+        {"span", attrs, _} -> check_span_id(attrs)
+        _ -> nil
+      end
+    end)
+  end
+
+  defp check_span_id(attrs) do
+    id = Enum.find_value(attrs, fn {k, v} -> if k == "id", do: v, else: nil end)
+
+    if id == "Spanish" do
+      # The infinitive is usually the text before the Spanish span
+      nil
+    else
+      nil
+    end
+  end
+
+  defp extract_infinitive_from_dl(section) do
+    section
+    |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd") end)
+    |> Enum.find_value(fn elem ->
+      text = Floki.text(elem) |> String.downcase()
+
+      if String.contains?(text, "infinitive") do
+        find_next_value(elem)
+      else
+        nil
+      end
+    end)
+  end
+
+  defp extract_gerund(section) do
+    section
+    |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
+    |> Enum.find_value(fn elem ->
+      text = Floki.text(elem) |> String.downcase()
+
+      if String.contains?(text, "gerund") do
+        find_next_value(elem)
+      else
+        nil
+      end
+    end)
+  end
+
+  defp extract_past_participle(section) do
+    section
+    |> Enum.flat_map(fn node -> Floki.find(node, "dl dt, dl dd, table td") end)
+    |> Enum.find_value(fn elem ->
+      text = Floki.text(elem) |> String.downcase()
+
+      if String.contains?(text, "past participle") or String.contains?(text, "participle") do
+        find_next_value(elem)
+      else
+        nil
+      end
+    end)
+  end
+
   defp parse_conjugation_table(table, acc) do
-    # Extract rows from the table
     rows = Floki.find(table, "tr")
 
-    # Group rows by mood (if there are mood headers)
-    # Otherwise, parse all rows as indicative
     Enum.reduce(rows, acc, fn row, tense_acc ->
       cells = Floki.find(row, "td, th")
 
-      # Check if this is a header row (all th cells or contains mood name)
-      is_header =
-        Enum.all?(cells, fn cell ->
-          case cell do
-            {"th", _, _} -> true
-            _ -> false
-          end
-        end) ||
-          (cells != [] &&
-             Floki.text(List.first(cells))
-             |> String.downcase()
-             |> String.contains?(["indicative", "subjunctive", "imperative"]))
-
-      if is_header do
-        # Skip header rows
+      if header_row?(cells) do
         tense_acc
       else
-        # Parse conjugation row
-        if length(cells) >= 6 do
-          # First cell is usually the tense name
-          tense_cell = List.first(cells)
-          tense_text = Floki.text(tense_cell) |> String.trim() |> String.downcase()
-
-          # Check if this row contains mood information
-          mood =
-            cond do
-              String.contains?(tense_text, "indicative") -> "indicative"
-              String.contains?(tense_text, "subjunctive") -> "subjunctive"
-              String.contains?(tense_text, "imperative") -> "imperative"
-              # Default to indicative
-              true -> "indicative"
-            end
-
-          # Extract tense name (remove mood if present)
-          tense_name =
-            tense_text
-            |> String.replace(~r/\b(indicative|subjunctive|imperative)\b/, "")
-            |> String.trim()
-
-          # Normalize tense names
-          tense_key = normalize_tense(tense_name)
-
-          if tense_key do
-            # Remaining cells are conjugations for each person
-            person_conjugations = extract_person_conjugations(cells)
-
-            # Store in nested structure: mood -> tense -> persons
-            mood_map = Map.get(tense_acc, mood, %{})
-            mood_map = Map.put(mood_map, tense_key, person_conjugations)
-            Map.put(tense_acc, mood, mood_map)
-          else
-            tense_acc
-          end
-        else
-          tense_acc
-        end
+        parse_conjugation_row(cells, tense_acc)
       end
     end)
+  end
+
+  defp header_row?(cells) do
+    all_th_cells?(cells) || contains_mood_name?(cells)
+  end
+
+  defp all_th_cells?(cells) do
+    Enum.all?(cells, fn cell ->
+      case cell do
+        {"th", _, _} -> true
+        _ -> false
+      end
+    end)
+  end
+
+  defp contains_mood_name?(cells) do
+    if cells != [] do
+      first_cell_text =
+        List.first(cells)
+        |> Floki.text()
+        |> String.downcase()
+
+      String.contains?(first_cell_text, ["indicative", "subjunctive", "imperative"])
+    else
+      false
+    end
+  end
+
+  defp parse_conjugation_row(cells, tense_acc) do
+    if length(cells) >= 6 do
+      process_conjugation_row(cells, tense_acc)
+    else
+      tense_acc
+    end
+  end
+
+  defp process_conjugation_row(cells, tense_acc) do
+    tense_cell = List.first(cells)
+    tense_text = Floki.text(tense_cell) |> String.trim() |> String.downcase()
+
+    mood = extract_mood(tense_text)
+    tense_name = extract_tense_name(tense_text)
+    tense_key = normalize_tense(tense_name)
+
+    if tense_key do
+      person_conjugations = extract_person_conjugations(cells)
+      store_conjugation(tense_acc, mood, tense_key, person_conjugations)
+    else
+      tense_acc
+    end
+  end
+
+  defp extract_mood(tense_text) do
+    cond do
+      String.contains?(tense_text, "indicative") -> "indicative"
+      String.contains?(tense_text, "subjunctive") -> "subjunctive"
+      String.contains?(tense_text, "imperative") -> "imperative"
+      true -> "indicative"
+    end
+  end
+
+  defp extract_tense_name(tense_text) do
+    tense_text
+    |> String.replace(~r/\b(indicative|subjunctive|imperative)\b/, "")
+    |> String.trim()
+  end
+
+  defp store_conjugation(tense_acc, mood, tense_key, person_conjugations) do
+    mood_map = Map.get(tense_acc, mood, %{})
+    mood_map = Map.put(mood_map, tense_key, person_conjugations)
+    Map.put(tense_acc, mood, mood_map)
   end
 
   defp normalize_tense(tense_text) do
     tense_text = String.downcase(tense_text)
 
-    cond do
-      String.contains?(tense_text, "present") ->
-        "present"
+    tense_patterns = [
+      {"present", "present"},
+      {"preterite", "preterite"},
+      {"pretérito", "preterite"},
+      {"imperfect subjunctive", "imperfect"},
+      {"imperfect", "imperfect"},
+      {"imperfecto", "imperfect"},
+      {"future subjunctive", "future"},
+      {"future", "future"},
+      {"conditional", "conditional"}
+    ]
 
-      String.contains?(tense_text, "preterite") or String.contains?(tense_text, "pretérito") ->
-        "preterite"
-
-      String.contains?(tense_text, "imperfect") or String.contains?(tense_text, "imperfecto") ->
-        "imperfect"
-
-      String.contains?(tense_text, "future") ->
-        "future"
-
-      String.contains?(tense_text, "conditional") ->
-        "conditional"
-
-      String.contains?(tense_text, "imperfect subjunctive") ->
-        "imperfect"
-
-      String.contains?(tense_text, "future subjunctive") ->
-        "future"
-
-      true ->
+    Enum.find_value(tense_patterns, fn {pattern, tense} ->
+      if String.contains?(tense_text, pattern) do
+        tense
+      else
         nil
-    end
+      end
+    end)
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp extract_person_conjugations(cells) do
     # Skip first cell (tense name), extract person conjugations

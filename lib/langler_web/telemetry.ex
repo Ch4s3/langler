@@ -1,4 +1,8 @@
 defmodule LanglerWeb.Telemetry do
+  @moduledoc """
+  Telemetry metrics and instrumentation for the application.
+  """
+
   use Supervisor
   import Telemetry.Metrics
 

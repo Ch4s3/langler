@@ -1,6 +1,9 @@
 defmodule Langler.Content.FrontPage do
   @moduledoc """
   Fetches random article links from curated publisher front pages.
+
+  Provides functionality to discover new articles by scraping or parsing
+  RSS feeds from configured source sites.
   """
 
   require Logger
@@ -32,7 +35,9 @@ defmodule Langler.Content.FrontPage do
   end
 
   defp fetch_front_page(url) do
-    case Req.get(url: url, headers: @default_headers, redirect: true, cache: false) do
+    case Req.get(
+           [url: url, headers: @default_headers, redirect: true, cache: false] ++ req_options()
+         ) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
@@ -81,5 +86,10 @@ defmodule Langler.Content.FrontPage do
   rescue
     ArgumentError ->
       nil
+  end
+
+  defp req_options do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :req_options, [])
   end
 end

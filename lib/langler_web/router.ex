@@ -1,4 +1,8 @@
 defmodule LanglerWeb.Router do
+  @moduledoc """
+  Defines application routes and pipelines.
+  """
+
   use LanglerWeb, :router
 
   import LanglerWeb.UserAuth

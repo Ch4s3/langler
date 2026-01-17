@@ -1,6 +1,9 @@
 defmodule Langler.Study.FSRS do
   @moduledoc """
-  Thin façade around the FSRS algorithm that loads configuration and normalizes items.
+  Thin façade around the FSRS (Free Spaced Repetition Scheduler) algorithm.
+
+  Loads configuration, normalizes items, and calculates next review states
+  based on user ratings and item history.
   """
 
   alias Langler.Study.FSRS.{Item, Params}
@@ -52,6 +55,7 @@ defmodule Langler.Study.FSRS do
   Calculates the next review state for a given item and rating.
   """
   @spec calculate_next_review(Item.t(), rating(), Keyword.t()) :: map()
+  @dialyzer {:nowarn_function, calculate_next_review: 3}
   def calculate_next_review(%Item{} = item, rating, opts \\ []) do
     params = params()
     now = Keyword.get(opts, :now, DateTime.utc_now())
@@ -125,6 +129,7 @@ defmodule Langler.Study.FSRS do
     end)
   end
 
+  @dialyzer {:nowarn_function, plan_learning: 4}
   defp plan_learning(%Item{} = item, rating, params, now) do
     steps = params.learning_steps || []
     total_steps = max(length(steps), 1)
@@ -145,6 +150,7 @@ defmodule Langler.Study.FSRS do
     end
   end
 
+  @dialyzer {:nowarn_function, plan_review: 5}
   defp plan_review(%Item{} = item, rating, params, now, retrievability) do
     difficulty = next_difficulty(item.difficulty, rating, params)
     ease = update_ease_factor(item.ease_factor || ease_from_difficulty(difficulty), rating)
@@ -181,6 +187,7 @@ defmodule Langler.Study.FSRS do
     end
   end
 
+  @dialyzer {:nowarn_function, relearn: 4}
   defp relearn(difficulty, params, now, ease) do
     steps = params.relearning_steps || [10.0]
     due = minutes_from_now(now, Enum.at(steps, 0, 10.0))

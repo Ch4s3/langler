@@ -1,5 +1,7 @@
 defmodule Langler.Vocabulary.Word do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for vocabulary words.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

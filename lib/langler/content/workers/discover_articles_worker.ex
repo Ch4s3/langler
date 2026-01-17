@@ -17,25 +17,34 @@ defmodule Langler.Content.Workers.DiscoverArticlesWorker do
 
   def perform(%Oban.Job{args: %{"source_site_id" => source_site_id}}) do
     case Content.get_source_site(source_site_id) do
-      nil ->
-        Logger.warning("Source site #{source_site_id} not found")
+      nil -> handle_source_site_not_found(source_site_id)
+      source_site -> process_source_site_discovery(source_site)
+    end
+  end
+
+  defp handle_source_site_not_found(source_site_id) do
+    Logger.warning("Source site #{source_site_id} not found")
+    :ok
+  end
+
+  defp process_source_site_discovery(source_site) do
+    if source_site.is_active do
+      discover_articles_from_source(source_site)
+    else
+      Logger.info("Skipping inactive source site #{source_site.name}")
+      :ok
+    end
+  end
+
+  defp discover_articles_from_source(source_site) do
+    case Discoverer.discover(source_site) do
+      {:ok, count} ->
+        Logger.info("Discovered #{count} articles from #{source_site.name}")
         :ok
 
-      source_site ->
-        if source_site.is_active do
-          case Discoverer.discover(source_site) do
-            {:ok, count} ->
-              Logger.info("Discovered #{count} articles from #{source_site.name}")
-              :ok
-
-            {:error, reason} ->
-              Logger.error("Discovery failed for #{source_site.name}: #{inspect(reason)}")
-              {:error, reason}
-          end
-        else
-          Logger.info("Skipping inactive source site #{source_site.name}")
-          :ok
-        end
+      {:error, reason} ->
+        Logger.error("Discovery failed for #{source_site.name}: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 

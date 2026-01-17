@@ -1,5 +1,7 @@
 defmodule Langler.Content.Workers.ExtractWordsWorker do
-  @moduledoc false
+  @moduledoc """
+  Oban worker for extracting words from articles.
+  """
 
   use Oban.Worker, queue: :ingestion, max_attempts: 5
 

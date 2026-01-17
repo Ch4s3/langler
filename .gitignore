@@ -41,3 +41,6 @@ npm-debug.log
 /native/**/target/
 /native/**/Cargo.lock
 lib/langler/creds.txt
+
+# Assay build artifacts
+_build/assay

@@ -1,13 +1,14 @@
 defmodule Langler.Content.Classifier do
   @moduledoc """
-  Topic classifier for articles.
-  Uses ML (TF-IDF + Naive Bayes) when available, falls back to rule-based keyword matching.
+  Topic classifier for articles using machine learning and rule-based methods.
+
+  Uses ML (TF-IDF + Naive Bayes) when available, falls back to rule-based
+  keyword matching. Supports training on labeled articles and provides
+  confidence scores for topic assignments.
   """
 
-  alias Langler.Content.Topics
-  alias Langler.Content.ClassifierNif
+  alias Langler.Content.{Article, ArticleTopic, ClassifierNif, Topics}
   alias Langler.Repo
-  alias Langler.Content.{Article, ArticleTopic}
   import Ecto.Query
 
   @confidence_threshold 0.15
@@ -51,38 +52,39 @@ defmodule Langler.Content.Classifier do
   # ML-based classification using TF-IDF + Naive Bayes
   defp classify_with_ml(content, language) do
     case get_model(language) do
-      {:ok, model_json} ->
-        case ClassifierNif.classify(content, model_json) do
-          result when is_map(result) ->
-            topics =
-              result
-              |> Map.get("topics", [])
-              |> Enum.map(fn topic_map ->
-                topic = Map.get(topic_map, "topic") || Map.get(topic_map, :topic)
-
-                conf =
-                  Map.get(topic_map, "confidence", 0.0) || Map.get(topic_map, :confidence, 0.0)
-
-                {topic, conf}
-              end)
-              |> Enum.filter(fn {_topic, conf} ->
-                is_float(conf) and conf >= @confidence_threshold
-              end)
-              |> Enum.sort_by(fn {_topic, conf} -> conf end, :desc)
-              |> Enum.take(@default_max_topics)
-
-            {:ok, topics}
-
-          {:error, :nif_not_loaded} ->
-            {:error, :nif_not_loaded}
-
-          other ->
-            {:error, other}
-        end
-
-      {:error, _} ->
-        {:error, :no_model}
+      {:ok, model_json} -> classify_with_model(model_json, content)
+      {:error, _} -> {:error, :no_model}
     end
+  end
+
+  defp classify_with_model(model_json, content) do
+    case ClassifierNif.classify(content, model_json) do
+      result when is_map(result) -> format_ml_topics(result)
+      {:error, :nif_not_loaded} -> {:error, :nif_not_loaded}
+      other -> {:error, other}
+    end
+  end
+
+  defp format_ml_topics(result) do
+    topics =
+      result
+      |> Map.get("topics", [])
+      |> Enum.map(&extract_topic_confidence/1)
+      |> Enum.filter(&filter_by_confidence_threshold/1)
+      |> Enum.sort_by(fn {_topic, conf} -> conf end, :desc)
+      |> Enum.take(@default_max_topics)
+
+    {:ok, topics}
+  end
+
+  defp extract_topic_confidence(topic_map) do
+    topic = Map.get(topic_map, "topic") || Map.get(topic_map, :topic)
+    conf = Map.get(topic_map, "confidence", 0.0) || Map.get(topic_map, :confidence, 0.0)
+    {topic, conf}
+  end
+
+  defp filter_by_confidence_threshold({_topic, conf}) do
+    is_float(conf) and conf >= @confidence_threshold
   end
 
   # Rule-based classification (original implementation)
@@ -133,11 +135,12 @@ defmodule Langler.Content.Classifier do
   Collects training data from existing articles with high-confidence topic assignments.
   Returns training data ready for ML classifier training.
   """
-  @spec collect_training_data(integer(), float()) :: list(map())
+  @dialyzer {:nowarn_function, collect_training_data: 2}
+  @spec collect_training_data(float(), integer()) :: list(map())
   def collect_training_data(min_confidence \\ 0.7, limit \\ 1000) do
-    alias Langler.Repo
-    alias Langler.Content.ArticleTopic
     alias Langler.Content.Article
+    alias Langler.Content.ArticleTopic
+    alias Langler.Repo
     import Ecto.Query
 
     # Get articles with high-confidence topic assignments
@@ -162,7 +165,7 @@ defmodule Langler.Content.Classifier do
         "topics" => topics
       }
     end)
-    |> Enum.filter(fn doc -> length(doc["topics"]) > 0 end)
+    |> Enum.reject(fn doc -> Enum.empty?(doc["topics"]) end)
   end
 
   # Get model from ETS

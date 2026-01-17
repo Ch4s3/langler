@@ -1,5 +1,7 @@
 defmodule Langler.Accounts.UserPreference do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for user preferences.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

@@ -109,6 +109,45 @@
 
 /* This file is for your main application CSS */
 
+.page-shell {
+  width: 100%;
+  max-width: 70rem;
+  margin: 0 auto;
+}
+
+.section-card {
+  border-radius: 1.5rem;
+  border: 1px solid color-mix(in srgb, var(--color-base-content) 6%, transparent);
+  background: color-mix(in srgb, var(--color-base-100) 98%, transparent);
+  box-shadow: 0 25px 45px -28px rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(8px);
+}
+
+.section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.section-header__eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--color-base-content) 55%, transparent);
+}
+
+.section-header__title {
+  font-size: clamp(1.5rem, 2vw, 2.25rem);
+  font-weight: 700;
+  color: var(--color-base-content, #1f2937);
+}
+
+.section-header__lede {
+  font-size: 0.95rem;
+  color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
+}
+
 .article-meta {
   transition: padding 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   border-radius: 0;
@@ -284,4 +323,47 @@
     order: -1;
     margin-bottom: 0.1rem;
   }
+}
+/* Chat drawer */
+.chat-drawer-main {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: color-mix(in srgb, var(--color-base-100) 98%, transparent);
+  border-top-left-radius: 2rem;
+  border-bottom-left-radius: 2rem;
+  box-shadow: 0 40px 60px -45px rgba(15, 23, 42, 0.5);
+}
+
+.chat-drawer-header {
+  padding: 1.5rem 1.75rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.chat-drawer-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-base-content);
+}
+
+.chat-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chat-pill-button {
+  border-radius: 9999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.chat-main-area {
+  flex: 1;
+  padding: 1.25rem;
+  overflow-y: auto;
 }

@@ -4,8 +4,8 @@ defmodule Langler.Chat.Message do
   """
 
   import Ecto.Query
-  alias Langler.Repo
   alias Langler.Chat.{ChatMessage, ChatSession, Encryption, TokenCounter}
+  alias Langler.Repo
 
   @doc """
   Creates a new encrypted message and counts tokens.

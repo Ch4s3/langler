@@ -12,26 +12,24 @@ defmodule Langler.Content.Workers.CalculateArticleDifficultyWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"article_id" => article_id}}) do
-    try do
-      _article = Content.get_article!(article_id)
+    _article = Content.get_article!(article_id)
 
-      case Content.calculate_article_difficulty(article_id) do
-        {:ok, _} ->
-          Logger.info("Calculated difficulty for article #{article_id}")
-          :ok
-
-        {:error, reason} ->
-          Logger.error(
-            "Failed to calculate difficulty for article #{article_id}: #{inspect(reason)}"
-          )
-
-          {:error, reason}
-      end
-    rescue
-      Ecto.NoResultsError ->
-        Logger.warning("Article #{article_id} not found")
+    case Content.calculate_article_difficulty(article_id) do
+      {:ok, _} ->
+        Logger.info("Calculated difficulty for article #{article_id}")
         :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to calculate difficulty for article #{article_id}: #{inspect(reason)}"
+        )
+
+        {:error, reason}
     end
+  rescue
+    Ecto.NoResultsError ->
+      Logger.warning("Article #{article_id} not found")
+      :ok
   end
 
   def perform(%Oban.Job{args: %{"discovered_article_id" => discovered_article_id}}) do
@@ -50,27 +48,7 @@ defmodule Langler.Content.Workers.CalculateArticleDifficultyWorker do
           |> Enum.filter(&(&1 && &1 != ""))
           |> Enum.join(" ")
 
-        avg_sentence_length =
-          if text != "" do
-            sentences =
-              text
-              |> String.split(~r/[.!?]+/)
-              |> Enum.filter(&(&1 != "" && String.trim(&1) != ""))
-
-            words =
-              text
-              |> String.downcase()
-              |> String.split(~r/\W+/u)
-              |> Enum.filter(&(&1 != ""))
-
-            if Enum.empty?(sentences) do
-              nil
-            else
-              length(words) / max(length(sentences), 1)
-            end
-          else
-            nil
-          end
+        avg_sentence_length = calculate_avg_sentence_length(text)
 
         case Content.update_discovered_article(discovered_article, %{
                difficulty_score: difficulty_score,
@@ -93,5 +71,30 @@ defmodule Langler.Content.Workers.CalculateArticleDifficultyWorker do
   def perform(%Oban.Job{args: _}) do
     Logger.warning("Invalid job args for CalculateArticleDifficultyWorker")
     :ok
+  end
+
+  defp calculate_avg_sentence_length(text) when is_binary(text) do
+    trimmed = String.trim(text)
+
+    if trimmed == "" do
+      nil
+    else
+      sentences =
+        trimmed
+        |> String.split(~r/[.!?]+/)
+        |> Enum.filter(&(&1 != "" && String.trim(&1) != ""))
+
+      words =
+        trimmed
+        |> String.downcase()
+        |> String.split(~r/\W+/u)
+        |> Enum.filter(&(&1 != ""))
+
+      if Enum.empty?(sentences) do
+        nil
+      else
+        length(words) / max(length(sentences), 1)
+      end
+    end
   end
 end

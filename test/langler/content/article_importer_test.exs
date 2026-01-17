@@ -1,25 +1,38 @@
 defmodule Langler.Content.ArticleImporterTest do
   use Langler.DataCase, async: true
 
-  import Plug.Conn
+  import Req.Test, only: [set_req_test_from_context: 1]
 
   alias Langler.AccountsFixtures
   alias Langler.Content
   alias Langler.Content.ArticleImporter
 
+  @importer_req Langler.Content.ArticleImporterReq
+
+  setup :set_req_test_from_context
+  setup {Req.Test, :verify_on_exit!}
+
   setup do
-    bypass = Bypass.open()
+    Application.put_env(:langler, Langler.Content.ArticleImporter,
+      req_options: [plug: {Req.Test, @importer_req}, retry: false]
+    )
+
+    on_exit(fn -> Application.delete_env(:langler, Langler.Content.ArticleImporter) end)
+
     user = AccountsFixtures.user_fixture()
 
-    %{bypass: bypass, user: user}
+    %{user: user, importer: @importer_req}
   end
 
   describe "import_from_url/2" do
     test "imports a new article, sanitizes content, and creates sentences", %{
-      bypass: bypass,
+      importer: importer,
       user: user
     } do
-      Bypass.expect_once(bypass, "GET", "/article", fn conn ->
+      Req.Test.expect(importer, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/article"
+
         body = """
         <html>
           <head><title>Ignored Title</title></head>
@@ -30,10 +43,10 @@ defmodule Langler.Content.ArticleImporterTest do
         </html>
         """
 
-        resp(conn, 200, body)
+        Req.Test.html(conn, body)
       end)
 
-      url = article_url(bypass, "/article")
+      url = article_url("/article")
 
       assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
       assert article.url == url
@@ -46,15 +59,18 @@ defmodule Langler.Content.ArticleImporterTest do
       assert Enum.map(sentences, & &1.content) == ["Hola mundo.", "Adiós Phoenix!"]
     end
 
-    test "re-importing existing article refreshes content", %{bypass: bypass, user: user} do
+    test "re-importing existing article refreshes content", %{importer: importer, user: user} do
       parent = self()
 
-      Bypass.expect(bypass, fn conn ->
+      Req.Test.expect(importer, 2, fn conn ->
+        assert conn.method == "GET"
+        assert conn.request_path == "/same"
+
         send(parent, :fetched)
-        resp(conn, 200, "<p>Hola mundo.</p>")
+        Req.Test.html(conn, "<p>Hola mundo.</p>")
       end)
 
-      url = article_url(bypass, "/same")
+      url = article_url("/same")
       assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
       assert {:ok, same_article, :existing} = ArticleImporter.import_from_url(user, url)
       assert same_article.id == article.id
@@ -69,7 +85,7 @@ defmodule Langler.Content.ArticleImporterTest do
     end
   end
 
-  defp article_url(bypass, path) do
-    "http://localhost:#{bypass.port}#{path}"
+  defp article_url(path) do
+    "https://article-importer.test#{path}"
   end
 end

@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserLive.Login do
+  @moduledoc """
+  LiveView for user login.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Accounts

@@ -1,5 +1,7 @@
 defmodule Langler.Content.ReadabilityNif do
-  @moduledoc false
+  @moduledoc """
+  Rust NIF wrapper for readability parsing.
+  """
 
   # Only use Rustler if cargo is available at compile time
   # The library may still be available at runtime even if cargo isn't in PATH

@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserLive.LlmSettings do
+  @moduledoc """
+  LiveView for user LLM settings.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Accounts.LlmConfig

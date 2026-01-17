@@ -1,11 +1,13 @@
 defmodule Langler.Content.Discovery.Discoverer do
   @moduledoc """
-  Orchestrates the discovery process for a source site.
-  Handles RSS, scraping, and hybrid methods.
+  Orchestrates the discovery process for source sites.
+
+  Handles RSS feed parsing, web scraping, and hybrid discovery methods
+  to find new articles from configured content sources.
   """
 
-  alias Langler.Content.SourceSite
   alias Langler.Content.Discovery.{RssParser, WebScraper}
+  alias Langler.Content.SourceSite
 
   @doc """
   Discovers articles from a source site.
@@ -131,6 +133,7 @@ defmodule Langler.Content.Discovery.Discoverer do
     end
   end
 
+  @dialyzer {:nowarn_function, get_header: 2}
   defp get_header(headers, key) when is_list(headers) do
     # Fallback for list format
     case List.keyfind(headers, key, 0, :error) do

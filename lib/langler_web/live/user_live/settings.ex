@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserLive.Settings do
+  @moduledoc """
+  LiveView for user settings.
+  """
+
   use LanglerWeb, :live_view
 
   on_mount {LanglerWeb.UserAuth, :require_sudo_mode}

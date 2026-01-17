@@ -18,6 +18,8 @@ defmodule Langler.Accounts.LlmProvider do
     timestamps(type: :utc_datetime)
   end
 
+  @type t :: %__MODULE__{}
+
   @doc false
   def changeset(llm_provider, attrs) do
     llm_provider

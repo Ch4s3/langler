@@ -5,14 +5,15 @@ defmodule LanglerWeb.ChatLive.Drawer do
   """
   use LanglerWeb, :live_component
 
+  alias Ecto.NoResultsError
   alias Langler.Accounts.LlmConfig
   alias Langler.Chat.Session
+  alias Langler.Content
+  alias Langler.External.Dictionary
   alias Langler.LLM.Adapters.ChatGPT
   alias Langler.Study
-  alias Langler.External.Dictionary
   alias Langler.Vocabulary
-  alias Langler.Content
-  alias Ecto.NoResultsError
+  alias Phoenix.HTML.Engine, as: HtmlEngine
 
   require Logger
   import Phoenix.HTML
@@ -58,6 +59,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
           |> stream_insert(:messages, assigns.message, dom_id: dom_id)
           |> assign(:sending, false)
           |> assign(:total_tokens, socket.assigns.total_tokens + assigns.tokens)
+          |> push_event("chat:scroll-bottom", %{})
 
         :start_article_chat ->
           handle_start_article_chat(socket, assigns)
@@ -82,17 +84,19 @@ defmodule LanglerWeb.ChatLive.Drawer do
       end
     end
 
-    if is_list(messages) and length(messages) > 0 do
-      stream(socket, :messages, messages, dom_id: dom_id_fn)
-    else
-      stream(socket, :messages, [], dom_id: dom_id_fn)
+    case messages do
+      list when is_list(list) and list != [] ->
+        stream(socket, :messages, list, dom_id: dom_id_fn)
+
+      _ ->
+        stream(socket, :messages, [], dom_id: dom_id_fn)
     end
   end
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="chat-drawer-container" phx-component="chat-drawer" class="fixed bottom-0 right-0 z-50">
+    <div id="chat-drawer-container" phx-component="chat-drawer" class="fixed bottom-0 right-0 z-[60]">
       <%!-- Floating Chat Button --%>
       <button
         :if={!@chat_open}
@@ -108,7 +112,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
       <%!-- Chat Drawer --%>
       <div
         class={[
-          "fixed inset-0 z-50 flex bg-base-100 transition-transform duration-300 ease-in-out",
+          "fixed inset-0 flex bg-base-100/70 backdrop-blur-md transition-transform duration-300 ease-in-out",
           @chat_open && "translate-x-0 opacity-100",
           !@chat_open && "translate-x-full opacity-0 pointer-events-none"
         ]}
@@ -116,7 +120,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
       >
         <%!-- Sidebar --%>
         <div class={[
-          "flex flex-col border-r border-base-200 bg-base-200/50 transition-all duration-300",
+          "flex flex-col border-r border-base-200 bg-base-200/70 transition-all duration-300",
           if(@sidebar_open, do: "w-64", else: "w-0 overflow-hidden")
         ]}>
           <div class="flex h-full flex-col">
@@ -200,9 +204,9 @@ defmodule LanglerWeb.ChatLive.Drawer do
         </div>
 
         <%!-- Main Chat Area --%>
-        <div class="flex-1 flex flex-col min-w-0">
+        <div class="chat-drawer-main min-w-0">
           <%!-- Header --%>
-          <div class="flex items-center justify-between border-b border-base-200 bg-base-200/50 px-4 py-3">
+          <div class="chat-drawer-header">
             <div class="flex items-center gap-3">
               <button
                 type="button"
@@ -215,26 +219,36 @@ defmodule LanglerWeb.ChatLive.Drawer do
               </button>
               <div class="flex items-center gap-2">
                 <.icon name="hero-chat-bubble-left-right" class="h-5 w-5 text-primary" />
-                <h3 class="text-lg font-semibold text-base-content">
+                <h3 class="text-base font-semibold text-base-content">
                   {if @current_session,
                     do: @current_session.title || "New Chat",
                     else: "Chat Assistant"}
                 </h3>
               </div>
             </div>
-            <button
-              type="button"
-              phx-click="toggle_chat"
-              phx-target={@myself}
-              class="btn btn-circle btn-ghost btn-sm"
-              aria-label="Close chat"
-            >
-              <.icon name="hero-x-mark" class="h-5 w-5" />
-            </button>
+            <div class="chat-drawer-actions">
+              <button
+                type="button"
+                phx-click="toggle_keyboard"
+                phx-target={@myself}
+                class="btn btn-ghost btn-sm chat-pill-button"
+              >
+                <.icon name="hero-language" class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                phx-click="toggle_chat"
+                phx-target={@myself}
+                class="btn btn-ghost btn-sm btn-circle"
+                aria-label="Close chat"
+              >
+                <.icon name="hero-x-mark" class="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           <%!-- Messages Area --%>
-          <div class="flex-1 overflow-y-auto p-4">
+          <div id="chat-main-area" class="chat-main-area" phx-hook="ChatAutoScroll">
             <%= if @current_session == nil do %>
               <div class="flex h-full flex-col items-center justify-center gap-4 text-center">
                 <.icon name="hero-chat-bubble-left-right" class="h-16 w-16 text-base-content/20" />
@@ -289,6 +303,19 @@ defmodule LanglerWeb.ChatLive.Drawer do
                       {msg.content}
                     <% end %>
                   </div>
+                </div>
+              </div>
+              <div
+                :if={@sending}
+                class="chat chat-start animate-pulse mt-4"
+                aria-live="polite"
+                aria-label="Assistant is typing"
+              >
+                <div class="chat-bubble bg-base-200 text-base-content/70 flex items-center gap-2">
+                  <span class="loading loading-dots loading-sm text-primary"></span>
+                  <span class="text-xs uppercase tracking-wide text-base-content/50">
+                    Thinking...
+                  </span>
                 </div>
               </div>
             <% end %>
@@ -387,50 +414,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
     socket =
       if chat_open do
-        # Check if user has LLM config when opening
-        user = socket.assigns.current_scope.user
-        default_config = LlmConfig.get_default_config(user.id)
-
-        # Load all sessions for the user
-        sessions = Session.list_user_sessions(user.id, limit: 20)
-        current_session = List.first(sessions)
-
-        # Load studied words for the user
-        {studied_word_ids, studied_forms} = load_studied_words(user.id)
-
-        socket =
-          socket
-          |> assign(:chat_open, true)
-          |> assign(:sessions, sessions)
-          |> assign(:sidebar_open, false)
-          |> assign(:session_search, "")
-          |> assign(:studied_word_ids, studied_word_ids)
-          |> assign(:studied_forms, studied_forms)
-          |> assign(:llm_config_missing, is_nil(default_config))
-
-        # Load messages if session exists
-        if current_session do
-          messages = Session.get_decrypted_messages(current_session)
-          total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
-
-          socket
-          |> assign(:current_session, current_session)
-          |> assign(:total_tokens, total_tokens)
-          |> stream(:messages, messages,
-            reset: true,
-            dom_id: fn msg ->
-              "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
-            end
-          )
-        else
-          socket
-          |> assign(:current_session, nil)
-          |> assign(:total_tokens, 0)
-          |> stream(:messages, [],
-            reset: true,
-            dom_id: fn _msg -> "msg-#{System.unique_integer([:positive])}" end
-          )
-        end
+        open_chat_drawer(socket)
       else
         assign(socket, :chat_open, false)
       end
@@ -597,12 +581,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
     sessions = Session.list_user_sessions(user.id, limit: 20)
 
     # Find the selected session
-    current_session = Enum.find(sessions, &(&1.id == session_id))
+    current_session = find_session_by_id(sessions, session_id)
 
     socket =
       if current_session do
         messages = Session.get_decrypted_messages(current_session)
-        total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
+        total_tokens = total_tokens(messages)
         {studied_word_ids, studied_forms} = load_studied_words(user.id)
 
         socket
@@ -611,12 +595,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
         |> assign(:studied_word_ids, studied_word_ids)
         |> assign(:studied_forms, studied_forms)
         |> assign(:total_tokens, total_tokens)
-        |> stream(:messages, messages,
-          reset: true,
-          dom_id: fn msg ->
-            "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
-          end
-        )
+        |> reset_messages_stream(messages)
       else
         socket
       end
@@ -630,69 +609,22 @@ defmodule LanglerWeb.ChatLive.Drawer do
     user = socket.assigns.current_scope.user
 
     # Find the session to delete
-    session_to_delete = Enum.find(socket.assigns.sessions, &(&1.id == session_id))
+    session_to_delete = find_session_by_id(socket.assigns.sessions, session_id)
 
     socket =
-      if session_to_delete do
-        # Delete the session
-        case Session.delete_session(session_to_delete) do
-          {:ok, _} ->
-            # Reload sessions list
-            sessions = Session.list_user_sessions(user.id, limit: 20)
+      case session_to_delete do
+        nil ->
+          socket
 
-            # If we deleted the current session, switch to the first available or clear it
-            new_current_session =
-              if socket.assigns.current_session && socket.assigns.current_session.id == session_id do
-                List.first(sessions)
-              else
-                socket.assigns.current_session
-              end
+        _ ->
+          case Session.delete_session(session_to_delete) do
+            {:ok, _} ->
+              refresh_after_session_delete(socket, user, session_id)
 
-            socket =
+            {:error, reason} ->
+              Logger.error("Failed to delete session: #{inspect(reason)}")
               socket
-              |> assign(:sessions, sessions)
-              |> assign(:current_session, new_current_session)
-
-            # Reload studied words
-            {studied_word_ids, studied_forms} = load_studied_words(user.id)
-
-            # If we have a new session, load its messages
-            updated_socket =
-              if new_current_session do
-                messages = Session.get_decrypted_messages(new_current_session)
-
-                total_tokens =
-                  Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
-
-                socket
-                |> assign(:studied_word_ids, studied_word_ids)
-                |> assign(:studied_forms, studied_forms)
-                |> assign(:total_tokens, total_tokens)
-                |> stream(:messages, messages,
-                  reset: true,
-                  dom_id: fn msg ->
-                    "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
-                  end
-                )
-              else
-                socket
-                |> assign(:studied_word_ids, studied_word_ids)
-                |> assign(:studied_forms, studied_forms)
-                |> assign(:total_tokens, 0)
-                |> stream(:messages, [],
-                  reset: true,
-                  dom_id: fn _msg -> "msg-#{System.unique_integer([:positive])}" end
-                )
-              end
-
-            updated_socket
-
-          {:error, reason} ->
-            Logger.error("Failed to delete session: #{inspect(reason)}")
-            socket
-        end
-      else
-        socket
+          end
       end
 
     {:noreply, socket}
@@ -739,82 +671,181 @@ defmodule LanglerWeb.ChatLive.Drawer do
   def handle_event("send_message", %{"message" => message}, socket) do
     message = String.trim(message)
 
-    if message != "" && !socket.assigns.sending do
-      user = socket.assigns.current_scope.user
-
-      # Create session if it doesn't exist
-      socket =
-        if is_nil(socket.assigns.current_session) do
-          case Session.create_session(user) do
-            {:ok, session} ->
-              # Set title from first message
-              Session.update_session_title(session, message)
-              # Reload sessions list to include the new session
-              sessions = Session.list_user_sessions(user.id, limit: 20)
-              # Load any existing messages (should be empty for new session)
-              messages = Session.get_decrypted_messages(session)
-
-              socket
-              |> assign(:current_session, session)
-              |> assign(:sessions, sessions)
-              |> stream(:messages, messages,
-                reset: true,
-                dom_id: fn msg ->
-                  "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
-                end
-              )
-
-            {:error, reason} ->
-              Logger.error("Failed to create chat session: #{inspect(reason)}")
-              socket
-          end
-        else
-          # Load messages for existing session
-          session = socket.assigns.current_session
-          messages = Session.get_decrypted_messages(session)
-
-          stream(socket, :messages, messages,
-            reset: true,
-            dom_id: fn msg ->
-              "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
-            end
-          )
-        end
-
-      session = socket.assigns.current_session
-
-      if session do
-        # Add user message
-        case Session.add_message(session, "user", message) do
-          {:ok, user_msg} ->
-            socket =
-              socket
-              |> stream_insert(:messages, user_msg,
-                dom_id: "msg-#{DateTime.to_unix(user_msg.inserted_at)}"
-              )
-              |> assign(:input_value, "")
-              |> assign(:sending, true)
-
-            # Send to LLM asynchronously via Task
-            parent_pid = self()
-            component_id = socket.assigns.myself
-
-            Task.start(fn ->
-              send_message_to_llm(session, message, user, parent_pid, component_id)
-            end)
-
-            {:noreply, socket}
-
-          {:error, reason} ->
-            Logger.error("Failed to add user message: #{inspect(reason)}")
-            {:noreply, socket}
-        end
-      else
+    cond do
+      message == "" ->
         {:noreply, socket}
-      end
-    else
-      {:noreply, socket}
+
+      socket.assigns.sending ->
+        {:noreply, socket}
+
+      true ->
+        user = socket.assigns.current_scope.user
+
+        case ensure_session_ready(socket, user, message) do
+          {:ok, socket, session} ->
+            add_user_message_and_dispatch(socket, session, message, user)
+
+          {:error, socket} ->
+            {:noreply, socket}
+        end
     end
+  end
+
+  defp ensure_session_ready(socket, user, message) do
+    case socket.assigns.current_session do
+      nil ->
+        create_session_and_load(socket, user, message)
+
+      session ->
+        {:ok, reset_messages_stream(socket, Session.get_decrypted_messages(session)), session}
+    end
+  end
+
+  defp create_session_and_load(socket, user, message) do
+    case Session.create_session(user) do
+      {:ok, session} ->
+        Session.update_session_title(session, message)
+        sessions = Session.list_user_sessions(user.id, limit: 20)
+        messages = Session.get_decrypted_messages(session)
+
+        socket =
+          socket
+          |> assign(:current_session, session)
+          |> assign(:sessions, sessions)
+          |> reset_messages_stream(messages)
+
+        {:ok, socket, session}
+
+      {:error, reason} ->
+        Logger.error("Failed to create chat session: #{inspect(reason)}")
+        {:error, socket}
+    end
+  end
+
+  defp reset_messages_stream(socket, messages) do
+    stream(socket, :messages, messages, reset: true, dom_id: &message_dom_id/1)
+  end
+
+  defp message_dom_id(msg) do
+    timestamp =
+      if msg.inserted_at do
+        DateTime.to_unix(msg.inserted_at)
+      else
+        System.unique_integer([:positive])
+      end
+
+    "msg-#{timestamp}"
+  end
+
+  # Helper functions for handle_event("toggle_chat", ...)
+  defp open_chat_drawer(socket) do
+    user = socket.assigns.current_scope.user
+    default_config = LlmConfig.get_default_config(user.id)
+    sessions = Session.list_user_sessions(user.id, limit: 20)
+    current_session = List.first(sessions)
+    {studied_word_ids, studied_forms} = load_studied_words(user.id)
+
+    socket
+    |> assign(:chat_open, true)
+    |> assign(:sessions, sessions)
+    |> assign(:sidebar_open, false)
+    |> assign(:session_search, "")
+    |> assign(:studied_word_ids, studied_word_ids)
+    |> assign(:studied_forms, studied_forms)
+    |> assign(:llm_config_missing, is_nil(default_config))
+    |> load_session_messages(current_session)
+  end
+
+  defp load_session_messages(socket, nil) do
+    socket
+    |> assign(:current_session, nil)
+    |> assign(:total_tokens, 0)
+    |> stream(:messages, [],
+      reset: true,
+      dom_id: fn _msg -> "msg-#{System.unique_integer([:positive])}" end
+    )
+  end
+
+  defp load_session_messages(socket, current_session) do
+    messages = Session.get_decrypted_messages(current_session)
+    total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
+
+    socket
+    |> assign(:current_session, current_session)
+    |> assign(:total_tokens, total_tokens)
+    |> stream(:messages, messages,
+      reset: true,
+      dom_id: fn msg ->
+        "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
+      end
+    )
+  end
+
+  defp add_user_message_and_dispatch(socket, session, message, user) do
+    case Session.add_message(session, "user", message) do
+      {:ok, user_msg} ->
+        socket =
+          socket
+          |> stream_insert(:messages, user_msg,
+            dom_id: "msg-#{DateTime.to_unix(user_msg.inserted_at)}"
+          )
+          |> assign(:input_value, "")
+          |> assign(:sending, true)
+          |> push_event("chat:scroll-bottom", %{instant: true})
+
+        dispatch_llm_request(session, message, user, socket.assigns.myself)
+
+        {:noreply, socket}
+
+      {:error, reason} ->
+        Logger.error("Failed to add user message: #{inspect(reason)}")
+        {:noreply, socket}
+    end
+  end
+
+  defp refresh_after_session_delete(socket, user, session_id) do
+    sessions = Session.list_user_sessions(user.id, limit: 20)
+
+    new_current_session =
+      pick_current_session_after_delete(socket.assigns.current_session, sessions, session_id)
+
+    socket =
+      socket
+      |> assign(:sessions, sessions)
+      |> assign(:current_session, new_current_session)
+
+    {studied_word_ids, studied_forms} = load_studied_words(user.id)
+
+    socket
+    |> assign(:studied_word_ids, studied_word_ids)
+    |> assign(:studied_forms, studied_forms)
+    |> load_session_messages(new_current_session)
+  end
+
+  defp pick_current_session_after_delete(nil, _sessions, _session_id), do: nil
+
+  defp pick_current_session_after_delete(current_session, sessions, session_id) do
+    if current_session.id == session_id do
+      List.first(sessions)
+    else
+      current_session
+    end
+  end
+
+  defp total_tokens(messages) do
+    Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
+  end
+
+  defp find_session_by_id(sessions, session_id) do
+    Enum.find(sessions, &(&1.id == session_id))
+  end
+
+  defp dispatch_llm_request(session, message, user, component_id) do
+    parent_pid = self()
+
+    Task.start(fn ->
+      send_message_to_llm(session, message, user, parent_pid, component_id)
+    end)
   end
 
   defp handle_start_article_chat(socket, assigns) do
@@ -878,22 +909,24 @@ defmodule LanglerWeb.ChatLive.Drawer do
         []
 
       true ->
-        with {:ok, article} <- fetch_article(session.context_id) do
-          topics =
-            article.id
-            |> Content.list_topics_for_article()
-            |> Enum.map(& &1.topic)
+        case fetch_article(session.context_id) do
+          {:ok, article} ->
+            topics =
+              article.id
+              |> Content.list_topics_for_article()
+              |> Enum.map(& &1.topic)
 
-          prompt =
-            build_article_prompt(%{
-              article_language: article.language,
-              article_topics: topics,
-              article_content: article.content
-            })
+            prompt =
+              build_article_prompt(%{
+                article_language: article.language,
+                article_topics: topics,
+                article_content: article.content
+              })
 
-          [%{role: "system", content: prompt}]
-        else
-          _ -> []
+            [%{role: "system", content: prompt}]
+
+          _ ->
+            []
         end
     end
   end
@@ -908,7 +941,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
   defp fetch_article(_), do: :error
 
-  defp refresh_chat_with_session(socket, session, opts \\ []) do
+  defp refresh_chat_with_session(socket, session, opts) do
     messages = Session.get_decrypted_messages(session)
     total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
     {studied_word_ids, studied_forms} = load_studied_words(socket.assigns.current_scope.user.id)
@@ -933,146 +966,166 @@ defmodule LanglerWeb.ChatLive.Drawer do
     config = LlmConfig.get_default_config(user.id)
 
     if config do
-      # Decrypt API key for use
-      alias Langler.Chat.Encryption
-
-      case Encryption.decrypt_message(user.id, config.encrypted_api_key) do
-        {:ok, api_key} ->
-          # Trim any whitespace from the API key
-          api_key = String.trim(api_key)
-
-          Logger.debug(
-            "Decrypted API key length: #{String.length(api_key)}, starts with: #{String.slice(api_key, 0, 10)}"
-          )
-
-          # Validate model name through adapter
-          temp_config = %{
-            api_key: api_key,
-            model: config.model || "gpt-4o-mini",
-            temperature: config.temperature || 0.7,
-            max_tokens: config.max_tokens || 2000
-          }
-
-          # This will validate and correct the model name
-          case ChatGPT.validate_config(temp_config) do
-            {:ok, validated_config} ->
-              Logger.debug("Sending to LLM with model: #{validated_config.model}")
-              send_to_llm(session, user_message, validated_config, parent_pid)
-
-            {:error, reason} ->
-              Logger.error("Invalid LLM config: #{inspect(reason)}")
-
-              send_update(parent_pid, __MODULE__,
-                id: "chat-drawer",
-                action: :sending_complete
-              )
-          end
-
-        {:error, reason} ->
-          Logger.error("Failed to decrypt API key: #{inspect(reason)}")
-
-          send_update(parent_pid, __MODULE__,
-            id: "chat-drawer",
-            action: :sending_complete
-          )
-      end
+      process_llm_config(session, user_message, user, config, parent_pid)
     else
-      Logger.error("No LLM config found for user")
-
-      send_update(parent_pid, __MODULE__,
-        id: "chat-drawer",
-        action: :sending_complete
-      )
+      handle_no_config(parent_pid)
     end
+  end
+
+  defp process_llm_config(session, user_message, user, config, parent_pid) do
+    alias Langler.Chat.Encryption
+
+    case Encryption.decrypt_message(user.id, config.encrypted_api_key) do
+      {:ok, api_key} -> handle_decrypted_key(session, user_message, api_key, config, parent_pid)
+      {:error, reason} -> handle_decrypt_error(reason, parent_pid)
+    end
+  end
+
+  defp handle_decrypted_key(session, user_message, api_key, config, parent_pid) do
+    trimmed_key = String.trim(api_key)
+
+    Logger.debug(
+      "Decrypted API key length: #{String.length(trimmed_key)}, starts with: #{String.slice(trimmed_key, 0, 10)}"
+    )
+
+    temp_config = build_temp_config(trimmed_key, config)
+
+    case ChatGPT.validate_config(temp_config) do
+      {:ok, validated_config} -> handle_validated_config(session, user_message, validated_config, parent_pid)
+      {:error, reason} -> handle_validation_error(reason, parent_pid)
+    end
+  end
+
+  defp build_temp_config(api_key, config) do
+    %{
+      api_key: api_key,
+      model: config.model || "gpt-4o-mini",
+      temperature: config.temperature || 0.7,
+      max_tokens: config.max_tokens || 2000
+    }
+  end
+
+  defp handle_validated_config(session, user_message, validated_config, parent_pid) do
+    Logger.debug("Sending to LLM with model: #{validated_config.model}")
+    send_to_llm(session, user_message, validated_config, parent_pid)
+  end
+
+  defp handle_validation_error(reason, parent_pid) do
+    Logger.error("Invalid LLM config: #{inspect(reason)}")
+    send_complete_update(parent_pid)
+  end
+
+  defp handle_decrypt_error(reason, parent_pid) do
+    Logger.error("Failed to decrypt API key: #{inspect(reason)}")
+    send_complete_update(parent_pid)
+  end
+
+  defp handle_no_config(parent_pid) do
+    Logger.error("No LLM config found for user")
+    send_complete_update(parent_pid)
+  end
+
+  defp send_complete_update(parent_pid) do
+    send_update(parent_pid, __MODULE__,
+      id: "chat-drawer",
+      action: :sending_complete
+    )
   end
 
   defp send_to_llm(session, user_message, decrypted_config, parent_pid) do
     alias Langler.Chat.RateLimiter
 
-    # Check rate limits before making the request
     user_id = session.user_id
 
     case RateLimiter.check_rate_limit(user_id, :requests_per_minute) do
-      {:ok} ->
-        case RateLimiter.check_rate_limit(user_id, :concurrent) do
-          {:ok} ->
-            # Mark concurrent request start
-            RateLimiter.start_concurrent_request(user_id)
-
-            # Get practice words (due or not marked as easy)
-            practice_words = Study.get_practice_words(user_id)
-
-            practice_words_text =
-              if practice_words != [] do
-                words_list = Enum.join(practice_words, ", ")
-
-                "\n\nWords the user is currently learning (use these in conversation when relevant): #{words_list}"
-              else
-                ""
-              end
-
-            base_system_message = """
-            You are a helpful language learning assistant.
-            The user is learning #{session.target_language} and speaks #{session.native_language}.
-            Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed.#{practice_words_text}
-            When returning verb conjugations, format them as a table using the customary format for the language.
-            """
-
-            history_messages =
-              session
-              |> Session.get_decrypted_messages()
-              |> Enum.map(fn message -> Map.take(message, [:role, :content]) end)
-
-            context_messages = article_context_messages(session, history_messages)
-
-            # Ensure the most recent user message is included even if history hasn't refreshed yet
-            history_messages =
-              if Enum.any?(history_messages, fn msg ->
-                   msg.role == "user" and msg.content == user_message
-                 end) do
-                history_messages
-              else
-                history_messages ++ [%{role: "user", content: user_message}]
-              end
-
-            messages =
-              [%{role: "system", content: base_system_message}] ++
-                context_messages ++
-                history_messages
-
-            result = ChatGPT.chat(messages, decrypted_config)
-
-            # Always mark concurrent request end, even on errors
-            RateLimiter.end_concurrent_request(user_id)
-
-            # Track the request only on success
-            if match?({:ok, _}, result) do
-              RateLimiter.track_request(user_id)
-            end
-
-            handle_llm_result(result, session, user_message, decrypted_config, parent_pid)
-
-          {:error, :rate_limit_exceeded, retry_after} ->
-            Logger.warning(
-              "Rate limit: concurrent requests exceeded, retry after #{retry_after}s"
-            )
-
-            send_update(parent_pid, __MODULE__,
-              id: "chat-drawer",
-              action: :sending_complete
-            )
-        end
-
-      {:error, :rate_limit_exceeded, retry_after} ->
-        Logger.warning("Rate limit: requests per minute exceeded, retry after #{retry_after}s")
-
-        send_update(parent_pid, __MODULE__,
-          id: "chat-drawer",
-          action: :sending_complete
-        )
+      {:ok} -> check_concurrent_rate_limit(session, user_message, decrypted_config, parent_pid, user_id)
+      {:error, :rate_limit_exceeded, retry_after} -> handle_rate_limit_error(parent_pid, retry_after, "requests per minute")
     end
   end
 
+  defp check_concurrent_rate_limit(session, user_message, decrypted_config, parent_pid, user_id) do
+    alias Langler.Chat.RateLimiter
+
+    case RateLimiter.check_rate_limit(user_id, :concurrent) do
+      {:ok} -> process_llm_request(session, user_message, decrypted_config, parent_pid, user_id)
+      {:error, :rate_limit_exceeded, retry_after} -> handle_rate_limit_error(parent_pid, retry_after, "concurrent requests")
+    end
+  end
+
+  defp process_llm_request(session, user_message, decrypted_config, parent_pid, user_id) do
+    alias Langler.Chat.RateLimiter
+
+    RateLimiter.start_concurrent_request(user_id)
+
+    messages = build_messages(session, user_message, user_id)
+    result = ChatGPT.chat(messages, decrypted_config)
+
+    RateLimiter.end_concurrent_request(user_id)
+
+    if match?({:ok, _}, result) do
+      RateLimiter.track_request(user_id)
+    end
+
+    handle_llm_result(result, session, user_message, decrypted_config, parent_pid)
+  end
+
+  defp build_messages(session, user_message, user_id) do
+    practice_words_text = build_practice_words_text(user_id)
+    base_system_message = build_system_message(session, practice_words_text)
+
+    history_messages = get_history_messages(session)
+    history_messages = ensure_user_message_in_history(history_messages, user_message)
+    context_messages = article_context_messages(session, history_messages)
+
+    [%{role: "system", content: base_system_message}] ++ context_messages ++ history_messages
+  end
+
+  defp build_practice_words_text(user_id) do
+    practice_words = Study.get_practice_words(user_id)
+
+    if practice_words != [] do
+      words_list = Enum.join(practice_words, ", ")
+      "\n\nWords the user is currently learning (use these in conversation when relevant): #{words_list}"
+    else
+      ""
+    end
+  end
+
+  defp build_system_message(session, practice_words_text) do
+    """
+    You are a helpful language learning assistant.
+    The user is learning #{session.target_language} and speaks #{session.native_language}.
+    Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed.#{practice_words_text}
+    When returning verb conjugations, format them as a table using the customary format for the language.
+    """
+  end
+
+  defp get_history_messages(session) do
+    session
+    |> Session.get_decrypted_messages()
+    |> Enum.map(fn message -> Map.take(message, [:role, :content]) end)
+  end
+
+  defp ensure_user_message_in_history(history_messages, user_message) do
+    if Enum.any?(history_messages, fn msg ->
+         msg.role == "user" and msg.content == user_message
+       end) do
+      history_messages
+    else
+      history_messages ++ [%{role: "user", content: user_message}]
+    end
+  end
+
+  defp handle_rate_limit_error(parent_pid, retry_after, limit_type) do
+    Logger.warning("Rate limit: #{limit_type} exceeded, retry after #{retry_after}s")
+
+    send_update(parent_pid, __MODULE__,
+      id: "chat-drawer",
+      action: :sending_complete
+    )
+  end
+
+  @dialyzer {:nowarn_function, handle_llm_result: 5}
   defp handle_llm_result(result, session, user_message, decrypted_config, parent_pid) do
     case result do
       {:ok, %{content: assistant_content, token_count: tokens}} ->
@@ -1119,6 +1172,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   end
 
   # Retries LLM request with exponential backoff
+  @dialyzer {:nowarn_function, retry_with_backoff: 6}
   defp retry_with_backoff(
          session,
          user_message,
@@ -1136,89 +1190,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
     # Check concurrent limit before retry
     case RateLimiter.check_rate_limit(session.user_id, :concurrent) do
-      {:ok} ->
-        RateLimiter.start_concurrent_request(session.user_id)
-
-        messages = [
-          %{
-            role: "system",
-            content:
-              "You are a helpful language learning assistant. The user is learning #{session.target_language} and speaks #{session.native_language}. Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed."
-          },
-          %{role: "user", content: user_message}
-        ]
-
-        result = ChatGPT.chat(messages, decrypted_config)
-
-        # Always clean up concurrent request
-        RateLimiter.end_concurrent_request(session.user_id)
-
-        case result do
-          {:ok, %{content: assistant_content, token_count: tokens}} ->
-            RateLimiter.track_tokens(session.user_id, tokens)
-            RateLimiter.track_request(session.user_id)
-
-            case Session.add_message(session, "assistant", assistant_content) do
-              {:ok, assistant_msg} ->
-                send_update(parent_pid, __MODULE__,
-                  id: "chat-drawer",
-                  action: :add_assistant_message,
-                  message: assistant_msg,
-                  tokens: tokens
-                )
-
-              {:error, reason} ->
-                Logger.error("Failed to add assistant message: #{inspect(reason)}")
-
-                send_update(parent_pid, __MODULE__,
-                  id: "chat-drawer",
-                  action: :sending_complete
-                )
-            end
-
-          {:error, {:rate_limit_exceeded, retry_after}} ->
-            # Exponential backoff: double the wait time
-            # Cap at 5 minutes
-            next_wait = min(retry_after * 2, 300)
-
-            retry_with_backoff(
-              session,
-              user_message,
-              decrypted_config,
-              parent_pid,
-              next_wait,
-              attempt + 1
-            )
-
-          {:error, :rate_limit_exceeded} ->
-            next_wait = min((60 * :math.pow(2, attempt)) |> trunc(), 300)
-
-            retry_with_backoff(
-              session,
-              user_message,
-              decrypted_config,
-              parent_pid,
-              next_wait,
-              attempt + 1
-            )
-
-          {:error, reason} ->
-            Logger.error("LLM API call failed after retry: #{inspect(reason)}")
-
-            send_update(parent_pid, __MODULE__,
-              id: "chat-drawer",
-              action: :sending_complete
-            )
-        end
-
-      {:error, :rate_limit_exceeded, _retry_after} ->
-        # Concurrent limit hit during retry, give up
-        Logger.warning("Concurrent limit hit during retry, aborting")
-
-        send_update(parent_pid, __MODULE__,
-          id: "chat-drawer",
-          action: :sending_complete
-        )
+      {:ok} -> process_retry_request(session, user_message, decrypted_config, parent_pid, attempt)
+      {:error, :rate_limit_exceeded, _retry_after} -> handle_concurrent_limit_during_retry(parent_pid)
     end
   end
 
@@ -1236,6 +1209,75 @@ defmodule LanglerWeb.ChatLive.Drawer do
       id: "chat-drawer",
       action: :sending_complete
     )
+  end
+
+  defp process_retry_request(session, user_message, decrypted_config, parent_pid, attempt) do
+    alias Langler.Chat.RateLimiter
+
+    RateLimiter.start_concurrent_request(session.user_id)
+
+    messages = build_retry_messages(session, user_message)
+    result = ChatGPT.chat(messages, decrypted_config)
+
+    RateLimiter.end_concurrent_request(session.user_id)
+
+    handle_retry_result(result, session, user_message, decrypted_config, parent_pid, attempt)
+  end
+
+  defp build_retry_messages(session, user_message) do
+    [
+      %{
+        role: "system",
+        content:
+          "You are a helpful language learning assistant. The user is learning #{session.target_language} and speaks #{session.native_language}. Help them practice by conversing in #{session.target_language}, correcting their mistakes gently, and explaining grammar or vocabulary when needed."
+      },
+      %{role: "user", content: user_message}
+    ]
+  end
+
+  defp handle_retry_result(result, session, user_message, decrypted_config, parent_pid, attempt) do
+    case result do
+      {:ok, %{content: assistant_content, token_count: tokens}} ->
+        handle_successful_retry(session, assistant_content, tokens, parent_pid)
+
+      {:error, {:rate_limit_exceeded, retry_after}} ->
+        next_wait = min(retry_after * 2, 300)
+        retry_with_backoff(session, user_message, decrypted_config, parent_pid, next_wait, attempt + 1)
+
+      {:error, :rate_limit_exceeded} ->
+        next_wait = min((60 * :math.pow(2, attempt)) |> trunc(), 300)
+        retry_with_backoff(session, user_message, decrypted_config, parent_pid, next_wait, attempt + 1)
+
+      {:error, reason} ->
+        Logger.error("LLM API call failed after retry: #{inspect(reason)}")
+        send_complete_update(parent_pid)
+    end
+  end
+
+  defp handle_successful_retry(session, assistant_content, tokens, parent_pid) do
+    alias Langler.Chat.RateLimiter
+
+    RateLimiter.track_tokens(session.user_id, tokens)
+    RateLimiter.track_request(session.user_id)
+
+    case Session.add_message(session, "assistant", assistant_content) do
+      {:ok, assistant_msg} ->
+        send_update(parent_pid, __MODULE__,
+          id: "chat-drawer",
+          action: :add_assistant_message,
+          message: assistant_msg,
+          tokens: tokens
+        )
+
+      {:error, reason} ->
+        Logger.error("Failed to add assistant message: #{inspect(reason)}")
+        send_complete_update(parent_pid)
+    end
+  end
+
+  defp handle_concurrent_limit_during_retry(parent_pid) do
+    Logger.warning("Concurrent limit hit during retry, aborting")
+    send_complete_update(parent_pid)
   end
 
   defp format_date(%DateTime{} = datetime) do
@@ -1365,6 +1407,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
 
   defp get_special_chars(_), do: []
 
+  @dialyzer {:nowarn_function, render_markdown: 1}
   defp render_markdown(content) when is_binary(content) do
     case MDEx.to_html(content, extension: [table: true]) do
       {:ok, html} ->
@@ -1374,11 +1417,11 @@ defmodule LanglerWeb.ChatLive.Drawer do
         html
 
       {:error, _} ->
-        Phoenix.HTML.Engine.html_escape(content)
+        HtmlEngine.html_escape(content)
 
       other ->
         Logger.warning("Unexpected MDEx return: #{inspect(other)}")
-        Phoenix.HTML.Engine.html_escape(content)
+        HtmlEngine.html_escape(content)
     end
   end
 
@@ -1394,40 +1437,35 @@ defmodule LanglerWeb.ChatLive.Drawer do
        )
        when is_binary(html) do
     case Floki.parse_fragment(html) do
-      {:ok, doc} ->
-        doc
-        |> Floki.traverse_and_update(fn
-          {tag, attrs, children} when is_list(children) ->
-            # Process text nodes in children
-            new_children =
-              Enum.flat_map(children, fn
-                text when is_binary(text) ->
-                  tokenize_and_wrap(
-                    text,
-                    language,
-                    studied_word_ids,
-                    studied_forms,
-                    message_id,
-                    component_id
-                  )
-
-                other ->
-                  [other]
-              end)
-
-            {tag, attrs, new_children}
-
-          other ->
-            other
-        end)
-        |> Floki.raw_html()
-
-      _ ->
-        html
+      {:ok, doc} -> process_html_document(doc, language, studied_word_ids, studied_forms, message_id, component_id)
+      _ -> html
     end
   end
 
   defp add_word_tooltips(html, _, _, _, _, _), do: html
+
+  defp process_html_document(doc, language, studied_word_ids, studied_forms, message_id, component_id) do
+    doc
+    |> Floki.traverse_and_update(fn
+      {tag, attrs, children} when is_list(children) ->
+        new_children = process_html_children(children, language, studied_word_ids, studied_forms, message_id, component_id)
+        {tag, attrs, new_children}
+
+      other ->
+        other
+    end)
+    |> Floki.raw_html()
+  end
+
+  defp process_html_children(children, language, studied_word_ids, studied_forms, message_id, component_id) do
+    Enum.flat_map(children, fn
+      text when is_binary(text) ->
+        tokenize_and_wrap(text, language, studied_word_ids, studied_forms, message_id, component_id)
+
+      other ->
+        [other]
+    end)
+  end
 
   defp tokenize_and_wrap(
          text,
@@ -1441,47 +1479,53 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> Regex.scan(text)
     |> Enum.map(&hd/1)
     |> Enum.reject(&(&1 == ""))
-    |> Enum.map(fn token ->
-      trimmed = String.trim(token)
-      is_lexical = is_lexical_token?(trimmed)
-
-      if is_lexical do
-        normalized = Vocabulary.normalize_form(trimmed)
-        studied? = normalized && MapSet.member?(studied_forms, normalized)
-        token_id = "chat-word-#{message_id}-#{System.unique_integer([:positive])}"
-
-        component_attr =
-          if component_id do
-            {"data-component-id", to_string(component_id)}
-          else
-            nil
-          end
-
-        attrs =
-          [
-            {"data-word", trimmed},
-            {"data-language", language},
-            component_attr,
-            {"phx-hook", "WordTooltip"},
-            {"id", token_id},
-            {"class",
-             "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40" <>
-               if(studied?, do: " bg-primary/5 text-primary", else: "")}
-          ]
-          |> Enum.reject(&is_nil/1)
-
-        {"span", attrs, [token]}
-      else
-        token
-      end
-    end)
+    |> Enum.map(fn token -> wrap_token_if_lexical(token, language, studied_forms, message_id, component_id) end)
   end
 
-  defp is_lexical_token?(text) when is_binary(text) do
+  defp wrap_token_if_lexical(token, language, studied_forms, message_id, component_id) do
+    trimmed = String.trim(token)
+
+    if lexical_token?(trimmed) do
+      build_wrapped_token(trimmed, language, studied_forms, message_id, component_id, token)
+    else
+      token
+    end
+  end
+
+  defp build_wrapped_token(trimmed, language, studied_forms, message_id, component_id, token) do
+    normalized = Vocabulary.normalize_form(trimmed)
+    studied? = normalized && MapSet.member?(studied_forms, normalized)
+    token_id = "chat-word-#{message_id}-#{System.unique_integer([:positive])}"
+    component_attr = build_component_attr(component_id)
+    attrs = build_token_attrs(trimmed, language, component_attr, token_id, studied?)
+
+    {"span", attrs, [token]}
+  end
+
+  defp build_component_attr(nil), do: nil
+  defp build_component_attr(component_id), do: {"data-component-id", to_string(component_id)}
+
+  defp build_token_attrs(trimmed, language, component_attr, token_id, studied?) do
+    class_base = "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40"
+    class_suffix = if studied?, do: " bg-primary/5 text-primary", else: ""
+
+    [
+      {"data-word", trimmed},
+      {"data-language", language},
+      component_attr,
+      {"phx-hook", "WordTooltip"},
+      {"id", token_id},
+      {"class", class_base <> class_suffix}
+    ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp lexical_token?(text) when is_binary(text) do
     String.length(text) > 0 && String.match?(text, ~r/\p{L}/u)
   end
 
-  defp is_lexical_token?(_), do: false
+  @dialyzer {:nowarn_function, lexical_token?: 1}
+  defp lexical_token?(_), do: false
 
   defp load_studied_words(user_id) do
     items = Study.list_items_for_user(user_id)

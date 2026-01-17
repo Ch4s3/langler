@@ -1,6 +1,9 @@
 defmodule Langler.External.Dictionary.Wiktionary do
   @moduledoc """
-  Minimal Wiktionary HTML scraper for definitions.
+  Minimal Wiktionary HTML scraper for extracting word definitions.
+
+  Parses Wiktionary pages to extract definitions, pronunciations, and
+  part-of-speech information for language learning purposes.
   """
 
   @header_selector "h1#firstHeading"
@@ -47,7 +50,7 @@ defmodule Langler.External.Dictionary.Wiktionary do
       |> Enum.join("/")
       |> with_language_anchor(language)
 
-    case Req.get(url: url, headers: default_headers(), retry: false) do
+    case Req.get([url: url, headers: default_headers(), retry: false] ++ req_options()) do
       {:ok, %{status: status, body: body}} when status in 200..299 ->
         {:ok, body, url}
 
@@ -59,6 +62,7 @@ defmodule Langler.External.Dictionary.Wiktionary do
     end
   end
 
+  @dialyzer {:nowarn_function, candidate_terms: 1}
   defp candidate_terms(term) do
     lower = String.downcase(term || "")
 
@@ -118,6 +122,11 @@ defmodule Langler.External.Dictionary.Wiktionary do
     Keyword.get(config, :ttl, :timer.hours(6))
   end
 
+  defp req_options do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :req_options, [])
+  end
+
   defp default_headers do
     [
       {"user-agent", "LanglerBot/0.1 (+https://langler.local)"}
@@ -151,27 +160,27 @@ defmodule Langler.External.Dictionary.Wiktionary do
   defp take_language_section(children, nil), do: children
 
   defp take_language_section(children, anchor) do
-    {_acc, _result} =
-      Enum.reduce(children, {false, []}, fn node, {found, acc} ->
+    {found, acc} =
+      Enum.reduce_while(children, {false, []}, fn node, {found, acc} ->
         cond do
           language_heading?(node, anchor) ->
-            {true, []}
+            {:cont, {true, []}}
 
           found && heading?(node) ->
-            throw({:done, Enum.reverse(acc)})
+            {:halt, {found, acc}}
 
           found ->
-            {found, [node | acc]}
+            {:cont, {found, [node | acc]}}
 
           true ->
-            {found, acc}
+            {:cont, {found, acc}}
         end
       end)
-  catch
-    {:done, acc} -> acc
-  else
-    {false, _} -> children
-    {_found, acc} -> Enum.reverse(acc)
+
+    case {found, acc} do
+      {false, _} -> children
+      {_found, acc} -> Enum.reverse(acc)
+    end
   end
 
   defp language_heading?({"h2", _attrs, children}, anchor) do

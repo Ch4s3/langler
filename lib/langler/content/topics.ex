@@ -1,7 +1,9 @@
 defmodule Langler.Content.Topics do
   @moduledoc """
-  Topic taxonomy and keyword dictionaries for classification.
-  Organized by language, with each topic containing keywords and weights.
+  Topic taxonomy and keyword dictionaries for article classification.
+
+  Organized by language, with each topic containing keywords and weights
+  used for rule-based topic classification of articles.
   """
 
   @topics %{

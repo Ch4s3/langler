@@ -1,4 +1,8 @@
 defmodule LanglerWeb.UserLive.Confirmation do
+  @moduledoc """
+  LiveView for login confirmation.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Accounts

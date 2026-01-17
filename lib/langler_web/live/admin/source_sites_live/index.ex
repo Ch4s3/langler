@@ -1,4 +1,8 @@
 defmodule LanglerWeb.Admin.SourceSitesLive.Index do
+  @moduledoc """
+  Admin LiveView for listing source sites.
+  """
+
   use LanglerWeb, :live_view
 
   alias Langler.Content

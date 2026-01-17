@@ -1,5 +1,7 @@
 defmodule LanglerWeb.UserAuth do
-  @moduledoc false
+  @moduledoc """
+  User authentication helpers and plugs.
+  """
 
   use LanglerWeb, :verified_routes
 

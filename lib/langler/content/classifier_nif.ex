@@ -1,5 +1,7 @@
 defmodule Langler.Content.ClassifierNif do
-  @moduledoc false
+  @moduledoc """
+  Rust NIF wrapper for ML classifier.
+  """
 
   # Only use Rustler if cargo is available
   if System.find_executable("cargo") do

@@ -9,6 +9,7 @@ defmodule Langler.Content.ClassifierTrainer do
   Trains the ML classifier using existing articles with high-confidence topic assignments.
   This uses rule-based classifications as training labels.
   """
+  @dialyzer {:nowarn_function, train_from_existing_articles: 2}
   @spec train_from_existing_articles(String.t(), integer()) ::
           {:ok, String.t()} | {:error, term()}
   def train_from_existing_articles(language \\ "spanish", min_articles \\ 50) do
@@ -31,6 +32,7 @@ defmodule Langler.Content.ClassifierTrainer do
   Retrains the classifier periodically as new articles are added.
   Call this from a background job or scheduled task.
   """
+  @dialyzer {:nowarn_function, retrain_if_needed: 2}
   @spec retrain_if_needed(String.t(), integer()) :: :ok | {:error, term()}
   def retrain_if_needed(language \\ "spanish", min_new_articles \\ 100) do
     # Check if we have enough new training data

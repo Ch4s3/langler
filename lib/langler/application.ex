@@ -1,7 +1,7 @@
 defmodule Langler.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
-  @moduledoc false
+  @moduledoc """
+  OTP application entry point for Langler.
+  """
 
   use Application
 

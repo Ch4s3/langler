@@ -1,5 +1,7 @@
 defmodule Langler.Accounts.User do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for users.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset

@@ -1,5 +1,7 @@
 defmodule Langler.Accounts.UserToken do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for user authentication tokens.
+  """
 
   use Ecto.Schema
   import Ecto.Query

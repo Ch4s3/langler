@@ -1,11 +1,10 @@
 defmodule Langler.Content.ClassifierTrainerTest do
   use Langler.DataCase, async: true
 
-  alias Langler.Content.ClassifierTrainer
-  alias Langler.Content.Classifier
-  alias Langler.Content.{ArticleTopic}
-  alias Langler.ContentFixtures
   alias Langler.AccountsFixtures
+  alias Langler.Content.ArticleTopic
+  alias Langler.Content.ClassifierTrainer
+  alias Langler.ContentFixtures
   alias Langler.Repo
 
   describe "train_from_existing_articles/2" do

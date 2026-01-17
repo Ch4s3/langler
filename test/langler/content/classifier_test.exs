@@ -1,9 +1,9 @@
 defmodule Langler.Content.ClassifierTest do
   use Langler.DataCase, async: true
 
+  alias Langler.Content.ArticleTopic
   alias Langler.Content.Classifier
   alias Langler.Content.ClassifierNif
-  alias Langler.Content.ArticleTopic
   alias Langler.ContentFixtures
   alias Langler.Repo
 
@@ -18,10 +18,10 @@ defmodule Langler.Content.ClassifierTest do
 
       topics = Classifier.classify(content, "spanish")
 
-      assert length(topics) > 0
+      refute Enum.empty?(topics)
       # Check that we got ciencia topic (may be spelled differently)
       ciencia_topics = Enum.filter(topics, fn {topic, _conf} -> topic =~ "ciencia" end)
-      assert length(ciencia_topics) > 0
+      refute Enum.empty?(ciencia_topics)
       {_topic, confidence} = List.first(ciencia_topics)
       # Confidence should be above threshold (0.15)
       assert confidence >= 0.15
@@ -37,12 +37,12 @@ defmodule Langler.Content.ClassifierTest do
 
       topics = Classifier.classify(content, "spanish")
 
-      assert length(topics) > 0
+      refute Enum.empty?(topics)
       # Check that we got política topic
       politica_topics =
         Enum.filter(topics, fn {topic, _conf} -> topic =~ "política" or topic =~ "politica" end)
 
-      assert length(politica_topics) > 0
+      refute Enum.empty?(politica_topics)
       {_topic, confidence} = List.first(politica_topics)
       assert confidence >= 0.3
     end
@@ -56,7 +56,7 @@ defmodule Langler.Content.ClassifierTest do
 
       topics = Classifier.classify(content, "english")
 
-      assert length(topics) > 0
+      refute Enum.empty?(topics)
       science_topic = Enum.find(topics, fn {topic, _conf} -> topic == "science" end)
       assert science_topic != nil
     end
@@ -99,10 +99,10 @@ defmodule Langler.Content.ClassifierTest do
 
       topics = Classifier.classify(content, "spanish")
 
-      assert length(topics) > 0
+      refute Enum.empty?(topics)
       # Should match "ciencia" despite accents
       ciencia_topics = Enum.filter(topics, fn {topic, _conf} -> topic =~ "ciencia" end)
-      assert length(ciencia_topics) > 0
+      refute Enum.empty?(ciencia_topics)
     end
   end
 
@@ -118,7 +118,7 @@ defmodule Langler.Content.ClassifierTest do
       topics = Classifier.classify(content, "spanish")
 
       # Should still work with rule-based
-      assert length(topics) > 0
+      refute Enum.empty?(topics)
       assert Enum.any?(topics, fn {topic, _conf} -> topic =~ "ciencia" end)
     end
 
@@ -149,7 +149,7 @@ defmodule Langler.Content.ClassifierTest do
             topics = Classifier.classify(content, "spanish")
 
             # ML should return results
-            assert length(topics) > 0
+            refute Enum.empty?(topics)
             assert Enum.any?(topics, fn {topic, _conf} -> topic =~ "ciencia" end)
 
           {:error, :nif_not_loaded} ->
@@ -274,7 +274,7 @@ defmodule Langler.Content.ClassifierTest do
         assert Map.has_key?(doc, "content")
         assert Map.has_key?(doc, "topics")
         assert is_list(doc["topics"])
-        assert length(doc["topics"]) > 0
+        refute Enum.empty?(doc["topics"])
       end)
 
       # Verify specific articles are included
@@ -330,14 +330,14 @@ defmodule Langler.Content.ClassifierTest do
           doc["content"] =~ "High confidence"
         end)
 
-      assert length(high_conf_articles) >= 1
+      refute Enum.empty?(high_conf_articles)
 
       low_conf_articles =
         Enum.filter(training_data, fn doc ->
           doc["content"] =~ "Low confidence"
         end)
 
-      assert length(low_conf_articles) == 0
+      assert Enum.empty?(low_conf_articles)
     end
 
     test "respects limit parameter" do

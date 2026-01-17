@@ -1,6 +1,9 @@
 defmodule Langler.External.Dictionary.LanguageTool do
   @moduledoc """
   Integration with LanguageTool API for grammar checking and part-of-speech tagging.
+
+  Uses LanguageTool's API to analyze text and extract grammatical information
+  including part-of-speech tags and lemma forms for language learning.
   """
 
   alias Langler.External.Dictionary.Cache
@@ -55,17 +58,13 @@ defmodule Langler.External.Dictionary.LanguageTool do
 
     # LanguageTool API expects form-encoded POST data
     form_data = %{
-      "text" => String.trim(to_string(text || "")),
+      "text" => String.trim(text),
       "language" => language_code,
       "enabledOnly" => "false",
       "level" => "default"
     }
 
-    case Req.post(
-           url: endpoint,
-           form: form_data,
-           retry: false
-         ) do
+    case Req.post([url: endpoint, form: form_data, retry: false] ++ req_options()) do
       {:ok, %{status: 200, body: body}} ->
         {:ok, body}
 
@@ -136,32 +135,27 @@ defmodule Langler.External.Dictionary.LanguageTool do
     rule_lower = String.downcase(rule_id)
     category_lower = String.downcase(category_id)
 
-    cond do
-      String.contains?(rule_lower, "verb") or String.contains?(category_lower, "verb") ->
-        "Verb"
+    pos_patterns = [
+      {"verb", "Verb"},
+      {"noun", "Noun"},
+      {"adjective", "Adjective"},
+      {"adverb", "Adverb"},
+      {"pronoun", "Pronoun"},
+      {"preposition", "Preposition"},
+      {"article", "Article"}
+    ]
 
-      String.contains?(rule_lower, "noun") or String.contains?(category_lower, "noun") ->
-        "Noun"
-
-      String.contains?(rule_lower, "adjective") or String.contains?(category_lower, "adjective") ->
-        "Adjective"
-
-      String.contains?(rule_lower, "adverb") or String.contains?(category_lower, "adverb") ->
-        "Adverb"
-
-      String.contains?(rule_lower, "pronoun") or String.contains?(category_lower, "pronoun") ->
-        "Pronoun"
-
-      String.contains?(rule_lower, "preposition") or
-          String.contains?(category_lower, "preposition") ->
-        "Preposition"
-
-      String.contains?(rule_lower, "article") or String.contains?(category_lower, "article") ->
-        "Article"
-
-      true ->
+    Enum.find_value(pos_patterns, fn {pattern, pos_tag} ->
+      if contains_pos_pattern?(rule_lower, category_lower, pattern) do
+        pos_tag
+      else
         nil
-    end
+      end
+    end)
+  end
+
+  defp contains_pos_pattern?(rule_lower, category_lower, pattern) do
+    String.contains?(rule_lower, pattern) or String.contains?(category_lower, pattern)
   end
 
   defp extract_lemma_from_response(response, _text) do
@@ -192,18 +186,39 @@ defmodule Langler.External.Dictionary.LanguageTool do
 
   defp normalize_pos_tag(tag) when is_binary(tag) do
     # Map LanguageTool category IDs to standard POS tags
-    case String.downcase(tag) do
-      tag when tag in ["verb", "verb_form"] -> "Verb"
-      tag when tag in ["noun", "noun_form"] -> "Noun"
-      tag when tag in ["adjective", "adj"] -> "Adjective"
-      tag when tag in ["adverb", "adv"] -> "Adverb"
-      tag when tag in ["pronoun"] -> "Pronoun"
-      tag when tag in ["preposition", "prep"] -> "Preposition"
-      tag when tag in ["conjunction", "conj"] -> "Conjunction"
-      tag when tag in ["article", "art"] -> "Article"
-      tag when tag in ["determiner", "det"] -> "Determiner"
-      _ -> tag |> String.split("_") |> List.first() |> String.capitalize()
+    tag_lower = String.downcase(tag)
+
+    pos_mapping = get_pos_mapping(tag_lower)
+
+    if pos_mapping do
+      pos_mapping
+    else
+      tag |> String.split("_") |> List.first() |> String.capitalize()
     end
+  end
+
+  defp get_pos_mapping(tag_lower) do
+    pos_map = %{
+      "verb" => "Verb",
+      "verb_form" => "Verb",
+      "noun" => "Noun",
+      "noun_form" => "Noun",
+      "adjective" => "Adjective",
+      "adj" => "Adjective",
+      "adverb" => "Adverb",
+      "adv" => "Adverb",
+      "pronoun" => "Pronoun",
+      "preposition" => "Preposition",
+      "prep" => "Preposition",
+      "conjunction" => "Conjunction",
+      "conj" => "Conjunction",
+      "article" => "Article",
+      "art" => "Article",
+      "determiner" => "Determiner",
+      "det" => "Determiner"
+    }
+
+    Map.get(pos_map, tag_lower)
   end
 
   defp language_to_code("spanish"), do: "es"
@@ -217,6 +232,11 @@ defmodule Langler.External.Dictionary.LanguageTool do
     do: String.downcase(code)
 
   defp language_to_code(_), do: "es"
+
+  defp req_options do
+    config = Application.get_env(:langler, __MODULE__, [])
+    Keyword.get(config, :req_options, [])
+  end
 
   defp cache_table do
     config = Application.get_env(:langler, __MODULE__, [])

@@ -1,7 +1,7 @@
 # Script for populating the llm_providers table.
 
-alias Langler.Repo
 alias Langler.Accounts.LlmProvider
+alias Langler.Repo
 
 # Seed ChatGPT provider
 Repo.insert!(

@@ -1,23 +1,32 @@
 defmodule Langler.External.Dictionary.WiktionaryTest do
   use ExUnit.Case, async: false
 
+  import Req.Test, only: [set_req_test_from_context: 1]
+
   alias Langler.External.Dictionary.Wiktionary
 
-  setup do
-    bypass = Bypass.open()
+  @wiktionary_req Langler.External.Dictionary.WiktionaryReq
 
+  setup :set_req_test_from_context
+  setup {Req.Test, :verify_on_exit!}
+
+  setup do
     Application.put_env(:langler, Langler.External.Dictionary.Wiktionary,
-      base_url: "http://localhost:#{bypass.port}"
+      base_url: "https://wiktionary.test",
+      req_options: [plug: {Req.Test, @wiktionary_req}]
     )
 
     on_exit(fn -> Application.delete_env(:langler, Langler.External.Dictionary.Wiktionary) end)
 
-    %{bypass: bypass}
+    %{wiktionary: @wiktionary_req}
   end
 
-  test "parses lemma and definitions", %{bypass: bypass} do
-    Bypass.expect(bypass, "GET", "/hola", fn conn ->
-      Plug.Conn.resp(conn, 200, """
+  test "parses lemma and definitions", %{wiktionary: wiktionary} do
+    Req.Test.expect(wiktionary, fn conn ->
+      assert conn.method == "GET"
+      assert conn.request_path == "/hola"
+
+      Req.Test.html(conn, """
       <html>
         <body>
           <h1 id="firstHeading">hola</h1>

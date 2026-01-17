@@ -1,5 +1,7 @@
 defmodule Langler.Content.DiscoveredArticle do
-  @moduledoc false
+  @moduledoc """
+  Ecto schema for discovered articles.
+  """
 
   use Ecto.Schema
   import Ecto.Changeset
@@ -22,6 +24,8 @@ defmodule Langler.Content.DiscoveredArticle do
 
     timestamps(type: :utc_datetime)
   end
+
+  @type t :: %__MODULE__{}
 
   @doc false
   def changeset(discovered_article, attrs) do
