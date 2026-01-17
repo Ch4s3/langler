@@ -8,20 +8,39 @@ defmodule Langler.External.Dictionary.CacheLoader do
 
   alias Langler.External.Dictionary.{Cache, PersistentCache}
 
-  def start_link(_opts) do
-    GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   @impl true
-  def init(state) do
-    Process.send_after(self(), :warm, 0)
+  def init(opts) do
+    state = %{auto_warm?: Keyword.get(opts, :auto_warm, true)}
+
+    if state.auto_warm? do
+      Process.send_after(self(), :warm, 0)
+    end
+
     {:ok, state}
+  end
+
+  def warm(pid \\ __MODULE__) do
+    GenServer.call(pid, :warm)
   end
 
   @impl true
   def handle_info(:warm, state) do
-    Enum.each(Cache.persistent_tables(), &warm_table/1)
+    warm_all_tables()
     {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(:warm, _from, state) do
+    warm_all_tables()
+    {:reply, :ok, state}
+  end
+
+  defp warm_all_tables do
+    Enum.each(Cache.persistent_tables(), &warm_table/1)
   end
 
   defp warm_table(table) do

@@ -5,10 +5,9 @@ defmodule Langler.External.Dictionary.CacheLoaderTest do
 
   test "warms configured persistent tables" do
     tables = Cache.persistent_tables()
-    {:ok, pid} = start_supervised(CacheLoader)
+    {:ok, pid} = start_supervised({CacheLoader, auto_warm: false})
 
-    send(pid, :warm)
-    Process.sleep(10)
+    assert :ok = CacheLoader.warm(pid)
 
     Enum.each(tables, fn table ->
       assert :ets.whereis(table) != :undefined
