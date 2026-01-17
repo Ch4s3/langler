@@ -62,4 +62,863 @@ defmodule Langler.ContentTest do
     assert fetched.article_id == article.id
     assert fetched.content == "Hola mundo."
   end
+
+  describe "finished article state" do
+    test "ArticleUser changeset accepts finished status" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article_user} =
+        Content.ensure_article_user(article, user.id, %{status: "finished"})
+
+      assert article_user.status == "finished"
+    end
+
+    test "ArticleUser changeset rejects invalid status" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      changeset =
+        Content.ArticleUser.changeset(%Content.ArticleUser{}, %{
+          status: "invalid_status",
+          article_id: article.id,
+          user_id: user.id
+        })
+
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset).status
+    end
+
+    test "list_articles_for_user excludes finished articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article3} =
+        Content.create_article(%{
+          title: "Article 3",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article1, user.id, %{status: "imported"})
+      Content.ensure_article_user(article2, user.id, %{status: "imported"})
+      Content.ensure_article_user(article3, user.id, %{status: "finished"})
+
+      articles = Content.list_articles_for_user(user.id)
+      article_ids = Enum.map(articles, & &1.id)
+
+      assert article1.id in article_ids
+      assert article2.id in article_ids
+      refute article3.id in article_ids
+    end
+
+    test "list_articles_for_user excludes both archived and finished" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article3} =
+        Content.create_article(%{
+          title: "Article 3",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article1, user.id, %{status: "imported"})
+      Content.ensure_article_user(article2, user.id, %{status: "archived"})
+      Content.ensure_article_user(article3, user.id, %{status: "finished"})
+
+      articles = Content.list_articles_for_user(user.id)
+      assert length(articles) == 1
+      assert hd(articles).id == article1.id
+    end
+
+    test "list_finished_articles_for_user returns only finished articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article3} =
+        Content.create_article(%{
+          title: "Article 3",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article1, user.id, %{status: "imported"})
+      Content.ensure_article_user(article2, user.id, %{status: "finished"})
+      Content.ensure_article_user(article3, user.id, %{status: "finished"})
+
+      finished = Content.list_finished_articles_for_user(user.id)
+      finished_ids = Enum.map(finished, & &1.id)
+
+      refute article1.id in finished_ids
+      assert article2.id in finished_ids
+      assert article3.id in finished_ids
+    end
+
+    test "list_archived_articles_for_user excludes finished articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article1, user.id, %{status: "archived"})
+      Content.ensure_article_user(article2, user.id, %{status: "finished"})
+
+      archived = Content.list_archived_articles_for_user(user.id)
+      assert length(archived) == 1
+      assert hd(archived).id == article1.id
+    end
+
+    test "finish_article_for_user sets status to finished" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id, %{status: "imported"})
+
+      assert {:ok, article_user} = Content.finish_article_for_user(user.id, article.id)
+      assert article_user.status == "finished"
+    end
+
+    test "finish_article_for_user returns error for non-existent article_user" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      assert {:error, :not_found} = Content.finish_article_for_user(user.id, article.id)
+    end
+
+    test "restore_article_for_user works for finished articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id, %{status: "finished"})
+
+      assert {:ok, article_user} = Content.restore_article_for_user(user.id, article.id)
+      assert article_user.status == "imported"
+    end
+
+    test "restore_article_for_user works for archived articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id, %{status: "archived"})
+
+      assert {:ok, article_user} = Content.restore_article_for_user(user.id, article.id)
+      assert article_user.status == "imported"
+    end
+
+    test "get_article_for_user! works for finished articles" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id, %{status: "finished"})
+
+      # Should not raise
+      retrieved = Content.get_article_for_user!(user.id, article.id)
+      assert retrieved.id == article.id
+    end
+  end
+
+  describe "article archiving" do
+    test "archive_article_for_user/2 sets status to archived" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id, %{status: "imported"})
+
+      assert {:ok, article_user} = Content.archive_article_for_user(user.id, article.id)
+      assert article_user.status == "archived"
+    end
+
+    test "archive_article_for_user/2 returns error for non-existent article_user" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      assert {:error, :not_found} = Content.archive_article_for_user(user.id, article.id)
+    end
+  end
+
+  describe "article topics" do
+    test "tag_article/2 tags article with topics" do
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Science Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      assert :ok = Content.tag_article(article, [{"ciencia", 0.9}, {"tecnología", 0.7}])
+      topics = Content.list_topics_for_article(article.id)
+      assert length(topics) == 2
+    end
+
+    test "tag_article/2 replaces existing topics" do
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Science Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.tag_article(article, [{"ciencia", 0.9}])
+      Content.tag_article(article, [{"política", 0.8}])
+
+      topics = Content.list_topics_for_article(article.id)
+      assert length(topics) == 1
+      assert hd(topics).topic == "política"
+    end
+
+    test "get_articles_by_topic/2 returns articles with topic" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Science Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id)
+      Content.tag_article(article, [{"ciencia", 0.9}])
+
+      articles = Content.get_articles_by_topic("ciencia", user.id)
+      assert Enum.any?(articles, &(&1.id == article.id))
+    end
+
+    test "get_user_topics/1 returns unique topics for user" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      Content.tag_article(article1, [{"ciencia", 0.9}])
+      Content.tag_article(article2, [{"ciencia", 0.8}, {"política", 0.7}])
+
+      topics = Content.get_user_topics(user.id)
+      assert "ciencia" in topics
+      assert "política" in topics
+    end
+  end
+
+  describe "article deletion" do
+    test "delete_article_for_user/2 deletes article_user" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id)
+
+      assert {:ok, :ok} = Content.delete_article_for_user(user.id, article.id)
+    end
+
+    test "delete_article_for_user/2 deletes article when no users left" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id)
+
+      assert {:ok, :ok} = Content.delete_article_for_user(user.id, article.id)
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Content.get_article!(article.id)
+      end
+    end
+  end
+
+  describe "source sites" do
+    test "list_source_sites/0 returns all sites" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish",
+          is_active: true
+        })
+
+      sites = Content.list_source_sites()
+      assert Enum.any?(sites, &(&1.id == site.id))
+    end
+
+    test "list_active_source_sites/0 returns only active sites" do
+      {:ok, active_site} =
+        Content.create_source_site(%{
+          name: "Active",
+          url: "https://active.com",
+          discovery_method: "rss",
+          language: "spanish",
+          is_active: true
+        })
+
+      {:ok, _inactive_site} =
+        Content.create_source_site(%{
+          name: "Inactive",
+          url: "https://inactive.com",
+          discovery_method: "rss",
+          language: "spanish",
+          is_active: false
+        })
+
+      active_sites = Content.list_active_source_sites()
+      assert Enum.any?(active_sites, &(&1.id == active_site.id))
+      assert Enum.all?(active_sites, & &1.is_active)
+    end
+
+    test "mark_source_checked/3 updates last_checked_at" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {:ok, updated} = Content.mark_source_checked(site, "etag123", "last-modified")
+      assert updated.last_checked_at != nil
+      assert updated.etag == "etag123"
+    end
+
+    test "mark_source_error/2 sets error fields" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {:ok, updated} = Content.mark_source_error(site, "Error message")
+      assert updated.last_error == "Error message"
+      assert updated.last_error_at != nil
+    end
+
+    test "get_source_site!/1 returns site" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      found = Content.get_source_site!(site.id)
+      assert found.id == site.id
+    end
+
+    test "get_source_site/1 returns site or nil" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      assert Content.get_source_site(site.id).id == site.id
+      assert Content.get_source_site(-1) == nil
+    end
+
+    test "update_source_site/2 updates site" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {:ok, updated} = Content.update_source_site(site, %{name: "Updated Site"})
+      assert updated.name == "Updated Site"
+    end
+
+    test "delete_source_site/1 deletes site" do
+      {:ok, site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {:ok, _} = Content.delete_source_site(site)
+      assert Content.get_source_site(site.id) == nil
+    end
+  end
+
+  describe "discovered articles" do
+    test "get_discovered_article!/1 returns discovered article" do
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article",
+            summary: "Test summary"
+          }
+        ])
+
+      assert count == 1
+
+      discovered = Content.get_discovered_article_by_url("https://example.com/article1")
+      found = Content.get_discovered_article!(discovered.id)
+      assert found.title == "Test Article"
+    end
+
+    test "get_discovered_article/1 returns discovered article or nil" do
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      discovered = Content.get_discovered_article_by_url("https://example.com/article1")
+      id = discovered.id
+      assert Content.get_discovered_article(id).id == id
+      assert Content.get_discovered_article(-1) == nil
+    end
+
+    test "get_discovered_article_by_url/1 returns discovered article" do
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      url = "https://example.com/article1"
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: url,
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+      found = Content.get_discovered_article_by_url(url)
+      assert found.url == url
+    end
+
+    test "update_discovered_article/2 updates discovered article" do
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Original Title"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, updated} =
+        Content.update_discovered_article(article, %{title: "Updated Title"})
+
+      assert updated.title == "Updated Title"
+    end
+  end
+
+  describe "article queries" do
+    test "get_article_by_url/1 returns article by URL" do
+      url = "https://example.com/#{System.unique_integer()}"
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test",
+          url: url,
+          language: "spanish"
+        })
+
+      found = Content.get_article_by_url(url)
+      assert found.id == article.id
+    end
+
+    test "get_article_by_url/1 returns nil when not found" do
+      assert Content.get_article_by_url("https://nonexistent.com") == nil
+    end
+
+    test "list_articles/0 returns all articles" do
+      {:ok, article1} =
+        Content.create_article(%{
+          title: "Article 1",
+          url: "https://example.com/1",
+          language: "spanish"
+        })
+
+      {:ok, article2} =
+        Content.create_article(%{
+          title: "Article 2",
+          url: "https://example.com/2",
+          language: "spanish"
+        })
+
+      articles = Content.list_articles()
+      article_ids = Enum.map(articles, & &1.id)
+
+      assert article1.id in article_ids
+      assert article2.id in article_ids
+    end
+
+    test "update_article/2 updates article" do
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Original",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      {:ok, updated} = Content.update_article(article, %{title: "Updated"})
+      assert updated.title == "Updated"
+    end
+
+    test "change_article/2 returns changeset" do
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      changeset = Content.change_article(article, %{title: "Changed"})
+      assert changeset.changes.title == "Changed"
+    end
+
+    test "score_article_for_user/2 scores article based on topics" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Science Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.ensure_article_user(article, user.id)
+      Langler.Accounts.set_user_topic_preference(user.id, "ciencia", 1.5)
+      Content.tag_article(article, [{"ciencia", 0.9}])
+
+      score = Content.score_article_for_user(article, user.id)
+      assert is_float(score)
+      assert score > 0.0
+    end
+
+    test "calculate_article_difficulty/1 calculates and stores difficulty" do
+      {:ok, article} =
+        Content.create_article(%{
+          title: "Test Article",
+          url: "https://example.com/#{System.unique_integer()}",
+          language: "spanish"
+        })
+
+      Content.calculate_article_difficulty(article.id)
+
+      updated = Content.get_article!(article.id)
+      assert updated.difficulty_score != nil
+    end
+  end
+
+  describe "discovered article users" do
+    test "get_or_create_discovered_article_user/3 creates new user association" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, dau} =
+        Content.get_or_create_discovered_article_user(article.id, user.id, %{
+          status: "recommended"
+        })
+
+      assert dau.user_id == user.id
+      assert dau.discovered_article_id == article.id
+    end
+
+    test "get_or_create_discovered_article_user/3 returns existing association" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, _} = Content.get_or_create_discovered_article_user(article.id, user.id)
+      {:ok, existing} = Content.get_or_create_discovered_article_user(article.id, user.id)
+
+      assert existing.user_id == user.id
+    end
+
+    test "mark_discovered_article_imported/2 marks as imported" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, dau} = Content.mark_discovered_article_imported(article.id, user.id)
+      assert dau.status == "imported"
+      assert dau.imported_at != nil
+    end
+
+    test "mark_discovered_article_dismissed/2 marks as dismissed" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, dau} = Content.mark_discovered_article_dismissed(article.id, user.id)
+      assert dau.status == "dismissed"
+    end
+
+    test "update_discovered_article_user/2 updates association" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      {count, _} =
+        Content.upsert_discovered_articles(source_site.id, [
+          %{
+            url: "https://example.com/article1",
+            title: "Test Article"
+          }
+        ])
+
+      assert count == 1
+
+      article = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      {:ok, dau} = Content.get_or_create_discovered_article_user(article.id, user.id)
+      {:ok, updated} = Content.update_discovered_article_user(dau, %{status: "dismissed"})
+
+      assert updated.status == "dismissed"
+    end
+  end
 end

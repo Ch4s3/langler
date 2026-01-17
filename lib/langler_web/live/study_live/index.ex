@@ -59,7 +59,7 @@ defmodule LanglerWeb.StudyLive.Index do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-8">
-        <div class="card section-card bg-base-100/95">
+        <div class="surface-panel card section-card bg-base-100/95">
           <div class="card-body gap-6">
             <div class="section-header">
               <p class="section-header__eyebrow">Study overview</p>
@@ -69,25 +69,23 @@ defmodule LanglerWeb.StudyLive.Index do
               </p>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-3">
-              <div class="stat rounded-2xl border border-base-200 bg-base-100 shadow transition duration-300 hover:-translate-y-1">
-                <div class="stat-title text-base-content/60">Due now</div>
-                <div class="stat-value text-4xl text-primary">{@stats.due_now}</div>
-                <div class="stat-desc text-base-content/70">Ready for immediate review</div>
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <p class="kpi-card__title">Due now</p>
+                <p class="kpi-card__value text-primary">{@stats.due_now}</p>
+                <p class="kpi-card__meta">Ready for immediate review</p>
               </div>
 
-              <div class="stat rounded-2xl border border-base-200 bg-base-100 shadow transition duration-300 hover:-translate-y-1">
-                <div class="stat-title text-base-content/60">Due today</div>
-                <div class="stat-value text-4xl text-secondary">{@stats.due_today}</div>
-                <div class="stat-desc text-base-content/70">
-                  Includes overdue &amp; later today
-                </div>
+              <div class="kpi-card">
+                <p class="kpi-card__title">Due today</p>
+                <p class="kpi-card__value text-secondary">{@stats.due_today}</p>
+                <p class="kpi-card__meta">Includes overdue &amp; later today</p>
               </div>
 
-              <div class="stat rounded-2xl border border-base-200 bg-base-100 shadow transition duration-300 hover:-translate-y-1">
-                <div class="stat-title text-base-content/60">Total tracked</div>
-                <div class="stat-value text-4xl text-base-content">{@stats.total}</div>
-                <div class="stat-desc text-base-content/70">Words in your study bank</div>
+              <div class="kpi-card">
+                <p class="kpi-card__title">Total tracked</p>
+                <p class="kpi-card__value text-base-content">{@stats.total}</p>
+                <p class="kpi-card__meta">Words in your study bank</p>
               </div>
             </div>
 
@@ -121,12 +119,13 @@ defmodule LanglerWeb.StudyLive.Index do
 
             <div class="flex flex-col gap-3 rounded-2xl border border-base-200 bg-base-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
               <p class="text-sm font-semibold text-base-content/70">Search your deck</p>
-              <form phx-change="search_items" class="w-full sm:w-auto">
+              <form id="study-search-form" phx-change="search_items" class="w-full sm:w-auto">
                 <label class="input input-bordered flex items-center gap-2 w-full sm:w-80">
                   <.icon name="hero-magnifying-glass" class="h-4 w-4 text-base-content/60" />
                   <input
                     type="text"
                     name="search_query"
+                    id="study-search-input"
                     value={@search_query}
                     placeholder="Search words..."
                     phx-debounce="300"
@@ -375,6 +374,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
                   <div
                     :if={MapSet.member?(@expanded_conjugations, item.word.id)}
+                    id={"study-conjugations-#{item.word.id}"}
                     class="mt-4 rounded-xl border border-base-200 bg-base-100/90 p-4 shadow-inner"
                   >
                     {render_conjugation_table(assigns, item.word.conjugations)}
@@ -744,12 +744,13 @@ defmodule LanglerWeb.StudyLive.Index do
       )
 
       {entry, duration} = lookup_dictionary_entry(term, word.language)
+      definitions = List.wrap(entry.definitions)
 
       Logger.debug(
-        "StudyLive: dictionary lookup complete word_id=#{word.id} defs=#{length(entry.definitions || [])} pos=#{inspect(entry.part_of_speech)} duration_ms=#{duration}"
+        "StudyLive: dictionary lookup complete word_id=#{word.id} defs=#{length(definitions)} pos=#{inspect(entry.part_of_speech)} duration_ms=#{duration}"
       )
 
-      updates = build_definition_updates(flags, entry)
+      updates = build_definition_updates(flags, entry, definitions)
       apply_word_updates(item, word, updates)
     end
   end
@@ -776,12 +777,12 @@ defmodule LanglerWeb.StudyLive.Index do
     {entry, duration}
   end
 
-  defp build_definition_updates(flags, entry) do
+  defp build_definition_updates(flags, entry, definitions) do
     updates = %{}
 
     updates =
-      if flags.needs_definitions && (entry.definitions || []) != [],
-        do: Map.put(updates, :definitions, entry.definitions),
+      if flags.needs_definitions && definitions != [],
+        do: Map.put(updates, :definitions, definitions),
         else: updates
 
     if flags.needs_pos && entry.part_of_speech,

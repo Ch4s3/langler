@@ -27,7 +27,7 @@ defmodule Langler.Content do
   def list_articles_for_user(user_id) do
     Article
     |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
-    |> where([_a, au], au.user_id == ^user_id and au.status != "archived")
+    |> where([_a, au], au.user_id == ^user_id and au.status not in ["archived", "finished"])
     |> order_by([a, _], desc: a.inserted_at)
     |> preload(:article_topics)
     |> Repo.all()
@@ -38,6 +38,15 @@ defmodule Langler.Content do
     |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
     |> where([_a, au], au.user_id == ^user_id and au.status == "archived")
     |> order_by([a, _], desc: a.inserted_at)
+    |> Repo.all()
+  end
+
+  def list_finished_articles_for_user(user_id) do
+    Article
+    |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
+    |> where([_a, au], au.user_id == ^user_id and au.status == "finished")
+    |> order_by([a, _], desc: a.inserted_at)
+    |> preload(:article_topics)
     |> Repo.all()
   end
 
@@ -99,6 +108,15 @@ defmodule Langler.Content do
     case user_article do
       nil -> {:error, :not_found}
       article_user -> update_article_user(article_user, %{status: "archived"})
+    end
+  end
+
+  def finish_article_for_user(user_id, article_id) do
+    user_article = Repo.get_by(ArticleUser, article_id: article_id, user_id: user_id)
+
+    case user_article do
+      nil -> {:error, :not_found}
+      article_user -> update_article_user(article_user, %{status: "finished"})
     end
   end
 
@@ -568,7 +586,9 @@ defmodule Langler.Content do
     discovered = attrs[:discovered_at] || attrs["discovered_at"]
 
     if discovered do
-      if is_struct(discovered, DateTime), do: DateTime.truncate(discovered, :second), else: default
+      if is_struct(discovered, DateTime),
+        do: DateTime.truncate(discovered, :second),
+        else: default
     else
       default
     end

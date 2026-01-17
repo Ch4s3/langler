@@ -86,6 +86,7 @@ defmodule LanglerWeb do
       import Phoenix.HTML
       # Core UI components
       import LanglerWeb.CoreComponents
+      import LanglerWeb.QuizComponents
 
       # Common modules used in templates
       alias LanglerWeb.Layouts

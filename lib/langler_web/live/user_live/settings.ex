@@ -7,7 +7,7 @@ defmodule LanglerWeb.UserLive.Settings do
 
   on_mount {LanglerWeb.UserAuth, :require_sudo_mode}
 
-  alias Langler.{Accounts, Content}
+  alias Langler.{Accounts, Content, Quizzes}
 
   @impl true
   def render(assigns) do
@@ -168,6 +168,78 @@ defmodule LanglerWeb.UserLive.Settings do
               </div>
             </div>
           </div>
+
+          <div class="rounded-3xl border border-base-200 bg-base-100/90 p-6 space-y-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
+                  Finished articles
+                </p>
+                <p class="text-base text-base-content">
+                  Articles you've completed with quiz scores
+                </p>
+              </div>
+              <span class="badge badge-outline">{length(@finished_articles)}</span>
+            </div>
+
+            <div
+              :if={@finished_articles == []}
+              class="rounded-2xl border border-dashed border-base-300 p-6 text-center text-base-content/70"
+            >
+              No finished articles yet.
+            </div>
+
+            <div
+              :for={article_data <- @finished_articles}
+              class="rounded-2xl border border-base-200 bg-base-100/80 p-4 space-y-3"
+            >
+              <% article = article_data.article %>
+              <% best_attempt = article_data.best_attempt %>
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="flex-1">
+                  <p class="text-lg font-semibold text-base-content">{article.title}</p>
+                  <p class="text-xs uppercase tracking-wide text-base-content/50">
+                    {article.source || URI.parse(article.url).host}
+                  </p>
+                  <p class="text-xs text-base-content/60">
+                    Imported {format_timestamp(article.inserted_at)}
+                  </p>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-2">
+                    <span
+                      :if={best_attempt}
+                      class="badge badge-primary badge-lg"
+                    >
+                      {best_attempt.score}/{best_attempt.max_score}
+                    </span>
+                    <span
+                      :if={!best_attempt}
+                      class="badge badge-ghost badge-lg"
+                    >
+                      No quiz
+                    </span>
+                  </div>
+                  <div class="flex gap-2">
+                    <.link
+                      :if={best_attempt}
+                      navigate={~p"/articles/#{article.id}?quiz=1"}
+                      class="btn btn-xs btn-primary"
+                    >
+                      Retake quiz
+                    </.link>
+                    <button
+                      class="btn btn-xs btn-ghost"
+                      phx-click="restore_finished_article"
+                      phx-value-id={article.id}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </Layouts.app>
@@ -194,6 +266,7 @@ defmodule LanglerWeb.UserLive.Settings do
     password_changeset = Accounts.change_user_password(user, %{}, hash_password: false)
 
     archived = Content.list_archived_articles_for_user(user.id)
+    finished = load_finished_articles_with_scores(user.id)
 
     socket =
       socket
@@ -202,6 +275,7 @@ defmodule LanglerWeb.UserLive.Settings do
       |> assign(:password_form, to_form(password_changeset))
       |> assign(:trigger_submit, false)
       |> assign(:archived_articles, archived)
+      |> assign(:finished_articles, finished)
 
     {:ok, socket}
   end
@@ -278,6 +352,21 @@ defmodule LanglerWeb.UserLive.Settings do
     end
   end
 
+  def handle_event("restore_finished_article", %{"id" => id}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with {:ok, article_id} <- parse_id(id),
+         {:ok, _} <- Content.restore_article_for_user(user_id, article_id) do
+      {:noreply,
+       socket
+       |> assign(:finished_articles, load_finished_articles_with_scores(user_id))
+       |> put_flash(:info, "Article restored")}
+    else
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Unable to restore: #{inspect(reason)}")}
+    end
+  end
+
   def handle_event("update_password", params, socket) do
     %{"user" => user_params} = params
     user = socket.assigns.current_scope.user
@@ -299,6 +388,22 @@ defmodule LanglerWeb.UserLive.Settings do
   end
 
   defp fetch_archived(user_id), do: Content.list_archived_articles_for_user(user_id)
+
+  defp load_finished_articles_with_scores(user_id) do
+    finished_articles = Content.list_finished_articles_for_user(user_id)
+    article_ids = Enum.map(finished_articles, & &1.id)
+
+    # Batch load all best attempts in a single query
+    best_attempts = Quizzes.best_attempts_for_articles(user_id, article_ids)
+    attempt_map = Map.new(best_attempts, &{&1.article_id, &1})
+
+    Enum.map(finished_articles, fn article ->
+      %{
+        article: article,
+        best_attempt: Map.get(attempt_map, article.id)
+      }
+    end)
+  end
 
   defp parse_id(value) when is_integer(value), do: {:ok, value}
 

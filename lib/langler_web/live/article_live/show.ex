@@ -9,17 +9,54 @@ defmodule LanglerWeb.ArticleLive.Show do
   alias Langler.Accounts.LlmConfig
   alias Langler.Content
   alias Langler.Content.ArticleImporter
+  alias Langler.Content.ArticleUser
   alias Langler.External.Dictionary
+  alias Langler.Quizzes
+  alias Langler.Repo
   alias Langler.Study
   alias Langler.Vocabulary
 
   @token_regex ~r/\p{L}+\p{M}*|[^\p{L}]+/u
 
-  def mount(%{"id" => article_id}, _session, socket) do
+  def mount(%{"id" => article_id} = params, _session, socket) do
     scope = socket.assigns.current_scope
     article = Content.get_article_for_user!(scope.user.id, article_id)
 
-    {:ok, assign_article(socket, article)}
+    socket =
+      socket
+      |> assign_article(article)
+      |> maybe_start_quiz_from_params(params, scope.user.id, article)
+
+    {:ok, socket}
+  end
+
+  defp maybe_start_quiz_from_params(socket, params, user_id, article) do
+    if Map.get(params, "quiz") == "1" do
+      maybe_start_quiz(socket, user_id, article)
+    else
+      socket
+    end
+  end
+
+  defp maybe_start_quiz(socket, user_id, article) do
+    with %ArticleUser{status: "finished"} <- get_article_user(user_id, article.id),
+         %{} <- LlmConfig.get_default_config(user_id) do
+      send_update(LanglerWeb.ChatLive.Drawer,
+        id: "chat-drawer",
+        action: :start_article_quiz,
+        article_id: article.id,
+        article_title: display_title(article),
+        article_language: article.language,
+        article_topics: Enum.map(socket.assigns.article_topics || [], & &1.topic),
+        article_content: article.content
+      )
+    end
+
+    socket
+  end
+
+  defp get_article_user(user_id, article_id) do
+    Repo.get_by(ArticleUser, user_id: user_id, article_id: article_id)
   end
 
   def render(assigns) do
@@ -30,10 +67,10 @@ defmodule LanglerWeb.ArticleLive.Show do
           id="article-hero"
           phx-hook="ArticleStickyHeader"
           data-article-target="article-reader"
-          class="article-meta section-card card w-full rounded-3xl bg-base-100/90"
+          class="surface-panel article-meta section-card card w-full rounded-3xl bg-base-100/90"
         >
-          <div class="card-body gap-6">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div class="card-body gap-6 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between lg:col-span-2">
               <div class="space-y-2">
                 <p class="article-meta__full text-sm font-semibold uppercase tracking-widest text-base-content/60">
                   {humanize_source(@article)}
@@ -71,7 +108,7 @@ defmodule LanglerWeb.ArticleLive.Show do
               </span>
             </div>
 
-            <div class="article-meta__controls flex flex-wrap items-center justify-between gap-3">
+            <div class="article-meta__controls flex flex-wrap items-center justify-between gap-2 lg:col-span-2 lg:flex-nowrap">
               <.link
                 navigate={~p"/articles"}
                 class="btn btn-ghost btn-sm gap-2 text-base-content/80 article-meta__back"
@@ -84,8 +121,9 @@ defmodule LanglerWeb.ArticleLive.Show do
                 {@article_short_title}
               </p>
 
-              <div class="flex flex-wrap items-center gap-2 article-meta__actions">
+              <div class="flex flex-wrap items-center gap-2 article-meta__actions lg:flex-nowrap">
                 <button
+                  :if={@article_status in ["imported", "finished"]}
                   type="button"
                   class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
                   aria-label="Practice with chat"
@@ -94,6 +132,45 @@ defmodule LanglerWeb.ArticleLive.Show do
                   <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
                   <span class="article-meta__button-label">Practice with chat</span>
                 </button>
+                <button
+                  :if={@article_status in ["imported", "finished"]}
+                  type="button"
+                  class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
+                  aria-label="Take quiz"
+                  phx-click="start_article_quiz"
+                >
+                  <.icon name="hero-academic-cap" class="h-4 w-4" />
+                  <span class="article-meta__button-label">Take quiz</span>
+                </button>
+                <div
+                  :if={@article_status == "imported"}
+                  class="dropdown dropdown-end"
+                >
+                  <button
+                    type="button"
+                    tabindex="0"
+                    class="article-meta__btn btn btn-ghost btn-sm gap-2"
+                    aria-label="Finish article"
+                  >
+                    <.icon name="hero-check-circle" class="h-4 w-4" />
+                    <span class="article-meta__button-label">Finish</span>
+                    <.icon name="hero-chevron-down" class="h-3 w-3" />
+                  </button>
+                  <ul
+                    tabindex="0"
+                    class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg"
+                  >
+                    <li>
+                      <button
+                        type="button"
+                        phx-click="finish_without_quiz"
+                        phx-confirm="Mark this article as finished without taking a quiz?"
+                      >
+                        <.icon name="hero-check" class="h-4 w-4" /> Finish without quiz
+                      </button>
+                    </li>
+                  </ul>
+                </div>
                 <div
                   class="tooltip tooltip-top"
                   data-tip="Archived articles can be deleted from settings."
@@ -200,6 +277,10 @@ defmodule LanglerWeb.ArticleLive.Show do
 
     reading_time_minutes = calculate_reading_time(sentences)
 
+    # Get article_user to determine status
+    article_user = get_article_user(user_id, article.id)
+    article_status = if article_user, do: article_user.status, else: "imported"
+
     socket
     |> assign(:article, article)
     |> assign(:sentences, sentences)
@@ -211,6 +292,7 @@ defmodule LanglerWeb.ArticleLive.Show do
     |> assign(:reading_time_minutes, reading_time_minutes)
     |> assign(:article_short_title, truncated_title(article))
     |> assign(:page_title, article.title || humanize_source(article))
+    |> assign(:article_status, article_status)
   end
 
   defp calculate_reading_time(sentences) do
@@ -282,6 +364,50 @@ defmodule LanglerWeb.ArticleLive.Show do
       {:noreply,
        socket
        |> put_flash(:error, "Add an LLM provider in settings before starting a chat")}
+    end
+  end
+
+  def handle_event(
+        "start_article_quiz",
+        _params,
+        %{assigns: %{current_scope: scope, article: article}} = socket
+      ) do
+    if LlmConfig.get_default_config(scope.user.id) do
+      send_update(LanglerWeb.ChatLive.Drawer,
+        id: "chat-drawer",
+        action: :start_article_quiz,
+        article_id: article.id,
+        article_title: display_title(article),
+        article_language: article.language,
+        article_topics: Enum.map(socket.assigns.article_topics || [], & &1.topic),
+        article_content: article.content
+      )
+
+      {:noreply, socket}
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Add an LLM provider in settings before starting a quiz")}
+    end
+  end
+
+  def handle_event(
+        "finish_without_quiz",
+        _params,
+        %{assigns: %{current_scope: scope, article: article}} = socket
+      ) do
+    case Content.finish_article_for_user(scope.user.id, article.id) do
+      {:ok, _} ->
+        # Create skip attempt
+        Quizzes.create_skip_attempt(scope.user.id, article.id)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Article marked as finished")
+         |> push_navigate(to: ~p"/articles")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Unable to finish article: #{inspect(reason)}")}
     end
   end
 

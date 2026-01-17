@@ -1,5 +1,5 @@
 defmodule LanglerWeb.ArticleLive.RecommendationsTest do
-  use LanglerWeb.ConnCase, async: true
+  use LanglerWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
   import Req.Test, only: [set_req_test_from_context: 1]

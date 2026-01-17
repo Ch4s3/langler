@@ -71,4 +71,117 @@ defmodule Langler.Content.FrontPageTest do
 
     assert {:error, :no_links} = FrontPage.random_article(source)
   end
+
+  test "handles HTTP errors", %{front_page: front_page} do
+    Req.Test.expect(front_page, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.send_resp(404, Jason.encode!(%{error: "Not found"}))
+    end)
+
+    source = %{
+      front_page: "https://front-page.test/index",
+      article_pattern: ~r{/posts/\d+},
+      label: "Example"
+    }
+
+    assert {:error, {:http_error, 404}} = FrontPage.random_article(source)
+  end
+
+  test "normalizes relative URLs", %{front_page: front_page} do
+    Req.Test.expect(front_page, fn conn ->
+      html = """
+      <html>
+        <body>
+          <a href="/posts/456">Post</a>
+        </body>
+      </html>
+      """
+
+      Req.Test.html(conn, html)
+    end)
+
+    source = %{
+      front_page: "https://front-page.test/index",
+      article_pattern: ~r{/posts/\d+},
+      label: "Example"
+    }
+
+    assert {:ok, url} = FrontPage.random_article(source)
+    assert url == "https://front-page.test/posts/456"
+  end
+
+  test "normalizes protocol-relative URLs", %{front_page: front_page} do
+    Req.Test.expect(front_page, fn conn ->
+      html = """
+      <html>
+        <body>
+          <a href="//front-page.test/posts/789">Post</a>
+        </body>
+      </html>
+      """
+
+      Req.Test.html(conn, html)
+    end)
+
+    source = %{
+      front_page: "https://front-page.test/index",
+      article_pattern: ~r{/posts/\d+},
+      label: "Example"
+    }
+
+    assert {:ok, url} = FrontPage.random_article(source)
+    assert url == "https://front-page.test/posts/789"
+  end
+
+  test "filters out mailto and javascript links", %{front_page: front_page} do
+    Req.Test.expect(front_page, fn conn ->
+      html = """
+      <html>
+        <body>
+          <a href="mailto:test@example.com">Email</a>
+          <a href="javascript:void(0)">JS</a>
+          <a href="/posts/123">Post</a>
+        </body>
+      </html>
+      """
+
+      Req.Test.html(conn, html)
+    end)
+
+    source = %{
+      front_page: "https://front-page.test/index",
+      article_pattern: ~r{/posts/\d+},
+      label: "Example"
+    }
+
+    assert {:ok, url} = FrontPage.random_article(source)
+    assert url == "https://front-page.test/posts/123"
+  end
+
+  test "uses custom link selector", %{front_page: front_page} do
+    Req.Test.expect(front_page, fn conn ->
+      html = """
+      <html>
+        <body>
+          <article>
+            <a class="article-link" href="/posts/999">Post</a>
+          </article>
+        </body>
+      </html>
+      """
+
+      Req.Test.html(conn, html)
+    end)
+
+    source = %{
+      front_page: "https://front-page.test/index",
+      article_pattern: ~r{/posts/\d+},
+      link_selector: "a.article-link",
+      label: "Example"
+    }
+
+    assert {:ok, url} = FrontPage.random_article(source)
+    assert url == "https://front-page.test/posts/999"
+  end
 end

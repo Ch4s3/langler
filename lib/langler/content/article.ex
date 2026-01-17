@@ -31,7 +31,18 @@ defmodule Langler.Content.Article do
   @doc false
   def changeset(article, attrs) do
     article
-    |> cast(attrs, [:title, :url, :source, :language, :content, :extracted_at])
+    |> cast(attrs, [
+      :title,
+      :url,
+      :source,
+      :language,
+      :content,
+      :extracted_at,
+      :difficulty_score,
+      :unique_word_count,
+      :avg_word_frequency,
+      :avg_sentence_length
+    ])
     |> validate_required([:title, :url, :language])
     |> unique_constraint(:url)
   end

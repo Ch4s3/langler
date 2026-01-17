@@ -31,8 +31,8 @@ defmodule LanglerWeb.ArticleLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto w-full max-w-5xl space-y-8 px-4 py-8 sm:px-6 lg:px-0">
-        <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+      <div class="space-y-10">
+        <div class="surface-panel card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
           <div class="card-body space-y-6">
             <div>
               <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
@@ -76,11 +76,11 @@ defmodule LanglerWeb.ArticleLive.Index do
               </div>
               <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/70">
                 <p>Need inspiration?</p>
-                <div class="flex flex-wrap gap-2">
+                <div class="chip-group">
                   <button
                     :for={sample <- sample_links()}
                     type="button"
-                    class="btn btn-ghost btn-xs border border-base-300"
+                    class="chip"
                     phx-click="prefill_url"
                     phx-value-url={sample.url}
                     phx-value-source={sample.id}
@@ -103,7 +103,7 @@ defmodule LanglerWeb.ArticleLive.Index do
           </div>
         </div>
 
-        <div class="card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+        <div class="surface-panel card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
           <div class="card-body space-y-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -156,10 +156,13 @@ defmodule LanglerWeb.ArticleLive.Index do
               phx-update="stream"
               class="grid gap-4 md:grid-cols-2"
             >
-              <div class={[
-                "alert border border-dashed border-base-300 text-base-content/70",
-                @articles_count > 0 && "hidden"
-              ]}>
+              <div
+                id="articles-empty-state"
+                class={[
+                  "alert border border-dashed border-base-300 text-base-content/70",
+                  @articles_count > 0 && "hidden"
+                ]}
+              >
                 No articles yet. Import one to get started.
               </div>
 
@@ -168,7 +171,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                   navigate={~p"/articles/#{article}"}
                   class="block rounded-2xl no-underline transition hover:-translate-y-1 hover:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
                 >
-                  <div class="card border border-base-200 bg-base-100/80 shadow">
+                  <div class="surface-panel card border border-base-200 bg-base-100/80 shadow">
                     <div class="card-body gap-4">
                       <div class="space-y-3">
                         <p class="text-xl font-semibold leading-snug text-base-content">

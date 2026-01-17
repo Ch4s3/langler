@@ -6,6 +6,22 @@
 @source "../js";
 @source "../../lib/langler_web";
 
+/* Quiz Results Animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
 .conjugation-table td {
   padding: 0.35rem 0.5rem;
   transition: background-color 0.2s ease;
@@ -109,6 +125,19 @@
 
 /* This file is for your main application CSS */
 
+body {
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.08), transparent 45%),
+    radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.05), transparent 36%),
+    var(--color-base-200);
+}
+
+.app-main {
+  min-height: calc(100vh - 5rem);
+  background: radial-gradient(circle at top, rgba(14, 116, 144, 0.08), transparent 30%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.04), transparent);
+}
+
 .page-shell {
   width: 100%;
   max-width: 70rem;
@@ -121,6 +150,77 @@
   background: color-mix(in srgb, var(--color-base-100) 98%, transparent);
   box-shadow: 0 25px 45px -28px rgba(15, 23, 42, 0.35);
   backdrop-filter: blur(8px);
+}
+
+.surface-panel {
+  border-radius: 1.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-base-content) 6%, transparent);
+  background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+  box-shadow: 0 25px 60px -35px rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(10px);
+}
+
+.surface-panel .card-body {
+  padding: clamp(1.5rem, 2vw, 2.75rem);
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip-group .chip {
+  border-radius: 999px;
+  padding: 0.25rem 0.85rem;
+  border: 1px dashed color-mix(in srgb, var(--color-base-content) 15%, transparent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+  background: color-mix(in srgb, var(--color-base-100) 75%, transparent);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.chip-group .chip:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px -12px rgba(15, 23, 42, 0.4);
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.kpi-card {
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--color-base-content) 6%, transparent);
+  background: color-mix(in srgb, var(--color-base-100) 96%, transparent);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 8rem;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-base-100) 40%, transparent);
+}
+
+.kpi-card__title {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+  font-weight: 600;
+}
+
+.kpi-card__value {
+  font-size: clamp(1.75rem, 1.8vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.kpi-card__meta {
+  font-size: 0.85rem;
+  color: color-mix(in srgb, var(--color-base-content) 65%, transparent);
 }
 
 .section-header {
@@ -224,6 +324,14 @@
   display: none !important;
 }
 
+.article-meta--stuck .article-meta__controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .article-meta--stuck .article-meta__sticky-title {
   display: block;
   margin-right: auto;
@@ -249,13 +357,16 @@
 }
 
 .article-meta--stuck .article-meta__back {
-  opacity: 0;
-  pointer-events: none;
+  display: none;
 }
 
 .article-meta--stuck .article-meta__actions {
+  display: flex;
+  width: 100%;
   align-items: center;
+  justify-content: flex-start;
   gap: 0.35rem;
+  flex-wrap: nowrap;
 }
 
 .article-meta--stuck .article-meta__actions .tooltip {
@@ -325,6 +436,10 @@
   }
 }
 /* Chat drawer */
+.chat-drawer-panel {
+  width: 100%;
+}
+
 .chat-drawer-main {
   display: flex;
   flex-direction: column;
@@ -366,4 +481,30 @@
   flex: 1;
   padding: 1.25rem;
   overflow-y: auto;
+}
+
+@media (min-width: 1024px) {
+  .chat-drawer-panel {
+    width: 50vw;
+  }
+
+  .chat-drawer-main {
+    border-top-left-radius: 1.25rem;
+    border-bottom-left-radius: 1.25rem;
+  }
+
+  body:has(#chat-drawer-container.chat-open) main {
+    width: 50vw;
+    max-width: 50vw;
+    margin-left: 0;
+    margin-right: auto;
+    padding-right: clamp(1rem, 2.5vw, 2.5rem);
+    transition: width 200ms ease, max-width 200ms ease, margin 200ms ease, padding 200ms ease;
+  }
+
+  body:has(#chat-drawer-container.chat-open) main > .page-shell {
+    width: 100%;
+    max-width: 100%;
+    transition: width 200ms ease, max-width 200ms ease;
+  }
 }

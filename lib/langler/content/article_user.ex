@@ -20,6 +20,7 @@ defmodule Langler.Content.ArticleUser do
     article_user
     |> cast(attrs, [:status, :article_id, :user_id])
     |> validate_required([:status, :article_id, :user_id])
+    |> validate_inclusion(:status, ["imported", "archived", "finished"])
     |> unique_constraint([:article_id, :user_id])
   end
 end

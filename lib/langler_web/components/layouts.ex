@@ -88,8 +88,8 @@ defmodule LanglerWeb.Layouts do
       </div>
     </header>
 
-    <main class="bg-base-200/30 px-4 py-10 sm:px-6 lg:px-8">
-      <div class="page-shell space-y-8">
+    <main class="app-main px-4 py-10 sm:px-6 lg:px-8">
+      <div class="page-shell space-y-10">
         {render_slot(@inner_block)}
       </div>
     </main>
