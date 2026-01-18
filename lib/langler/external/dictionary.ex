@@ -36,14 +36,14 @@ defmodule Langler.External.Dictionary do
 
     case Cache.get(entry_cache, entry_key) do
       {:ok, cached} ->
-        {:ok, cached}
+        if stale_entry?(cached) do
+          {:ok, fetch_and_cache_entry(term, language, target, entry_cache, entry_key)}
+        else
+          {:ok, cached}
+        end
 
       :miss ->
-        sources = fetch_all_sources(term, language, target)
-        entry = build_entry(term, language, sources)
-
-        Cache.put(entry_cache, entry_key, entry, ttl: ttl(:entry))
-        {:ok, entry}
+        {:ok, fetch_and_cache_entry(term, language, target, entry_cache, entry_key)}
     end
   end
 
@@ -62,6 +62,19 @@ defmodule Langler.External.Dictionary do
   defp cache_table(:entry), do: :dictionary_entry_cache
 
   defp ttl(:entry), do: :timer.hours(12)
+
+  defp fetch_and_cache_entry(term, language, target, cache, key) do
+    sources = fetch_all_sources(term, language, target)
+    entry = build_entry(term, language, sources)
+    Cache.put(cache, key, entry, ttl: ttl(:entry))
+    entry
+  end
+
+  defp stale_entry?(entry) do
+    definitions_missing = is_nil(entry.definitions) || entry.definitions == []
+    translation_missing = is_nil(entry.translation) || entry.translation == ""
+    definitions_missing && translation_missing
+  end
 
   defp fetch_google_data(nil, _language, _target), do: %{translation: nil, definitions: []}
 

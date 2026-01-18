@@ -7,5 +7,6 @@ defmodule LanglerWeb.PageHTMLTest do
     html = render_to_string(LanglerWeb.PageHTML, "home", "html", %{flash: %{}})
 
     assert html =~ "Phoenix Framework"
+    assert html =~ "Guides &amp; Docs"
   end
 end

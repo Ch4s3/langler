@@ -12,6 +12,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   alias Langler.External.Dictionary
   alias Langler.LLM.Adapters.ChatGPT
   alias Langler.Quizzes
+  alias Langler.Quizzes.Result
   alias Langler.Quizzes.Service
   alias Langler.Quizzes.State
   alias Langler.Study
@@ -104,11 +105,31 @@ defmodule LanglerWeb.ChatLive.Drawer do
   defp apply_quiz_result_action(socket, assigns) do
     case Map.get(assigns, :quiz_result_action) do
       :quiz_completed ->
-        result = Map.get(assigns, :quiz_result_map)
+        result_map = Map.get(assigns, :quiz_result_map)
 
-        socket
-        |> assign(:quiz_completed, true)
-        |> assign(:quiz_result, result)
+        result =
+          case result_map do
+            %Result{} ->
+              result_map
+
+            %{} ->
+              case Result.from_map(result_map) do
+                {:ok, quiz_result} -> quiz_result
+                {:error, _reason} -> nil
+              end
+
+            _ ->
+              nil
+          end
+
+        if result do
+          socket
+          |> assign(:quiz_completed, true)
+          |> assign(:quiz_result, result)
+        else
+          socket
+          |> put_flash(:error, "Quiz completed but result could not be displayed.")
+        end
 
       {:quiz_error, reason} when is_binary(reason) ->
         socket

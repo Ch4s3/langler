@@ -389,6 +389,10 @@ body {
   transition: transform 120ms ease-out;
 }
 
+.article-meta__dropdown-caret {
+  display: inline-flex;
+}
+
 .article-meta--stuck {
   position: sticky;
   top: 0;
@@ -428,6 +432,10 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.article-meta--stuck .article-meta__dropdown-caret {
+  display: none !important;
 }
 
 .article-meta--stuck .article-meta__button-label {

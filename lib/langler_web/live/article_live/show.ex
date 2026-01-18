@@ -122,29 +122,37 @@ defmodule LanglerWeb.ArticleLive.Show do
               </p>
 
               <div class="flex flex-wrap items-center gap-2 article-meta__actions lg:flex-nowrap">
-                <button
-                  :if={@article_status in ["imported", "finished"]}
-                  type="button"
-                  class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
-                  aria-label="Practice with chat"
-                  phx-click="start_article_chat"
+                <div class="tooltip tooltip-right" data-tip="Start a practice chat for this article">
+                  <button
+                    :if={@article_status in ["imported", "finished"]}
+                    type="button"
+                    class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
+                    aria-label="Practice with chat"
+                    phx-click="start_article_chat"
+                  >
+                    <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
+                    <span class="article-meta__button-label">Practice with chat</span>
+                  </button>
+                </div>
+                <div
+                  class="tooltip tooltip-right"
+                  data-tip="Launch the comprehension quiz for this article"
                 >
-                  <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
-                  <span class="article-meta__button-label">Practice with chat</span>
-                </button>
-                <button
-                  :if={@article_status in ["imported", "finished"]}
-                  type="button"
-                  class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
-                  aria-label="Take quiz"
-                  phx-click="start_article_quiz"
-                >
-                  <.icon name="hero-academic-cap" class="h-4 w-4" />
-                  <span class="article-meta__button-label">Take quiz</span>
-                </button>
+                  <button
+                    :if={@article_status in ["imported", "finished"]}
+                    type="button"
+                    class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
+                    aria-label="Take quiz"
+                    phx-click="start_article_quiz"
+                  >
+                    <.icon name="hero-academic-cap" class="h-4 w-4" />
+                    <span class="article-meta__button-label">Take quiz</span>
+                  </button>
+                </div>
                 <div
                   :if={@article_status == "imported"}
-                  class="dropdown dropdown-end"
+                  class="dropdown dropdown-bottom dropdown-start tooltip tooltip-right"
+                  data-tip="Mark this article as finished"
                 >
                   <button
                     type="button"
@@ -152,13 +160,14 @@ defmodule LanglerWeb.ArticleLive.Show do
                     class="article-meta__btn btn btn-ghost btn-sm gap-2"
                     aria-label="Finish article"
                   >
-                    <.icon name="hero-check-circle" class="h-4 w-4" />
-                    <span class="article-meta__button-label">Finish</span>
-                    <.icon name="hero-chevron-down" class="h-3 w-3" />
+                    <span class="flex items-center gap-2">
+                      <.icon name="hero-flag" class="h-4 w-4" />
+                      <span class="article-meta__button-label hidden sm:inline">Finish</span>
+                    </span>
                   </button>
                   <ul
                     tabindex="0"
-                    class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg"
+                    class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg right-0 left-auto mt-2"
                   >
                     <li>
                       <button
@@ -172,7 +181,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                   </ul>
                 </div>
                 <div
-                  class="tooltip tooltip-top"
+                  class="tooltip tooltip-right"
                   data-tip="Archived articles can be deleted from settings."
                 >
                   <button
@@ -187,25 +196,32 @@ defmodule LanglerWeb.ArticleLive.Show do
                     <span class="article-meta__button-label">Archive</span>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  class="article-meta__btn btn btn-ghost btn-sm gap-2"
-                  aria-label="Refresh article"
-                  phx-click="refresh_article"
-                  phx-disable-with="Refreshing..."
+                <div
+                  class="tooltip tooltip-right"
+                  data-tip="Re-import the article content and vocabulary"
                 >
-                  <.icon name="hero-arrow-path" class="h-4 w-4" />
-                  <span class="article-meta__button-label">Refresh article</span>
-                </button>
-                <.link
-                  href={@article.url}
-                  target="_blank"
-                  class="article-meta__btn btn btn-outline btn-sm gap-2"
-                  aria-label="View original article"
-                >
-                  <span class="article-meta__button-label">View original</span>
-                  <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
-                </.link>
+                  <button
+                    type="button"
+                    class="article-meta__btn btn btn-ghost btn-sm gap-2"
+                    aria-label="Refresh article"
+                    phx-click="refresh_article"
+                    phx-disable-with="Refreshing..."
+                  >
+                    <.icon name="hero-arrow-path" class="h-4 w-4" />
+                    <span class="article-meta__button-label">Refresh article</span>
+                  </button>
+                </div>
+                <div class="tooltip tooltip-right" data-tip="Open the original article in a new tab">
+                  <.link
+                    href={@article.url}
+                    target="_blank"
+                    class="article-meta__btn btn btn-outline btn-sm gap-2"
+                    aria-label="View original article"
+                  >
+                    <span class="article-meta__button-label">View original</span>
+                    <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
+                  </.link>
+                </div>
               </div>
             </div>
           </div>
