@@ -538,7 +538,9 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   defp handle_successful_import(socket, article, status, trimmed, opts) do
     count_delta = if status == :new, do: 1, else: 0
-    form_payload = if opts[:keep_url], do: %{"url" => trimmed}, else: %{"url" => ""}
+    keep_url? = opts[:keep_url]
+    form_payload = if keep_url?, do: %{"url" => trimmed}, else: %{"url" => ""}
+    selected_source = if keep_url?, do: socket.assigns.selected_source, else: nil
     flash_message = opts[:flash] || "Imported #{article.title || article.url}"
 
     socket =
@@ -546,6 +548,7 @@ defmodule LanglerWeb.ArticleLive.Index do
       |> put_flash(:info, flash_message)
       |> assign(
         importing: false,
+        selected_source: selected_source,
         form: to_form(form_payload, as: :article),
         articles_count: socket.assigns.articles_count + count_delta
       )

@@ -103,6 +103,13 @@ defmodule LanglerWeb.Layouts do
         id="chat-drawer"
         current_scope={@current_scope}
       />
+
+      <%!-- Dictionary Search Modal (Cmd+J) --%>
+      <.live_component
+        module={LanglerWeb.DictionarySearchLive.Modal}
+        id="dictionary-search-modal"
+        current_scope={@current_scope}
+      />
     <% end %>
     """
   end

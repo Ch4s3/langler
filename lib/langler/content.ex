@@ -29,15 +29,48 @@ defmodule Langler.Content do
     topic = Keyword.get(opts, :topic)
     query = opts |> Keyword.get(:query) |> normalize_search_query()
 
-    Article
-    |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
-    |> where([_a, au], au.user_id == ^user_id and au.status not in ["archived", "finished"])
-    |> maybe_filter_article_topic(topic)
-    |> maybe_search_articles(query)
-    |> order_by([a, _], desc: a.inserted_at)
-    |> distinct([a], a.id)
-    |> preload(:article_topics)
-    |> Repo.all()
+    # Build base query - the topic filter join can create duplicates
+    base_query =
+      Article
+      |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
+      |> where([_a, au], au.user_id == ^user_id and au.status not in ["archived", "finished"])
+      |> maybe_filter_article_topic(topic)
+      |> maybe_search_articles(query)
+
+    # Get article IDs with their sort dates, ordered correctly
+    # Use window function to pick one row per article (the one with most recent date)
+    article_ids_with_dates =
+      base_query
+      |> select([a, au], %{
+        article_id: a.id,
+        sort_date: fragment("COALESCE(?, ?)", au.inserted_at, a.inserted_at),
+        article_inserted_at: a.inserted_at
+      })
+      |> order_by([a, au], [
+        desc: fragment("COALESCE(?, ?)", au.inserted_at, a.inserted_at),
+        desc: a.inserted_at
+      ])
+      |> Repo.all()
+      |> Enum.reduce([], fn %{article_id: id}, acc ->
+        if id in acc, do: acc, else: [id | acc]
+      end)
+      |> Enum.reverse()
+
+    # Fetch full articles in the correct order
+    if article_ids_with_dates == [] do
+      []
+    else
+      articles_map =
+        Article
+        |> where([a], a.id in ^article_ids_with_dates)
+        |> preload(:article_topics)
+        |> Repo.all()
+        |> Map.new(fn a -> {a.id, a} end)
+
+      # Return articles in the original sort order
+      Enum.map(article_ids_with_dates, fn id -> Map.get(articles_map, id) end)
+      |> Enum.reject(&is_nil/1)
+    end
   end
 
   def list_archived_articles_for_user(user_id) do

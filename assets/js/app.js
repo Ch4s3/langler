@@ -31,6 +31,7 @@ import ChatMenuDropdown from "./hooks/chat_menu_dropdown"
 import StudySession from "./hooks/study_session"
 import ChatDrawerState from "./hooks/chat_drawer_state"
 import TextDownloader from "./hooks/text_downloader"
+import DictionarySearch from "./hooks/dictionary_search"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -87,6 +88,7 @@ const hooks = {
   StudySession,
   ChatDrawerState,
   TextDownloader,
+  DictionarySearch,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
