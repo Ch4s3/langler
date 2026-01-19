@@ -15,7 +15,6 @@ defmodule LanglerWeb.ArticleLive.Index do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     user = scope.user
-    articles = Content.list_articles_for_user(user.id)
     user_topics = Content.get_user_topics(user.id)
     user_id = user.id
 
@@ -26,13 +25,34 @@ defmodule LanglerWeb.ArticleLive.Index do
      |> assign(:selected_topic, nil)
      |> assign(:query, "")
      |> assign(:user_topics, user_topics)
-     |> assign(:articles_count, length(articles))
      |> assign_async(:recommended_count, fn ->
        {:ok, %{recommended_count: recommended_count(user_id)}}
      end)
-     |> assign(:form, to_form(%{"url" => ""}, as: :article))
-     |> assign(:library_form, to_form(%{"query" => ""}, as: :library))
-     |> stream(:articles, articles)}
+     |> assign(:form, to_form(%{"url" => ""}, as: :article))}
+  end
+
+  def handle_params(params, _uri, socket) do
+    query = Map.get(params, "q", "") |> String.trim()
+
+    # Only update if different (idempotent - prevents rerenders)
+    socket =
+      cond do
+        socket.assigns[:query] == query && Map.has_key?(socket.assigns, :articles_count) ->
+          # Query unchanged and articles already loaded
+          socket
+
+        socket.assigns[:query] == query ->
+          # Query unchanged but articles not loaded yet (initial mount)
+          refresh_articles(socket)
+
+        true ->
+          # Query changed
+          socket
+          |> assign(:query, query)
+          |> refresh_articles()
+      end
+
+    {:noreply, socket}
   end
 
   def render(assigns) do
@@ -169,35 +189,16 @@ defmodule LanglerWeb.ArticleLive.Index do
                     </span>
                   </.async_result>
                 </div>
-                <.form
-                  for={@library_form}
-                  id="article-library-search-form"
+                <.search_input
+                  id="article-search"
+                  value={@query}
+                  placeholder="Title, URL, or source"
+                  event="search"
+                  clear_event="clear_search"
+                  debounce={250}
                   class="w-full sm:w-80"
-                  phx-change="search"
-                >
-                  <div class="flex items-end gap-2">
-                    <div class="flex-1">
-                      <.input
-                        field={@library_form[:query]}
-                        type="search"
-                        label="Search"
-                        placeholder="Title, URL, or source"
-                        phx-debounce="250"
-                        disabled={@importing}
-                        class="w-full input"
-                      />
-                    </div>
-                    <button
-                      :if={@query != ""}
-                      type="button"
-                      class="btn btn-sm btn-ghost"
-                      phx-click="clear_search"
-                      aria-label="Clear search"
-                    >
-                      <.icon name="hero-x-mark" class="h-4 w-4" />
-                    </button>
-                  </div>
-                </.form>
+                  disabled={@importing}
+                />
               </div>
             </div>
 
@@ -232,20 +233,20 @@ defmodule LanglerWeb.ArticleLive.Index do
               phx-update="stream"
               class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 articles-grid"
             >
-              <div
+              <.list_empty_state
                 id="articles-empty-state"
-                class={[
-                  "alert border border-dashed border-base-300 bg-base-100/60 text-base-content/70 sm:col-span-2 xl:col-span-3",
-                  @articles_count > 0 && "hidden"
-                ]}
+                class={if @articles_count > 0, do: "sm:col-span-2 xl:col-span-3 hidden", else: "sm:col-span-2 xl:col-span-3"}
               >
-                <div class="flex flex-wrap items-center justify-between gap-3 w-full">
-                  <span class="text-sm font-semibold">No articles yet.</span>
+                <:title>No articles yet.</:title>
+                <:description>
+                  Start building your reading queue by importing an article.
+                </:description>
+                <:actions>
                   <.link href="#article-import-form" class="btn btn-sm btn-primary">
                     Import your first one
                   </.link>
-                </div>
-              </div>
+                </:actions>
+              </.list_empty_state>
 
               <.card
                 :for={{dom_id, article} <- @streams.articles}
@@ -364,22 +365,29 @@ defmodule LanglerWeb.ArticleLive.Index do
      |> assign(:form, to_form(changeset, as: :article))}
   end
 
-  def handle_event("search", %{"library" => params}, socket) do
-    query = Map.get(params, "query", "") |> to_string()
+  def handle_event("search", %{"q" => query}, socket) do
+    query = String.trim(to_string(query))
+
+    path =
+      if query == "" do
+        ~p"/articles"
+      else
+        ~p"/articles?q=#{URI.encode(query)}"
+      end
 
     {:noreply,
      socket
      |> assign(:query, query)
-     |> assign(:library_form, to_form(%{"query" => query}, as: :library))
-     |> refresh_articles()}
+     |> refresh_articles()
+     |> push_patch(to: path, replace: true)}
   end
 
   def handle_event("clear_search", _params, socket) do
     {:noreply,
      socket
      |> assign(:query, "")
-     |> assign(:library_form, to_form(%{"query" => ""}, as: :library))
-     |> refresh_articles()}
+     |> refresh_articles()
+     |> push_patch(to: ~p"/articles", replace: true)}
   end
 
   def handle_event("import", %{"article" => %{"url" => url}}, socket) do

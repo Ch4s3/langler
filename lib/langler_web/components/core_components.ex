@@ -790,6 +790,126 @@ defmodule LanglerWeb.CoreComponents do
     end)
   end
 
+  @doc """
+  Renders a search input with icon and clear button.
+
+  ## Examples
+
+      <.search_input
+        id="article-search"
+        value={@query}
+        placeholder="Search articles..."
+        event="search"
+        clear_event="clear_search"
+      />
+  """
+  attr :id, :string, required: true, doc: "unique DOM id for the search input"
+  attr :value, :string, default: "", doc: "current search value"
+  attr :placeholder, :string, default: "Search...", doc: "placeholder text"
+  attr :event, :string, required: true, doc: "phx-change event name"
+  attr :clear_event, :string, required: true, doc: "phx-click event for clear button"
+  attr :debounce, :integer, default: 300, doc: "debounce time in milliseconds"
+  attr :class, :string, default: nil, doc: "additional CSS classes for wrapper"
+  attr :rest, :global, include: ~w(disabled autocomplete)
+
+  def search_input(assigns) do
+    ~H"""
+    <form phx-change={@event} class={["flex items-center gap-2", @class]}>
+      <label class="input input-bordered flex items-center gap-2 w-full focus-within:ring focus-within:ring-primary/30">
+        <.icon name="hero-magnifying-glass" class="h-4 w-4 text-base-content/60 shrink-0" />
+        <input
+          type="text"
+          id={@id}
+          name="q"
+          value={@value}
+          placeholder={@placeholder}
+          phx-debounce={to_string(@debounce)}
+          autocomplete="off"
+          class="grow border-none outline-none"
+          aria-label={@placeholder}
+          {@rest}
+        />
+        <button
+          :if={@value != ""}
+          type="button"
+          class="btn btn-ghost btn-xs shrink-0"
+          phx-click={@clear_event}
+          aria-label="Clear search"
+        >
+          <.icon name="hero-x-mark" class="h-4 w-4" />
+        </button>
+      </label>
+    </form>
+    """
+  end
+
+  @doc """
+  Renders an empty state message with optional title, description, and actions.
+
+  ## Examples
+
+      <.list_empty_state id="articles-empty" class="col-span-3">
+        <:title>No articles found</:title>
+        <:description>Try adjusting your search or filters.</:description>
+        <:actions>
+          <button phx-click="clear_search">Clear search</button>
+        </:actions>
+      </.list_empty_state>
+  """
+  attr :id, :string, required: true, doc: "DOM id for the empty state container"
+  attr :class, :string, default: nil, doc: "additional CSS classes"
+  attr :rest, :global
+
+  slot :title, required: true, doc: "main heading text"
+  slot :description, doc: "supporting description text"
+  slot :actions, doc: "action buttons or links"
+
+  def list_empty_state(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "flex flex-col items-center justify-center rounded-3xl border border-dashed border-base-300 bg-base-100/80 px-8 py-10 text-center text-base-content/70",
+        @class
+      ]}
+      {@rest}
+    >
+      <p class="text-lg font-semibold text-base-content">
+        {render_slot(@title)}
+      </p>
+      <p :if={@description != []} class="text-sm mt-2">
+        {render_slot(@description)}
+      </p>
+      <div :if={@actions != []} class="mt-4 flex flex-wrap justify-center gap-2">
+        {render_slot(@actions)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a loading spinner with optional text.
+
+  ## Examples
+
+      <.spinner size={:sm} text="Loading..." />
+      <.spinner />
+  """
+  attr :size, :atom, default: :sm, values: [:xs, :sm, :md, :lg], doc: "spinner size"
+  attr :text, :string, default: nil, doc: "optional loading text"
+  attr :class, :string, default: nil, doc: "additional CSS classes"
+
+  def spinner(assigns) do
+    assigns = assign(assigns, :size_class, "loading-#{assigns.size}")
+
+    ~H"""
+    <div class={["flex items-center gap-2", @class]}>
+      <span class={["loading loading-spinner", @size_class]}></span>
+      <span :if={@text} class="text-sm text-base-content/70">{@text}</span>
+    </div>
+    """
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

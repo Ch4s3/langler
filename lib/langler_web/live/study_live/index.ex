@@ -34,7 +34,6 @@ defmodule LanglerWeb.StudyLive.Index do
     scope = socket.assigns.current_scope
     items = Study.list_items_for_user(scope.user.id)
     filter = :now
-    visible_items = filter_items(items, filter)
 
     # Calculate user level and get recommendations
     user_level = Study.get_user_vocabulary_level(scope.user.id)
@@ -49,7 +48,7 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:quality_buttons, @quality_buttons)
      |> assign(:stats, build_stats(items))
      |> assign(:all_items, items)
-     |> assign(:visible_count, length(visible_items))
+     |> assign(:visible_count, 0)
      |> assign(:flipped_cards, MapSet.new())
      |> assign(:expanded_conjugations, MapSet.new())
      |> assign(:conjugations_loading, MapSet.new())
@@ -57,8 +56,54 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:user_level, user_level)
      |> assign_async(:recommended_articles, fn ->
        {:ok, %{recommended_articles: Content.get_recommended_articles_for_user(user_id, 5)}}
-     end)
-     |> stream(:items, visible_items)}
+     end)}
+  end
+
+  def handle_params(params, _uri, socket) do
+    query = Map.get(params, "q", "") |> String.trim()
+    filter = parse_filter_from_params(params, socket.assigns.filter)
+
+    # Only update if different (idempotent - prevents rerenders)
+    socket =
+      socket
+      |> maybe_update_search_query(query)
+      |> maybe_update_filter(filter)
+      |> refresh_visible_items()
+
+    {:noreply, socket}
+  end
+
+  defp maybe_update_search_query(socket, query) do
+    if socket.assigns[:search_query] == query do
+      socket
+    else
+      assign(socket, :search_query, query)
+    end
+  end
+
+  defp maybe_update_filter(socket, filter) do
+    if socket.assigns[:filter] == filter do
+      socket
+    else
+      assign(socket, :filter, filter)
+    end
+  end
+
+  defp parse_filter_from_params(params, default) do
+    case params["filter"] do
+      "today" -> :today
+      "all" -> :all
+      "now" -> :now
+      _ -> default
+    end
+  end
+
+  defp refresh_visible_items(socket) do
+    visible = filter_items(socket.assigns.all_items, socket.assigns.filter, socket.assigns.search_query)
+
+    socket
+    |> assign(:visible_count, length(visible))
+    |> stream(:items, visible, reset: true)
   end
 
   def render(assigns) do
@@ -136,31 +181,15 @@ defmodule LanglerWeb.StudyLive.Index do
                   Type a lemma to narrow results across filters.
                 </p>
               </div>
-              <form id="study-search-form" phx-change="search_items" class="w-full sm:w-auto">
-                <label class="input input-bordered flex items-center gap-2 w-full sm:w-96 focus-within:ring focus-within:ring-primary/30 phx-change-loading:opacity-70">
-                  <.icon name="hero-magnifying-glass" class="h-4 w-4 text-base-content/60" />
-                  <input
-                    type="text"
-                    name="search_query"
-                    id="study-search-input"
-                    value={@search_query}
-                    placeholder="Search words…"
-                    phx-debounce="300"
-                    autocomplete="off"
-                    class="grow"
-                    aria-label="Search words"
-                  />
-                  <button
-                    :if={@search_query != ""}
-                    type="button"
-                    class="btn btn-ghost btn-xs"
-                    phx-click={JS.push("clear_search") |> JS.focus(to: "#study-search-input")}
-                    aria-label="Clear search"
-                  >
-                    <.icon name="hero-x-mark" class="h-4 w-4" />
-                  </button>
-                </label>
-              </form>
+              <.search_input
+                id="study-search-input"
+                value={@search_query}
+                placeholder="Search words…"
+                event="search_items"
+                clear_event="clear_search"
+                debounce={300}
+                class="w-full sm:w-96"
+              />
             </div>
 
             <div class="tabs tabs-boxed bg-base-200/70 p-1 text-sm font-semibold text-base-content/70 overflow-x-auto">
@@ -315,11 +344,11 @@ defmodule LanglerWeb.StudyLive.Index do
             phx-update="stream"
             class="space-y-4"
           >
-            <div
+            <.list_empty_state
               id="study-empty-state"
-              class="hidden only:flex flex-col items-center justify-center rounded-3xl border border-dashed border-base-300 bg-base-100/80 px-8 py-10 text-center text-base-content/70"
+              class="hidden only:flex"
             >
-              <p class="text-lg font-semibold text-base-content">
+              <:title>
                 <%= cond do %>
                   <% @search_query != "" -> %>
                     No matches found
@@ -328,8 +357,8 @@ defmodule LanglerWeb.StudyLive.Index do
                   <% true -> %>
                     No cards to show
                 <% end %>
-              </p>
-              <p class="text-sm">
+              </:title>
+              <:description>
                 <%= cond do %>
                   <% @search_query != "" -> %>
                     Try a different spelling, or clear your search to see everything again.
@@ -338,8 +367,8 @@ defmodule LanglerWeb.StudyLive.Index do
                   <% true -> %>
                     Switch filters or import more words from an article.
                 <% end %>
-              </p>
-              <div class="mt-4 flex flex-wrap justify-center gap-2">
+              </:description>
+              <:actions>
                 <button
                   :if={@search_query != ""}
                   id="study-empty-clear-search"
@@ -355,8 +384,8 @@ defmodule LanglerWeb.StudyLive.Index do
                 >
                   Explore library
                 </.link>
-              </div>
-            </div>
+              </:actions>
+            </.list_empty_state>
 
             <.card
               :for={{dom_id, item} <- @streams.items}
@@ -573,11 +602,25 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  def handle_event("search_items", params, socket) do
-    query =
-      params
-      |> extract_search_query()
-      |> String.trim()
+  def handle_event("search_items", %{"q" => query}, socket) do
+    query = String.trim(to_string(query))
+    filter_param = filter_to_param(socket.assigns.filter)
+    base_path = ~p"/study"
+
+    path =
+      cond do
+        query != "" && filter_param != "" ->
+          ~p"/study?q=#{URI.encode(query)}&filter=#{filter_param}"
+
+        query != "" ->
+          ~p"/study?q=#{URI.encode(query)}"
+
+        filter_param != "" ->
+          ~p"/study?filter=#{filter_param}"
+
+        true ->
+          base_path
+      end
 
     visible = filter_items(socket.assigns.all_items, socket.assigns.filter, query)
 
@@ -585,18 +628,34 @@ defmodule LanglerWeb.StudyLive.Index do
      socket
      |> assign(:search_query, query)
      |> assign(:visible_count, length(visible))
-     |> stream(:items, visible, reset: true)}
+     |> stream(:items, visible, reset: true)
+     |> push_patch(to: path, replace: true)}
   end
 
   def handle_event("clear_search", _params, socket) do
+    filter_param = filter_to_param(socket.assigns.filter)
+
+    path =
+      if filter_param != "" do
+        ~p"/study?filter=#{filter_param}"
+      else
+        ~p"/study"
+      end
+
     visible = filter_items(socket.assigns.all_items, socket.assigns.filter, "")
 
     {:noreply,
      socket
      |> assign(:search_query, "")
      |> assign(:visible_count, length(visible))
-     |> stream(:items, visible, reset: true)}
+     |> stream(:items, visible, reset: true)
+     |> push_patch(to: path, replace: true)}
   end
+
+  defp filter_to_param(:now), do: "now"
+  defp filter_to_param(:today), do: "today"
+  defp filter_to_param(:all), do: "all"
+  defp filter_to_param(_), do: ""
 
   def handle_event("import_article", %{"id" => discovered_article_id_str}, socket) do
     with {discovered_article_id, ""} <- Integer.parse(discovered_article_id_str),
@@ -753,10 +812,6 @@ defmodule LanglerWeb.StudyLive.Index do
      )}
   end
 
-  defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query
-  defp extract_search_query(%{"search-query" => query}) when is_binary(query), do: query
-  defp extract_search_query(_), do: ""
-
   defp parse_filter(value) do
     case value do
       "today" -> :today
@@ -773,7 +828,7 @@ defmodule LanglerWeb.StudyLive.Index do
     ArgumentError -> :good
   end
 
-  defp filter_items(items, filter, query \\ "") do
+  defp filter_items(items, filter, query) do
     now = DateTime.utc_now()
     end_of_day = end_of_day(now)
     downcased_query = String.downcase(query || "")

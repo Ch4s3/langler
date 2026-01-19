@@ -28,7 +28,7 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       assert has_element?(view, "#study-card-word-#{item.id}")
     end
 
-    test "filters items based on search query", %{conn: conn} do
+    test "filters items immediately as user types", %{conn: conn} do
       user = AccountsFixtures.user_fixture()
       word_one = VocabularyFixtures.word_fixture(%{normalized_form: "hablar", lemma: "hablar"})
       word_two = VocabularyFixtures.word_fixture(%{normalized_form: "comer", lemma: "comer"})
@@ -50,12 +50,142 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
 
+      # Both items should be visible initially
+      assert has_element?(view, "#items-#{item_one.id}")
+      assert has_element?(view, "#items-#{item_two.id}")
+
+      # Type search query - target the form that contains the input
       view
-      |> element("#study-search-form")
-      |> render_change(%{"search_query" => "hablar"})
+      |> form("form[phx-change='search_items']", %{"q" => "hablar"})
+      |> render_change()
 
       assert has_element?(view, "#items-#{item_one.id}")
       refute has_element?(view, "#items-#{item_two.id}")
+    end
+
+    test "URL with ?q=query param loads correct filtered results", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      word_one = VocabularyFixtures.word_fixture(%{normalized_form: "hablar", lemma: "hablar"})
+      word_two = VocabularyFixtures.word_fixture(%{normalized_form: "comer", lemma: "comer"})
+
+      item_one =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word_one,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      item_two =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word_two,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study?q=hablar")
+
+      assert has_element?(view, "#items-#{item_one.id}")
+      refute has_element?(view, "#items-#{item_two.id}")
+      assert render(view) =~ ~r/value="hablar"/
+    end
+
+    test "clearing search removes filter and shows all items", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      word_one = VocabularyFixtures.word_fixture(%{normalized_form: "hablar", lemma: "hablar"})
+      word_two = VocabularyFixtures.word_fixture(%{normalized_form: "comer", lemma: "comer"})
+
+      item_one =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word_one,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      item_two =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word_two,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study?q=hablar")
+
+      # Only hablar item visible
+      assert has_element?(view, "#items-#{item_one.id}")
+      refute has_element?(view, "#items-#{item_two.id}")
+
+      # Clear search
+      view
+      |> element("button[phx-click='clear_search']")
+      |> render_click()
+
+      # Both items should be visible
+      assert has_element?(view, "#items-#{item_one.id}")
+      assert has_element?(view, "#items-#{item_two.id}")
+    end
+
+    test "empty state displays when no results match", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      word = VocabularyFixtures.word_fixture(%{normalized_form: "hablar", lemma: "hablar"})
+
+      item =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Item is visible
+      assert has_element?(view, "#items-#{item.id}")
+
+      # Search for something that doesn't match
+      view
+      |> form("form[phx-change='search_items']", %{"q" => "nonexistent"})
+      |> render_change()
+
+      # Item should be hidden, empty state should show
+      refute has_element?(view, "#items-#{item.id}")
+      html = render(view)
+      assert html =~ "No matches found"
+    end
+
+    test "URL updates immediately when search is entered", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Type search query
+      view
+      |> form("form[phx-change='search_items']", %{"q" => "test"})
+      |> render_change()
+
+      # URL should be updated immediately and search query should be set
+      assert render(view) =~ ~r/value="test"/
+      # Verify URL was updated by checking the current path (includes filter=now by default)
+      assert_patch(view, "/study?q=test&filter=now")
+    end
+
+    test "search input component renders correctly", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      assert has_element?(view, "#study-search-input")
+      assert has_element?(view, "input#study-search-input")
+
+      # Clear button only appears when there's a value
+      view
+      |> form("form[phx-change='search_items']", %{"q" => "test"})
+      |> render_change()
+
+      assert has_element?(view, "button[phx-click='clear_search']")
     end
 
     test "rates a word and updates stats", %{conn: conn} do
