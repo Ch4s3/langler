@@ -56,10 +56,7 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
               No recommendations available yet. Import some articles to get personalized suggestions.
             </div>
 
-            <div
-              :if={length(recommended_articles) > 0}
-              class="grid gap-4 md:grid-cols-2 recommendations-grid"
-            >
+            <.card_grid :if={length(recommended_articles) > 0}>
               <.card
                 :for={article <- recommended_articles}
                 variant={:default}
@@ -143,7 +140,7 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                   </div>
                 </:actions>
               </.card>
-            </div>
+            </.card_grid>
           </.async_result>
         </div>
       </div>

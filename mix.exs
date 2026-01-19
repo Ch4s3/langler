@@ -14,6 +14,7 @@ defmodule Langler.MixProject do
       test_coverage: [summary: [threshold: 80]],
       listeners: [Phoenix.CodeReloader],
       rustler_crates: rustler_crates(),
+      elixirc_options: [warnings_as_errors: true],
       assay: [
         dialyzer: [
           # Analyze project apps + dependencies

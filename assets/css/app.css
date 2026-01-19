@@ -615,10 +615,10 @@ body {
   transition: width 200ms ease, max-width 200ms ease;
 }
 
-.body-chat-open main .recommendations-grid,
-.body-chat-open main .articles-grid {
+.body-chat-open .card-grid {
   grid-template-columns: 1fr !important;
 }
+
 
   /* Fullscreen mode */
   #chat-drawer-container.chat-fullscreen {
@@ -663,3 +663,4 @@ body {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
   }
+}

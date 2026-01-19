@@ -228,14 +228,10 @@ defmodule LanglerWeb.ArticleLive.Index do
               </button>
             </div>
 
-            <div
-              id="articles"
-              phx-update="stream"
-              class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 articles-grid"
-            >
+            <.card_grid id="articles" phx-update="stream">
               <.list_empty_state
                 id="articles-empty-state"
-                class={if @articles_count > 0, do: "sm:col-span-2 xl:col-span-3 hidden", else: "sm:col-span-2 xl:col-span-3"}
+                class={if @articles_count > 0, do: "md:col-span-2 hidden", else: "md:col-span-2"}
               >
                 <:title>No articles yet.</:title>
                 <:description>
@@ -346,7 +342,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                   </div>
                 </:actions>
               </.card>
-            </div>
+            </.card_grid>
           </div>
         </div>
       </div>

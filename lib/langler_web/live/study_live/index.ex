@@ -99,7 +99,8 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp refresh_visible_items(socket) do
-    visible = filter_items(socket.assigns.all_items, socket.assigns.filter, socket.assigns.search_query)
+    visible =
+      filter_items(socket.assigns.all_items, socket.assigns.filter, socket.assigns.search_query)
 
     socket
     |> assign(:visible_count, length(visible))
@@ -253,7 +254,7 @@ defmodule LanglerWeb.StudyLive.Index do
                 </.link>
               </div>
 
-              <div class="grid gap-3 sm:grid-cols-2">
+              <.card_grid>
                 <.card
                   :for={rec <- recommended_articles}
                   variant={:border}
@@ -319,7 +320,7 @@ defmodule LanglerWeb.StudyLive.Index do
                     </div>
                   </:actions>
                 </.card>
-              </div>
+              </.card_grid>
             </div>
           </div>
         </.async_result>
@@ -652,11 +653,6 @@ defmodule LanglerWeb.StudyLive.Index do
      |> push_patch(to: path, replace: true)}
   end
 
-  defp filter_to_param(:now), do: "now"
-  defp filter_to_param(:today), do: "today"
-  defp filter_to_param(:all), do: "all"
-  defp filter_to_param(_), do: ""
-
   def handle_event("import_article", %{"id" => discovered_article_id_str}, socket) do
     with {discovered_article_id, ""} <- Integer.parse(discovered_article_id_str),
          _discovered_article <- Content.get_discovered_article(discovered_article_id),
@@ -728,6 +724,11 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
+  defp filter_to_param(:now), do: "now"
+  defp filter_to_param(:today), do: "today"
+  defp filter_to_param(:all), do: "all"
+  defp filter_to_param(_), do: ""
+
   defp filter_label(filter) do
     Enum.find_value(@filters, "All words", fn %{id: id, label: label} ->
       if id == filter, do: label
@@ -777,7 +778,9 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   def handle_async({:fetch_conjugations, word_id}, {:ok, conjugations_map}, socket) do
-    Logger.debug("StudyLive: handle_async received conjugations for word_id=#{word_id}: #{inspect(conjugations_map)}")
+    Logger.debug(
+      "StudyLive: handle_async received conjugations for word_id=#{word_id}: #{inspect(conjugations_map)}"
+    )
 
     case conjugations_map do
       {:error, reason} ->
@@ -930,23 +933,36 @@ defmodule LanglerWeb.StudyLive.Index do
       word.conjugations
     else
       # Fetch from external source (which uses ETS cache)
-      Logger.debug("StudyLive: fetching conjugations from external for word_id=#{word.id}, lemma=#{lookup_lemma}")
+      Logger.debug(
+        "StudyLive: fetching conjugations from external for word_id=#{word.id}, lemma=#{lookup_lemma}"
+      )
+
       case Conjugations.fetch_conjugations(lookup_lemma, word.language) do
         {:ok, conjugations_map} ->
           Logger.debug("StudyLive: successfully fetched conjugations for word_id=#{word.id}")
           conjugations_map
+
         {:error, reason} ->
-          Logger.warning("StudyLive: failed to fetch conjugations for word_id=#{word.id}: #{inspect(reason)}")
+          Logger.warning(
+            "StudyLive: failed to fetch conjugations for word_id=#{word.id}: #{inspect(reason)}"
+          )
+
           {:error, reason}
       end
     end
   rescue
     e ->
-      Logger.error("StudyLive: exception fetching conjugations for word_id=#{word.id}: #{inspect(e)}")
+      Logger.error(
+        "StudyLive: exception fetching conjugations for word_id=#{word.id}: #{inspect(e)}"
+      )
+
       {:error, :exception}
   catch
     :exit, reason ->
-      Logger.error("StudyLive: exit while fetching conjugations for word_id=#{word.id}: #{inspect(reason)}")
+      Logger.error(
+        "StudyLive: exit while fetching conjugations for word_id=#{word.id}: #{inspect(reason)}"
+      )
+
       {:error, :exit}
   end
 
@@ -1242,7 +1258,8 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
-  defp maybe_start_conjugation_fetch(socket, word_id, expanded_state, item) when is_boolean(expanded_state) do
+  defp maybe_start_conjugation_fetch(socket, word_id, expanded_state, item)
+       when is_boolean(expanded_state) do
     cond do
       not expanded_state ->
         socket
@@ -1284,12 +1301,18 @@ defmodule LanglerWeb.StudyLive.Index do
     task = Task.async(fn -> fetch_conjugations_with_cache(refreshed_word, lookup_lemma) end)
 
     case Task.yield(task, 30_000) || Task.shutdown(task) do
-      {:ok, result} -> result
+      {:ok, result} ->
+        result
+
       nil ->
         Logger.warning("StudyLive: timeout fetching conjugations for word_id=#{word_id}")
         {:error, :timeout}
+
       {:exit, reason} ->
-        Logger.warning("StudyLive: task exited while fetching conjugations for word_id=#{word_id}: #{inspect(reason)}")
+        Logger.warning(
+          "StudyLive: task exited while fetching conjugations for word_id=#{word_id}: #{inspect(reason)}"
+        )
+
         {:error, :exit}
     end
   end

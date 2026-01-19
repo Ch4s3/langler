@@ -428,6 +428,40 @@ defmodule LanglerWeb.CoreComponents do
   end
 
   @doc """
+  Renders a responsive card grid.
+
+  - Mobile/small screens: 1 column
+  - Desktop (md: 768px+): 2 columns
+  - Chat drawer open: 1 column (via CSS `body-chat-open` override)
+
+  ## Examples
+
+      <.card_grid>
+        <.card :for={item <- @items}>...</.card>
+      </.card_grid>
+
+      <.card_grid id="articles" phx-update="stream">
+        <.card :for={{id, article} <- @streams.articles} id={id}>...</.card>
+      </.card_grid>
+  """
+  attr :id, :string, default: nil
+  attr :class, :string, default: nil
+  attr :rest, :global, include: ~w(phx-update)
+  slot :inner_block, required: true
+
+  def card_grid(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={["grid gap-4 md:grid-cols-2 card-grid", @class]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
   Renders a card container with optional header and actions slots.
 
   Uses DaisyUI's card component classes. Supports multiple variants and
@@ -493,7 +527,10 @@ defmodule LanglerWeb.CoreComponents do
 
   slot :header, doc: "Optional header content (badges, title). Renders before main content."
   slot :inner_block, required: true, doc: "Main card content"
-  slot :conjugations, doc: "Optional conjugations section. Renders after main content, before actions."
+
+  slot :conjugations,
+    doc: "Optional conjugations section. Renders after main content, before actions."
+
   slot :actions, doc: "Optional footer with action buttons. Wraps in card-actions div."
 
   def card(assigns) do
