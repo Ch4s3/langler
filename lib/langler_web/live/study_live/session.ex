@@ -120,7 +120,11 @@ defmodule LanglerWeb.StudyLive.Session do
     >
       <%!-- Front side (swap-off) - Word, Stats, Rating --%>
       <div class="swap-off w-full h-full">
-        <.card variant={:default} class="h-full w-full flex flex-col">
+        <.card
+          variant={:default}
+          class="h-full w-full flex flex-col"
+          body_class="flex flex-col h-full"
+        >
           <%!-- Word --%>
           <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
             <p class="text-4xl font-semibold text-base-content text-center">
@@ -176,16 +180,23 @@ defmodule LanglerWeb.StudyLive.Session do
 
       <%!-- Back side (swap-on) - Definition only --%>
       <div class="swap-on w-full h-full">
-        <.card variant={:default} class="h-full w-full flex flex-col">
-          <div class="flex flex-col gap-2 w-full items-center justify-center flex-1 min-h-0">
+        <.card
+          variant={:default}
+          class="h-full w-full flex flex-col"
+          body_class="flex flex-col h-full justify-center items-center"
+        >
+          <div class="flex flex-col gap-4 items-center w-full">
             <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
               Definition
             </p>
             <%= if @definitions != [] do %>
-              <ol class="space-y-2 text-sm leading-relaxed text-base-content/90">
-                <li :for={{definition, idx} <- Enum.with_index(@definitions, 1)} class="break-words">
+              <ol class="space-y-3 text-sm leading-relaxed text-base-content/90 text-left max-h-full overflow-auto w-full max-w-lg">
+                <li
+                  :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
+                  class="flex gap-2 items-start break-words"
+                >
                   <span class="font-semibold text-primary/80">{idx}.</span>
-                  <span class="ml-2 break-words">{definition}</span>
+                  <span class="break-words">{definition}</span>
                 </li>
               </ol>
             <% else %>

@@ -523,6 +523,10 @@ defmodule LanglerWeb.CoreComponents do
     default: false,
     doc: "Enable hover effects (translate + shadow)"
 
+  attr :body_class, :string,
+    default: nil,
+    doc: "Additional classes for the card body wrapper"
+
   attr :rest, :global, doc: "Additional HTML attributes"
 
   slot :header, doc: "Optional header content (badges, title). Renders before main content."
@@ -580,7 +584,7 @@ defmodule LanglerWeb.CoreComponents do
 
     ~H"""
     <div id={@id} class={@card_classes} {@rest}>
-      <div class="card-body">
+      <div class={["card-body", @body_class]}>
         <%= if @header != [] do %>
           <div>
             {render_slot(@header)}
