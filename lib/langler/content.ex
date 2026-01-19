@@ -46,10 +46,10 @@ defmodule Langler.Content do
         sort_date: fragment("COALESCE(?, ?)", au.inserted_at, a.inserted_at),
         article_inserted_at: a.inserted_at
       })
-      |> order_by([a, au], [
+      |> order_by([a, au],
         desc: fragment("COALESCE(?, ?)", au.inserted_at, a.inserted_at),
         desc: a.inserted_at
-      ])
+      )
       |> Repo.all()
       |> Enum.reduce([], fn %{article_id: id}, acc ->
         if id in acc, do: acc, else: [id | acc]

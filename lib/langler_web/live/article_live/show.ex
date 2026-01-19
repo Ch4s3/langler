@@ -261,17 +261,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                     ]
                 ]
               }
-              style={
-                # Remove spacing before punctuation tokens to attach them visually to previous word
-                if not token.lexical? and String.match?(token.text, ~r/^[,\.;:!?\)\]\}]/u) do
-                  "margin-left: -0.15em;"
-                else
-                  nil
-                end
-              }
-            >
-              {token.text}
-            </span>
+            >{token.text}</span>
           </p>
         </article>
       </div>
@@ -696,6 +686,29 @@ defmodule LanglerWeb.ArticleLive.Show do
     tokens
     |> Enum.reduce([], &attach_space_token/2)
     |> Enum.reverse()
+    |> collapse_space_before_punct()
+  end
+
+  # Remove trailing whitespace from tokens when followed by punctuation that attaches
+  # to the previous word (like commas, periods, semicolons, etc.)
+  # This handles cases where the source text has incorrect spacing like "word , next"
+  defp collapse_space_before_punct([]), do: []
+  defp collapse_space_before_punct([single]), do: [single]
+
+  defp collapse_space_before_punct(tokens) do
+    tokens
+    |> Enum.zip(tl(tokens) ++ [nil])
+    |> Enum.map(fn
+      {current, next} when is_binary(next) ->
+        if attaching_punct?(next), do: String.trim_trailing(current), else: current
+
+      {current, nil} ->
+        current
+    end)
+  end
+
+  defp attaching_punct?(token) do
+    String.match?(token, ~r/^[,\.;:!?\)\]\}»›"']/u)
   end
 
   defp attach_space_token(token, acc) do

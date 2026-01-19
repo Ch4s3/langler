@@ -508,8 +508,11 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
 
     if lower_lemma != normalized_lemma do
       case Conjugations.fetch_conjugations(lower_lemma, language) do
-        {:ok, conjugations} -> conjugations
-        {:error, reason} -> log_conjugation_fallback_error(lemma, normalized_lemma, lower_lemma, reason)
+        {:ok, conjugations} ->
+          conjugations
+
+        {:error, reason} ->
+          log_conjugation_fallback_error(lemma, normalized_lemma, lower_lemma, reason)
       end
     else
       Logger.warning("Failed to fetch conjugations for #{lemma} (#{language}): 404")
@@ -525,6 +528,7 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
     Logger.warning(
       "Failed to fetch conjugations for #{lemma} (tried #{normalized_lemma} and #{lower_lemma}): #{inspect(reason)}"
     )
+
     nil
   end
 
