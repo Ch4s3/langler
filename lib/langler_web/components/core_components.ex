@@ -427,6 +427,369 @@ defmodule LanglerWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders a card container with optional header and actions slots.
+
+  Uses DaisyUI's card component classes. Supports multiple variants and
+  optional hover effects for interactive cards.
+
+  ## Variants
+
+  - `:default` - Standard card with shadow (`card bg-base-100 shadow-xl`)
+  - `:border` - Outlined card (`card card-border bg-base-100`)
+  - `:dash` - Dashed border card (`card card-dash bg-base-100`)
+  - `:panel` - Frosted glass effect (`card bg-base-100/95 shadow-xl backdrop-blur`)
+
+  ## Examples
+
+      <%!-- Basic card --%>
+      <.card>
+        <p>Card content</p>
+      </.card>
+
+      <%!-- Card with header and actions --%>
+      <.card id="article-1" variant={:border} hover>
+        <:header>
+          <span class="badge badge-primary">New</span>
+          <h3 class="card-title">Article Title</h3>
+        </:header>
+
+        <p class="text-sm text-base-content/70">Article preview...</p>
+
+        <:actions>
+          <.link navigate={~p"/articles/1"} class="btn btn-sm btn-primary">
+            Read more
+          </.link>
+        </:actions>
+      </.card>
+
+      <%!-- Card with async loading content --%>
+      <.card>
+        <.async_result :let={data} assign={@async_data}>
+          <:loading><span class="loading loading-spinner"></span></:loading>
+          <:failed>Failed to load</:failed>
+          <p>{data.content}</p>
+        </.async_result>
+      </.card>
+  """
+  attr :id, :string, default: nil, doc: "DOM id for the card element"
+  attr :class, :string, default: nil, doc: "Additional CSS classes to merge"
+
+  attr :variant, :atom,
+    default: :default,
+    values: [:default, :border, :dash, :panel],
+    doc: "Card style variant"
+
+  attr :size, :atom,
+    default: nil,
+    values: [nil, :xs, :sm, :md, :lg, :xl],
+    doc: "Card size (maps to DaisyUI card-{size})"
+
+  attr :hover, :boolean,
+    default: false,
+    doc: "Enable hover effects (translate + shadow)"
+
+  attr :rest, :global, doc: "Additional HTML attributes"
+
+  slot :header, doc: "Optional header content (badges, title). Renders before main content."
+  slot :inner_block, required: true, doc: "Main card content"
+  slot :conjugations, doc: "Optional conjugations section. Renders after main content, before actions."
+  slot :actions, doc: "Optional footer with action buttons. Wraps in card-actions div."
+
+  def card(assigns) do
+    variant_classes = %{
+      default: "bg-base-100 shadow-xl",
+      border: "card-border bg-base-100",
+      dash: "card-dash bg-base-100",
+      panel: "bg-base-100/95 shadow-xl backdrop-blur"
+    }
+
+    size_classes = %{
+      xs: "card-xs",
+      sm: "card-sm",
+      md: "card-md",
+      lg: "card-lg",
+      xl: "card-xl"
+    }
+
+    base_classes = ["card", Map.fetch!(variant_classes, assigns.variant)]
+
+    size_class =
+      if assigns.size do
+        Map.fetch!(size_classes, assigns.size)
+      else
+        nil
+      end
+
+    hover_classes =
+      if assigns.hover do
+        "transition duration-300 hover:-translate-y-1 hover:shadow-2xl"
+      else
+        nil
+      end
+
+    card_classes =
+      [base_classes, size_class, hover_classes, assigns[:class]]
+      |> List.flatten()
+      |> Enum.filter(&(&1 != nil))
+      |> Enum.join(" ")
+
+    assigns =
+      assigns
+      |> assign(:card_classes, card_classes)
+      |> assign_new(:header, fn -> [] end)
+      |> assign_new(:conjugations, fn -> [] end)
+      |> assign_new(:actions, fn -> [] end)
+
+    ~H"""
+    <div id={@id} class={@card_classes} {@rest}>
+      <div class="card-body">
+        <%= if @header != [] do %>
+          <div>
+            {render_slot(@header)}
+          </div>
+        <% end %>
+
+        {render_slot(@inner_block)}
+
+        <%= if @conjugations != [] do %>
+          <div>
+            {render_slot(@conjugations)}
+          </div>
+        <% end %>
+
+        <%= if @actions != [] do %>
+          <div class="card-actions">
+            {render_slot(@actions)}
+          </div>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a row of FSRS rating buttons for study cards.
+
+  Displays Again/Hard/Good/Easy buttons that trigger rating events.
+  Designed to be placed in the `:actions` slot of a card.
+
+  ## Examples
+
+      <.card_rating
+        item_id={@item.id}
+        buttons={[
+          %{score: 0, label: "Again", class: "btn-error"},
+          %{score: 2, label: "Hard", class: "btn-warning"},
+          %{score: 3, label: "Good", class: "btn-primary"},
+          %{score: 4, label: "Easy", class: "btn-success"}
+        ]}
+      />
+  """
+  attr :buttons, :list,
+    required: true,
+    doc: "List of button configs with :score, :label, and :class keys"
+
+  attr :item_id, :any,
+    required: true,
+    doc: "The item ID to rate (passed as phx-value-item-id)"
+
+  attr :event, :string,
+    default: "rate_word",
+    doc: "The event name to fire on click (default: 'rate_word')"
+
+  def card_rating(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-2">
+      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
+        Rate this card
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <button
+          :for={button <- @buttons}
+          type="button"
+          class={[
+            "btn btn-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-offset-2 focus-visible:ring-primary/40 phx-click-loading:opacity-70 phx-click-loading:cursor-wait",
+            button.class
+          ]}
+          phx-click={@event}
+          phx-value-item-id={@item_id}
+          phx-value-quality={button.score}
+        >
+          {button.label}
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a verb conjugation table with moods and tenses.
+
+  Displays conjugations in a two-column layout (singular/plural).
+  Handles loading, empty, and populated states gracefully.
+
+  ## States
+
+  - `nil` conjugations - Shows "Loading conjugations..." message
+  - Empty map `%{}` - Shows "Conjugations not available" message
+  - Populated map - Renders full conjugation tables by mood
+
+  ## Examples
+
+      <%!-- Static conjugations --%>
+      <.conjugation_table conjugations={@word.conjugations} />
+
+      <%!-- With async loading --%>
+      <.async_result :let={conjugations} assign={@conjugations}>
+        <:loading><span class="loading loading-spinner"></span></:loading>
+        <:failed>Failed to load conjugations</:failed>
+        <.conjugation_table conjugations={conjugations} />
+      </.async_result>
+  """
+  attr :conjugations, :any,
+    default: nil,
+    doc: "Conjugations map or nil for loading state"
+
+  def conjugation_table(%{conjugations: nil} = assigns) do
+    ~H"""
+    <p class="text-sm text-base-content/70">Loading conjugations...</p>
+    """
+  end
+
+  def conjugation_table(%{conjugations: %{}} = assigns)
+      when map_size(assigns.conjugations) == 0 do
+    ~H"""
+    <p class="text-sm text-base-content/70">Conjugations not available for this verb.</p>
+    """
+  end
+
+  def conjugation_table(assigns) do
+    ~H"""
+    <div class="space-y-6">
+      <h3 class="text-lg font-semibold text-base-content">Conjugations</h3>
+
+      <%= if Map.has_key?(@conjugations, "indicative") do %>
+        <div class="space-y-3">
+          <h4 class="text-md font-semibold text-base-content/80">Indicative</h4>
+          {render_mood(assigns, @conjugations["indicative"])}
+        </div>
+      <% end %>
+
+      <%= if Map.has_key?(@conjugations, "subjunctive") do %>
+        <div class="space-y-3">
+          <h4 class="text-md font-semibold text-base-content/80">Subjunctive</h4>
+          {render_mood(assigns, @conjugations["subjunctive"])}
+        </div>
+      <% end %>
+
+      <%= if Map.has_key?(@conjugations, "imperative") do %>
+        <div class="space-y-3">
+          <h4 class="text-md font-semibold text-base-content/80">Imperative</h4>
+          {render_mood(assigns, @conjugations["imperative"])}
+        </div>
+      <% end %>
+
+      <%= if Map.has_key?(@conjugations, "non_finite") do %>
+        <div class="space-y-3">
+          <h4 class="text-md font-semibold text-base-content/80">Non-finite Forms</h4>
+          <div class="grid grid-cols-3 gap-2 text-sm">
+            <%= if Map.has_key?(@conjugations["non_finite"], "infinitive") do %>
+              <div>
+                <span class="font-semibold text-base-content/70">Infinitive:</span>
+                <span class="ml-2">{@conjugations["non_finite"]["infinitive"]}</span>
+              </div>
+            <% end %>
+            <%= if Map.has_key?(@conjugations["non_finite"], "gerund") do %>
+              <div>
+                <span class="font-semibold text-base-content/70">Gerund:</span>
+                <span class="ml-2">{@conjugations["non_finite"]["gerund"]}</span>
+              </div>
+            <% end %>
+            <%= if Map.has_key?(@conjugations["non_finite"], "past_participle") do %>
+              <div>
+                <span class="font-semibold text-base-content/70">Past Participle:</span>
+                <span class="ml-2">{@conjugations["non_finite"]["past_participle"]}</span>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp render_mood(assigns, mood_conjugations) when is_map(mood_conjugations) do
+    assigns = assign(assigns, :mood_conjugations, mood_conjugations)
+
+    ~H"""
+    <div class="space-y-4">
+      <%= for {tense, forms} <- @mood_conjugations do %>
+        <div class="space-y-2">
+          <h5 class="text-sm font-semibold text-base-content/70 capitalize">{tense}</h5>
+          {render_two_column_conjugations(assigns, forms)}
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp render_mood(assigns, _) do
+    ~H"""
+    <p class="text-sm text-base-content/70">No conjugations available.</p>
+    """
+  end
+
+  defp render_two_column_conjugations(assigns, forms) do
+    assigns = assign(assigns, :forms, forms)
+
+    ~H"""
+    <div class="overflow-x-auto">
+      <table class="table table-sm whitespace-normal conjugation-table">
+        <tbody>
+          <tr class="bg-base-200/60 text-xs uppercase tracking-widest text-base-content/60">
+            <th class="w-32">Singular</th>
+            <th>Conjugation</th>
+            <th class="w-32">Plural</th>
+            <th>Conjugation</th>
+          </tr>
+          <%= for row <- conjugation_rows(@forms) do %>
+            <tr class="align-top">
+              <td class={["conjugation-person", "pair-left"]}>{row.left.person}</td>
+              <td class={["conjugation-form", "pair-left"]}>{row.left.form}</td>
+              <td class={["conjugation-person", "pair-right"]}>{row.right.person}</td>
+              <td class={["conjugation-form", "pair-right"]}>{row.right.form}</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  defp conjugation_rows(forms) do
+    singular = [
+      {"yo", Map.get(forms, "yo")},
+      {"tú", Map.get(forms, "tú")},
+      {"él/ella/usted", Map.get(forms, "él/ella/usted")}
+    ]
+
+    plural = [
+      {"nosotros/nosotras", Map.get(forms, "nosotros/nosotras")},
+      {"vosotros/vosotras", Map.get(forms, "vosotros/vosotras")},
+      {"ellos/ellas/ustedes", Map.get(forms, "ellos/ellas/ustedes")}
+    ]
+
+    singular
+    |> Enum.zip(plural)
+    |> Enum.map(fn {{s_person, s_form}, {p_person, p_form}} ->
+      %{
+        left: %{person: s_person, form: s_form || "—"},
+        right: %{person: p_person, form: p_form || "—"}
+      }
+    end)
+  end
+
   ## JS Commands
 
   def show(js \\ %JS{}, selector) do

@@ -11,6 +11,7 @@ defmodule Langler.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
+      test_coverage: [summary: [threshold: 80]],
       listeners: [Phoenix.CodeReloader],
       rustler_crates: rustler_crates(),
       assay: [

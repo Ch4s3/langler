@@ -110,5 +110,106 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       assert has_element?(view, "#study-conjugations-#{word.id}")
     end
+
+    test "shows loading state for recommendations initially, then displays them", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Initial render may show loading or empty state
+      # Wait for async to complete
+      html = render_async(view)
+
+      # Should show recommendations section or empty state (not loading)
+      refute html =~ "Loading recommendations..."
+    end
+
+    test "shows loading spinner while fetching conjugations", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      word =
+        VocabularyFixtures.word_fixture(%{
+          lemma: "hablar",
+          normalized_form: "hablar",
+          part_of_speech: "verb",
+          definitions: ["to speak"],
+          conjugations: nil
+        })
+
+      _item =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Click toggle to expand conjugations
+      view
+      |> element("button[phx-click='toggle_conjugations'][phx-value-word-id='#{word.id}']")
+      |> render_click()
+
+      # Should show loading state immediately after click
+      html = render(view)
+      assert html =~ "Loading conjugations..."
+    end
+
+    test "fetches definitions when flipping a card that needs them", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      word =
+        VocabularyFixtures.word_fixture(%{
+          lemma: "test",
+          normalized_form: "test",
+          definitions: [],
+          part_of_speech: nil
+        })
+
+      item =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: word,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Flip the card
+      view
+      |> element("button[phx-click='toggle_card'][phx-value-id='#{item.id}']")
+      |> render_click()
+
+      # Should not crash - definitions should be fetched async
+      html = render(view)
+      assert html =~ "items-#{item.id}"
+    end
+
+    test "handles card flip when word is nil gracefully", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+
+      # Create an item without a word (edge case)
+      item =
+        StudyFixtures.fsrs_item_fixture(%{
+          user: user,
+          word: nil,
+          due_date: DateTime.add(DateTime.utc_now(), -3_600, :second)
+        })
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Flip the card - should not crash even with nil word
+      view
+      |> element("button[phx-click='toggle_card'][phx-value-id='#{item.id}']")
+      |> render_click()
+
+      # Should not crash
+      html = render(view)
+      assert html =~ "items-#{item.id}"
+    end
   end
 end

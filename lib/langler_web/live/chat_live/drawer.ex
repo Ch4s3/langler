@@ -102,54 +102,47 @@ defmodule LanglerWeb.ChatLive.Drawer do
     apply_quiz_result_action(socket, assigns)
   end
 
-  defp apply_quiz_result_action(socket, assigns) do
-    case Map.get(assigns, :quiz_result_action) do
-      :quiz_completed ->
-        result_map = Map.get(assigns, :quiz_result_map)
-
-        result =
-          case result_map do
-            %Result{} ->
-              result_map
-
-            %{} ->
-              case Result.from_map(result_map) do
-                {:ok, quiz_result} -> quiz_result
-                {:error, _reason} -> nil
-              end
-
-            _ ->
-              nil
-          end
-
-        if result do
-          socket
-          |> assign(:quiz_completed, true)
-          |> assign(:quiz_result, result)
-        else
-          socket
-          |> put_flash(:error, "Quiz completed but result could not be displayed.")
-        end
-
-      {:quiz_error, reason} when is_binary(reason) ->
+  defp apply_quiz_result_action(socket, %{quiz_result_action: :quiz_completed} = assigns) do
+    case normalize_quiz_result(Map.get(assigns, :quiz_result_map)) do
+      {:ok, result} ->
         socket
-        |> put_flash(:error, "Failed to save quiz result: #{reason}")
+        |> assign(:quiz_completed, true)
+        |> assign(:quiz_result, result)
 
-      {:quiz_error, _reason} ->
-        socket
-        |> put_flash(:error, "Failed to save quiz result. Please try again.")
-
-      :quiz_parse_error ->
-        socket
-        |> put_flash(
-          :error,
-          "Quiz result couldn't be processed. The quiz may still be in progress or the format was invalid."
-        )
-
-      _ ->
-        socket
+      :error ->
+        put_flash(socket, :error, "Quiz completed but result could not be displayed.")
     end
   end
+
+  defp apply_quiz_result_action(socket, %{quiz_result_action: {:quiz_error, reason}})
+       when is_binary(reason) do
+    put_flash(socket, :error, "Failed to save quiz result: #{reason}")
+  end
+
+  defp apply_quiz_result_action(socket, %{quiz_result_action: {:quiz_error, _reason}}) do
+    put_flash(socket, :error, "Failed to save quiz result. Please try again.")
+  end
+
+  defp apply_quiz_result_action(socket, %{quiz_result_action: :quiz_parse_error}) do
+    put_flash(
+      socket,
+      :error,
+      "Quiz result couldn't be processed. The quiz may still be in progress or the format was invalid."
+    )
+  end
+
+  defp apply_quiz_result_action(socket, _assigns), do: socket
+
+  defp normalize_quiz_result(%Result{} = result), do: {:ok, result}
+
+  defp normalize_quiz_result(%{} = result_map) do
+    case Result.from_map(result_map) do
+      {:ok, quiz_result} -> {:ok, quiz_result}
+      {:error, _reason} -> :error
+    end
+  end
+
+  defp normalize_quiz_result(_), do: :error
 
   defp maybe_stream_messages(socket) do
     messages = socket.assigns.messages || []
@@ -176,6 +169,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     <div
       id="chat-drawer-container"
       phx-component="chat-drawer"
+      phx-hook="ChatDrawerState"
       class={[
         "fixed bottom-0 right-0 z-[60]",
         @chat_open && "chat-open",
@@ -307,6 +301,29 @@ defmodule LanglerWeb.ChatLive.Drawer do
                             @myself.cid
                           )
                         )}
+                      </div>
+                      <div class="flex items-center gap-2 mt-2 text-xs text-base-content/60">
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm gap-1 px-2 py-1 transition hover:bg-base-200/60"
+                          phx-hook="CopyToClipboard"
+                          id={"copy-message-#{id}"}
+                          data-copy-text={msg.content}
+                          aria-label="Copy message"
+                        >
+                          <.icon name="hero-clipboard-document" class="h-4 w-4" /> Copy
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost btn-sm gap-1 px-2 py-1 transition hover:bg-base-200/60"
+                          phx-hook="TextDownloader"
+                          id={"download-message-#{id}"}
+                          data-download-text={msg.content}
+                          data-download-filename={"langler-response-" <> id <> ".txt"}
+                          aria-label="Download message"
+                        >
+                          <.icon name="hero-arrow-down-tray" class="h-4 w-4" /> Download
+                        </button>
                       </div>
                     <% else %>
                       {msg.content}

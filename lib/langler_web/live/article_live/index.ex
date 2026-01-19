@@ -10,21 +10,28 @@ defmodule LanglerWeb.ArticleLive.Index do
   alias Langler.Content.FrontPage
   alias Langler.Content.Topics
 
+  @recommendations_limit 10
+
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
-    current_user = scope.user
-    articles = Content.list_articles_for_user(current_user.id)
-    user_topics = Content.get_user_topics(current_user.id)
+    user = scope.user
+    articles = Content.list_articles_for_user(user.id)
+    user_topics = Content.get_user_topics(user.id)
+    user_id = user.id
 
     {:ok,
      socket
-     |> assign(:current_user, current_user)
      |> assign(:importing, false)
      |> assign(:selected_source, nil)
      |> assign(:selected_topic, nil)
+     |> assign(:query, "")
      |> assign(:user_topics, user_topics)
      |> assign(:articles_count, length(articles))
+     |> assign_async(:recommended_count, fn ->
+       {:ok, %{recommended_count: recommended_count(user_id)}}
+     end)
      |> assign(:form, to_form(%{"url" => ""}, as: :article))
+     |> assign(:library_form, to_form(%{"query" => ""}, as: :library))
      |> stream(:articles, articles)}
   end
 
@@ -32,7 +39,7 @@ defmodule LanglerWeb.ArticleLive.Index do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="space-y-10">
-        <div class="surface-panel card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+        <div class="surface-panel card">
           <div class="card-body space-y-6">
             <div>
               <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
@@ -44,6 +51,15 @@ defmodule LanglerWeb.ArticleLive.Index do
               </p>
             </div>
 
+            <div
+              :if={@importing}
+              class="alert alert-info border border-base-200 bg-base-100/70 text-base-content/70"
+            >
+              <span class="loading loading-spinner loading-sm"></span>
+              <span class="text-sm font-semibold">Importing…</span>
+              <span class="text-sm">This usually takes a few seconds.</span>
+            </div>
+
             <.form
               for={@form}
               id="article-import-form"
@@ -51,7 +67,7 @@ defmodule LanglerWeb.ArticleLive.Index do
               phx-submit="import"
               phx-change="validate"
             >
-              <div class="relative">
+              <div class="space-y-3">
                 <.input
                   field={@form[:url]}
                   type="url"
@@ -60,19 +76,27 @@ defmodule LanglerWeb.ArticleLive.Index do
                   required
                   disabled={@importing}
                   phx-debounce="300"
-                  class={url_input_classes(@selected_source)}
+                  class="w-full input"
                 />
-                <button
-                  :if={@selected_source}
-                  type="button"
-                  class="btn btn-sm absolute right-3 top-10 gap-2 rounded-full border border-base-300 bg-base-100/90 px-4 text-sm font-semibold text-base-content shadow transition hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring focus-visible:ring-primary/40"
-                  phx-click="random_from_source"
-                  phx-value-source={@selected_source.id}
-                  phx-disable-with="Searching..."
-                  disabled={@importing}
-                >
-                  <.icon name="hero-sparkles" class="h-4 w-4" /> Random from {@selected_source.label}
-                </button>
+                <div :if={@selected_source} class="flex flex-wrap items-center justify-between gap-3">
+                  <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
+                    <span class="badge badge-sm badge-outline uppercase tracking-widest">
+                      Source detected
+                    </span>
+                    <span class="text-base-content">{@selected_source.label}</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline gap-2 rounded-full"
+                    phx-click="random_from_source"
+                    phx-value-source={@selected_source.id}
+                    phx-disable-with="Searching..."
+                    disabled={@importing}
+                  >
+                    <.icon name="hero-sparkles" class="h-4 w-4" />
+                    Random from {@selected_source.label}
+                  </button>
+                </div>
               </div>
               <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/70">
                 <p>Need inspiration?</p>
@@ -94,7 +118,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                 <.button
                   phx-disable-with="Importing..."
                   disabled={@importing}
-                  class="btn btn-primary gap-2"
+                  class="btn btn-primary gap-2 phx-submit-loading:loading"
                 >
                   <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import Article
                 </.button>
@@ -103,25 +127,77 @@ defmodule LanglerWeb.ArticleLive.Index do
           </div>
         </div>
 
-        <div class="surface-panel card border border-base-200 bg-base-100/90 shadow-2xl backdrop-blur">
+        <div class="surface-panel card">
           <div class="card-body space-y-6">
             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
                   Library
                 </p>
-                <h2 class="text-2xl font-semibold text-base-content">Your articles</h2>
+                <h2 class="flex flex-wrap items-center gap-3 text-2xl font-semibold text-base-content">
+                  Your articles
+                  <span class="badge badge-lg badge-outline font-semibold text-base-content/80">
+                    {@articles_count}
+                  </span>
+                </h2>
+                <p class="mt-1 text-sm text-base-content/65">
+                  Search, filter by topic, then continue reading where you left off.
+                </p>
               </div>
-              <div class="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-4">
-                <.link
-                  navigate={~p"/articles/recommendations"}
-                  class="link text-sm font-semibold text-primary"
+              <div class="flex flex-col items-stretch gap-3 sm:items-end">
+                <div class="flex flex-wrap items-center justify-end gap-3">
+                  <.link
+                    navigate={~p"/articles/recommendations"}
+                    class="btn btn-sm btn-ghost gap-2"
+                  >
+                    <.icon name="hero-sparkles" class="h-4 w-4" /> Recommendations
+                  </.link>
+                  <.async_result :let={count} assign={@recommended_count}>
+                    <:loading>
+                      <span class="badge badge-sm badge-ghost">
+                        <span class="loading loading-spinner loading-xs"></span>
+                      </span>
+                    </:loading>
+                    <:failed>
+                      <span class="badge badge-sm badge-ghost">0</span>
+                    </:failed>
+                    <span class={[
+                      "badge badge-sm font-semibold text-base-content/80",
+                      count > 0 && "badge-primary badge-outline"
+                    ]}>
+                      {count}
+                    </span>
+                  </.async_result>
+                </div>
+                <.form
+                  for={@library_form}
+                  id="article-library-search-form"
+                  class="w-full sm:w-80"
+                  phx-change="search"
                 >
-                  See recommendations →
-                </.link>
-                <span class="badge badge-lg badge-outline font-semibold text-base-content/80 self-start">
-                  {@articles_count}
-                </span>
+                  <div class="flex items-end gap-2">
+                    <div class="flex-1">
+                      <.input
+                        field={@library_form[:query]}
+                        type="search"
+                        label="Search"
+                        placeholder="Title, URL, or source"
+                        phx-debounce="250"
+                        disabled={@importing}
+                        class="w-full input"
+                      />
+                    </div>
+                    <button
+                      :if={@query != ""}
+                      type="button"
+                      class="btn btn-sm btn-ghost"
+                      phx-click="clear_search"
+                      aria-label="Clear search"
+                    >
+                      <.icon name="hero-x-mark" class="h-4 w-4" />
+                    </button>
+                  </div>
+                </.form>
               </div>
             </div>
 
@@ -135,7 +211,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                   if(@selected_topic == nil, do: "badge-primary", else: "badge-outline")
                 ]}
               >
-                Todos
+                All
               </button>
               <button
                 :for={topic <- @user_topics}
@@ -147,71 +223,128 @@ defmodule LanglerWeb.ArticleLive.Index do
                   if(@selected_topic == topic, do: "badge-primary", else: "badge-outline")
                 ]}
               >
-                {get_topic_name(@current_user, topic)}
+                {get_topic_name(@current_scope.user, topic)}
               </button>
             </div>
 
             <div
               id="articles"
               phx-update="stream"
-              class="grid gap-4 md:grid-cols-2"
+              class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 articles-grid"
             >
               <div
                 id="articles-empty-state"
                 class={[
-                  "alert border border-dashed border-base-300 text-base-content/70",
+                  "alert border border-dashed border-base-300 bg-base-100/60 text-base-content/70 sm:col-span-2 xl:col-span-3",
                   @articles_count > 0 && "hidden"
                 ]}
               >
-                No articles yet. Import one to get started.
+                <div class="flex flex-wrap items-center justify-between gap-3 w-full">
+                  <span class="text-sm font-semibold">No articles yet.</span>
+                  <.link href="#article-import-form" class="btn btn-sm btn-primary">
+                    Import your first one
+                  </.link>
+                </div>
               </div>
 
-              <div :for={{dom_id, article} <- @streams.articles} id={dom_id} class="relative group">
-                <.link
-                  navigate={~p"/articles/#{article}"}
-                  class="block rounded-2xl no-underline transition hover:-translate-y-1 hover:shadow-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                >
-                  <div class="surface-panel card border border-base-200 bg-base-100/80 shadow">
-                    <div class="card-body gap-4">
-                      <div class="space-y-3">
-                        <p class="text-xl font-semibold leading-snug text-base-content">
-                          {article.title}
-                        </p>
-                        <div class="flex flex-wrap items-center justify-between gap-3 text-xs uppercase tracking-wide text-base-content/60">
-                          <span class="font-semibold">
+              <.card
+                :for={{dom_id, article} <- @streams.articles}
+                id={dom_id}
+                variant={:panel}
+                hover
+                class="relative group h-full"
+              >
+                <:header>
+                  <% topics = top_topics(article) %>
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex flex-col gap-2">
+                      <div class="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">
+                        <span class="inline-flex items-center gap-2">
+                          <span class="badge badge-sm badge-outline">
                             {article.source || URI.parse(article.url).host}
                           </span>
-                          <div class="flex flex-wrap items-center gap-2">
-                            <span class="badge badge-primary badge-outline uppercase tracking-wide">
-                              {article.language}
-                            </span>
-                            <div class="flex flex-wrap gap-1">
-                              <span
-                                :for={
-                                  topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)
-                                }
-                                class="badge badge-xs badge-ghost normal-case"
-                              >
-                                {Topics.topic_name(article.language, topic.topic)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      <p class="line-clamp-3 text-sm text-base-content/70">
-                        {article.content |> String.slice(0, 220)}
-                        {if String.length(article.content || "") > 220, do: "…"}
-                      </p>
-                      <div class="flex items-center justify-between text-xs text-base-content/60">
-                        <span>Imported {format_timestamp(article.inserted_at)}</span>
-                        <span class="inline-flex items-center gap-1 font-semibold text-primary">
-                          Continue <.icon name="hero-arrow-right" class="h-3 w-3" />
+                          <span class="badge badge-sm badge-primary badge-outline uppercase tracking-wide">
+                            {article.language}
+                          </span>
+                        </span>
+                        <span class="text-base-content/40">•</span>
+                        <span class="text-base-content/60">
+                          Imported {format_timestamp(article.inserted_at)}
                         </span>
                       </div>
+                      <.link
+                        navigate={~p"/articles/#{article}"}
+                        class="card-title text-lg font-semibold leading-snug text-base-content no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
+                      >
+                        {article.title || "Untitled article"}
+                      </.link>
                     </div>
+
+                    <details class="dropdown dropdown-end opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition">
+                      <summary class="btn btn-ghost btn-sm btn-circle" aria-label="Article actions">
+                        <.icon name="hero-ellipsis-vertical" class="h-5 w-5" />
+                      </summary>
+                      <ul class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg">
+                        <li>
+                          <.link navigate={~p"/articles/#{article}"}>
+                            <.icon name="hero-arrow-right" class="h-4 w-4" /> Continue reading
+                          </.link>
+                        </li>
+                        <li>
+                          <.link href={article.url} target="_blank">
+                            <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
+                            View original
+                          </.link>
+                        </li>
+                        <li>
+                          <button
+                            type="button"
+                            class="text-error"
+                            phx-click="delete"
+                            phx-value-id={article.id}
+                            phx-confirm="Remove this article from your library?"
+                          >
+                            <.icon name="hero-trash" class="h-4 w-4" /> Remove
+                          </button>
+                        </li>
+                      </ul>
+                    </details>
                   </div>
-                </.link>
-              </div>
+
+                  <div :if={topics != []} class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
+                      Topics
+                    </span>
+                    <span
+                      :for={topic <- topics}
+                      class="badge badge-sm rounded-full border border-primary/20 bg-primary/10 text-primary"
+                    >
+                      {Topics.topic_name(article.language, topic.topic)}
+                    </span>
+                  </div>
+                </:header>
+
+                <p
+                  :if={article.content && article.content != ""}
+                  class="line-clamp-3 text-sm text-base-content/70"
+                >
+                  {article.content |> String.slice(0, 220)}
+                  {if String.length(article.content || "") > 220, do: "…"}
+                </p>
+
+                <:actions>
+                  <div class="flex items-center justify-between gap-3 w-full">
+                    <div class="flex flex-wrap items-center gap-2 text-xs text-base-content/60">
+                      <span :if={article.unique_word_count} class="badge badge-sm badge-ghost">
+                        {article.unique_word_count} unique words
+                      </span>
+                    </div>
+                    <.link navigate={~p"/articles/#{article}"} class="btn btn-sm btn-primary gap-2">
+                      Continue <.icon name="hero-arrow-right" class="h-4 w-4" />
+                    </.link>
+                  </div>
+                </:actions>
+              </.card>
             </div>
           </div>
         </div>
@@ -229,6 +362,24 @@ defmodule LanglerWeb.ArticleLive.Index do
      socket
      |> assign(:selected_source, source)
      |> assign(:form, to_form(changeset, as: :article))}
+  end
+
+  def handle_event("search", %{"library" => params}, socket) do
+    query = Map.get(params, "query", "") |> to_string()
+
+    {:noreply,
+     socket
+     |> assign(:query, query)
+     |> assign(:library_form, to_form(%{"query" => query}, as: :library))
+     |> refresh_articles()}
+  end
+
+  def handle_event("clear_search", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:query, "")
+     |> assign(:library_form, to_form(%{"query" => ""}, as: :library))
+     |> refresh_articles()}
   end
 
   def handle_event("import", %{"article" => %{"url" => url}}, socket) do
@@ -255,34 +406,32 @@ defmodule LanglerWeb.ArticleLive.Index do
   end
 
   def handle_event("filter_topic", %{"topic" => ""}, socket) do
-    user_id = socket.assigns.current_user.id
-    articles = Content.list_articles_for_user(user_id)
-
     {:noreply,
      socket
      |> assign(:selected_topic, nil)
-     |> assign(:articles_count, length(articles))
-     |> stream(:articles, articles, reset: true)}
+     |> refresh_articles()}
   end
 
   def handle_event("filter_topic", %{"topic" => topic}, socket) do
-    user_id = socket.assigns.current_user.id
-    articles = Content.get_articles_by_topic(topic, user_id)
-
     {:noreply,
      socket
      |> assign(:selected_topic, topic)
-     |> assign(:articles_count, length(articles))
-     |> stream(:articles, articles, reset: true)}
+     |> refresh_articles()}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
     with {:ok, article_id} <- parse_id(id),
-         {:ok, _} <- Content.delete_article_for_user(socket.assigns.current_user.id, article_id) do
+         {:ok, _} <-
+           Content.delete_article_for_user(socket.assigns.current_scope.user.id, article_id) do
+      user_id = socket.assigns.current_scope.user.id
+
       {:noreply,
        socket
        |> update(:articles_count, &max(&1 - 1, 0))
        |> stream_delete(:articles, %{id: article_id})
+       |> assign_async(:recommended_count, fn ->
+         {:ok, %{recommended_count: recommended_count(user_id)}}
+       end)
        |> put_flash(:info, "Article removed")}
     else
       {:error, :not_found} ->
@@ -374,7 +523,7 @@ defmodule LanglerWeb.ArticleLive.Index do
   end
 
   defp process_article_import(socket, trimmed, opts) do
-    user = socket.assigns.current_user
+    user = socket.assigns.current_scope.user
     socket = assign(socket, importing: true)
 
     case ArticleImporter.import_from_url(user, trimmed) do
@@ -388,15 +537,31 @@ defmodule LanglerWeb.ArticleLive.Index do
     form_payload = if opts[:keep_url], do: %{"url" => trimmed}, else: %{"url" => ""}
     flash_message = opts[:flash] || "Imported #{article.title || article.url}"
 
-    {:ok,
-     socket
-     |> put_flash(:info, flash_message)
-     |> assign(
-       importing: false,
-       form: to_form(form_payload, as: :article),
-       articles_count: socket.assigns.articles_count + count_delta
-     )
-     |> stream_insert(:articles, article, at: 0)}
+    socket =
+      socket
+      |> put_flash(:info, flash_message)
+      |> assign(
+        importing: false,
+        form: to_form(form_payload, as: :article),
+        articles_count: socket.assigns.articles_count + count_delta
+      )
+
+    socket =
+      if socket.assigns.selected_topic || socket.assigns.query != "" do
+        refresh_articles(socket)
+      else
+        stream_insert(socket, :articles, article, at: 0)
+      end
+
+    user_id = socket.assigns.current_scope.user.id
+
+    socket =
+      socket
+      |> assign_async(:recommended_count, fn ->
+        {:ok, %{recommended_count: recommended_count(user_id)}}
+      end)
+
+    {:ok, socket}
   end
 
   defp handle_import_error(socket, reason) do
@@ -406,8 +571,37 @@ defmodule LanglerWeb.ArticleLive.Index do
      |> assign(importing: false)}
   end
 
-  defp url_input_classes(nil), do: "w-full input"
-  defp url_input_classes(_source), do: "w-full input pr-40"
+  defp refresh_articles(socket) do
+    user_id = socket.assigns.current_scope.user.id
+    query = socket.assigns.query
+
+    articles =
+      Content.list_articles_for_user(user_id,
+        query: query,
+        topic: socket.assigns.selected_topic
+      )
+
+    socket
+    |> assign(:articles_count, length(articles))
+    |> stream(:articles, articles, reset: true)
+  end
+
+  defp top_topics(article) do
+    article
+    |> Map.get(:article_topics, [])
+    |> Enum.sort_by(fn topic -> topic_confidence(topic) end, :desc)
+    |> Enum.take(3)
+  end
+
+  defp topic_confidence(%{confidence: %Decimal{} = confidence}), do: Decimal.to_float(confidence)
+  defp topic_confidence(%{confidence: confidence}) when is_number(confidence), do: confidence
+  defp topic_confidence(_), do: 0.0
+
+  defp recommended_count(user_id) do
+    user_id
+    |> Content.get_recommended_articles(@recommendations_limit)
+    |> length()
+  end
 
   defp curated_sources do
     [

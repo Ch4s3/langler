@@ -8,7 +8,7 @@ defmodule Langler.Content.RecommendationScorer do
 
   import Ecto.Query, warn: false
   alias Langler.Accounts
-  alias Langler.Content.{Article, DiscoveredArticle, Sentence}
+  alias Langler.Content.{Article, Classifier, DiscoveredArticle, Sentence}
   alias Langler.Repo
   alias Langler.Study.FSRSItem
   alias Langler.Vocabulary.{Word, WordOccurrence}
@@ -20,14 +20,47 @@ defmodule Langler.Content.RecommendationScorer do
   Scores an article for a user combining topic match and vocabulary novelty.
   For articles without extracted words (e.g., discovered but not imported), only uses topic score.
   """
+  @spec score_article_for_user(Article.t(), integer()) :: float()
   @spec score_article_for_user(Article.t(), integer(), map()) :: float()
   def score_article_for_user(%Article{} = article, user_id, weights \\ @default_weights) do
+    has_words = has_words?(article.id)
+    score_article_for_user_optimized(article, user_id, has_words, weights)
+  end
+
+  @doc """
+  Optimized version that accepts pre-computed has_words flag to avoid query.
+  Also accepts pre-computed user word frequencies and FSRS word IDs for batch processing.
+  """
+  @spec score_article_for_user_optimized(Article.t(), integer(), boolean(), map()) :: float()
+  @spec score_article_for_user_optimized(
+          Article.t(),
+          integer(),
+          boolean(),
+          map(),
+          map() | nil
+        ) :: float()
+  @spec score_article_for_user_optimized(
+          Article.t(),
+          integer(),
+          boolean(),
+          map(),
+          map() | nil,
+          MapSet.t() | nil
+        ) :: float()
+  def score_article_for_user_optimized(
+        %Article{} = article,
+        user_id,
+        has_words,
+        weights \\ @default_weights,
+        user_word_freqs \\ nil,
+        fsrs_word_ids \\ nil
+      ) do
     topic_score = calculate_topic_score(article, user_id)
 
     # Only calculate vocab score if article has words extracted
     vocab_score =
-      if has_words?(article.id) do
-        calculate_vocabulary_novelty(article, user_id)
+      if has_words do
+        calculate_vocabulary_novelty_optimized(article, user_id, user_word_freqs, fsrs_word_ids)
       else
         0.0
       end
@@ -43,6 +76,31 @@ defmodule Langler.Content.RecommendationScorer do
     topic_score * effective_weights.topic + vocab_score * effective_weights.vocab
   end
 
+  defp calculate_vocabulary_novelty_optimized(%Article{} = article, user_id, nil, nil) do
+    # Fallback to regular calculation if not provided
+    calculate_vocabulary_novelty(article, user_id)
+  end
+
+  defp calculate_vocabulary_novelty_optimized(
+         %Article{} = article,
+         _user_id,
+         user_word_freqs,
+         fsrs_word_ids
+       ) do
+    article_words = get_words_for_article(article.id)
+
+    if Enum.empty?(article_words) do
+      0.0
+    else
+      total =
+        Enum.reduce(article_words, 0.0, fn word, acc ->
+          calculate_word_novelty_score(word, user_word_freqs, fsrs_word_ids, acc)
+        end)
+
+      total / max(length(article_words), 1)
+    end
+  end
+
   defp has_words?(article_id) do
     Langler.Content.Sentence
     |> where([s], s.article_id == ^article_id)
@@ -52,11 +110,23 @@ defmodule Langler.Content.RecommendationScorer do
 
   @doc """
   Calculates topic-based score for an article.
+  Uses preloaded article_topics if available to avoid N+1 queries.
   """
   @spec calculate_topic_score(Article.t(), integer()) :: float()
   def calculate_topic_score(%Article{} = article, user_id) do
     user_topics = Accounts.get_user_topic_preferences(user_id)
-    article_topics = Langler.Content.list_topics_for_article(article.id)
+
+    # Use preloaded topics if available, otherwise fetch
+    article_topics =
+      if Ecto.assoc_loaded?(article.article_topics) do
+        article.article_topics
+      else
+        Langler.Content.list_topics_for_article(article.id)
+      end
+
+    sports_topic = "deportes"
+    is_sports_article = Enum.any?(article_topics, fn at -> at.topic == sports_topic end)
+    has_sports_preference = Map.has_key?(user_topics, sports_topic)
 
     base_score =
       Enum.reduce(article_topics, 0.0, fn at, acc ->
@@ -70,7 +140,11 @@ defmodule Langler.Content.RecommendationScorer do
     days_old = DateTime.diff(DateTime.utc_now(), article.inserted_at, :day)
     freshness_bonus = max(0.0, 1.0 - days_old / 30.0) * 0.1
 
-    base_score + freshness_bonus
+    if is_sports_article and not has_sports_preference do
+      0.05
+    else
+      base_score + freshness_bonus
+    end
   end
 
   @doc """
@@ -128,7 +202,8 @@ defmodule Langler.Content.RecommendationScorer do
   end
 
   # Count word occurrences across user's imported articles
-  defp get_user_word_frequencies(user_id) do
+  # Made public for batch optimization in Content.get_recommended_articles
+  def get_user_word_frequencies(user_id) do
     # Get all article IDs for this user
     user_article_ids =
       Langler.Content.ArticleUser
@@ -150,7 +225,8 @@ defmodule Langler.Content.RecommendationScorer do
   end
 
   # Get word IDs from user's FSRS items
-  defp get_user_fsrs_word_ids(user_id) do
+  # Made public for batch optimization in Content.get_recommended_articles
+  def get_user_fsrs_word_ids(user_id) do
     FSRSItem
     |> where([fi], fi.user_id == ^user_id)
     |> select([fi], fi.word_id)
@@ -324,8 +400,17 @@ defmodule Langler.Content.RecommendationScorer do
     topic_score = calculate_topic_score_safe(article, user_id)
     challenge_bonus = calculate_challenge_bonus(article_difficulty, user_level)
 
-    level_match_score * 0.4 + vocab_novelty_score * 0.3 + topic_score * 0.2 +
-      challenge_bonus * 0.1
+    base_score =
+      level_match_score * 0.4 + vocab_novelty_score * 0.3 + topic_score * 0.2 +
+        challenge_bonus * 0.1
+
+    # If topic score is very low (no match or sports without preference), heavily penalize
+    # This prevents non-matching articles from scoring high due to other factors
+    if topic_score < 0.1 do
+      base_score * 0.1
+    else
+      base_score
+    end
   end
 
   defp calculate_level_match_score(article_difficulty, user_level) do
@@ -373,11 +458,52 @@ defmodule Langler.Content.RecommendationScorer do
     end
   end
 
-  defp calculate_topic_score_for_discovered(%DiscoveredArticle{} = _article, _user_id) do
-    # For discovered articles, we may not have topic data yet
-    # Return neutral score for now
-    # Future: Extract topics from discovered articles if available
-    0.5
+  defp calculate_topic_score_for_discovered(%DiscoveredArticle{} = article, user_id) do
+    # Classify the article title and summary to get topics
+    content = prepare_discovered_article_text(article)
+    language = article.language || "spanish"
+
+    classified_topics =
+      if String.trim(content) != "" do
+        Classifier.classify(content, language)
+      else
+        []
+      end
+
+    # Get user topic preferences
+    user_topics = Accounts.get_user_topic_preferences(user_id)
+
+    # Score based on matching topics
+    base_score =
+      Enum.reduce(classified_topics, 0.0, fn {topic, confidence}, acc ->
+        user_pref = Map.get(user_topics, topic, Decimal.new("1.0"))
+        weight = Decimal.to_float(user_pref)
+        acc + confidence * weight
+      end)
+
+    # Special handling for sports articles: heavily penalize if user has no preference
+    is_sports = Enum.any?(classified_topics, fn {topic, _conf} -> topic == "deportes" end)
+    has_sports_preference = Map.has_key?(user_topics, "deportes")
+
+    cond do
+      is_sports and not has_sports_preference ->
+        # Heavy penalty for sports articles when user has no preference
+        0.05
+
+      base_score > 0.0 ->
+        # Article matches user preferences
+        base_score
+
+      true ->
+        # No topic match, but not sports - neutral score
+        0.3
+    end
+  end
+
+  defp prepare_discovered_article_text(%DiscoveredArticle{} = article) do
+    [article.title, article.summary]
+    |> Enum.filter(&(&1 && &1 != ""))
+    |> Enum.join(" ")
   end
 
   @doc """

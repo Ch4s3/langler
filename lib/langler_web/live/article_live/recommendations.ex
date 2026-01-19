@@ -6,19 +6,19 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
   use LanglerWeb, :live_view
 
   alias Langler.Content
-  alias Langler.Content.ArticleImporter
-  alias Langler.Content.Topics
+  alias Langler.Content.{ArticleImporter, Classifier, Topics}
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
-    current_user = scope.user
-    recommended_articles = Content.get_recommended_articles(current_user.id, 10)
+    user = scope.user
+    user_id = user.id
 
     {:ok,
      socket
-     |> assign(:current_user, current_user)
      |> assign(:importing, false)
-     |> assign(:recommended_articles, recommended_articles)
+     |> assign_async(:recommended_articles, fn ->
+       {:ok, %{recommended_articles: Content.get_recommended_articles(user_id, 10)}}
+     end)
      |> assign(:form, to_form(%{"url" => ""}, as: :article))}
   end
 
@@ -35,19 +35,40 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
             </p>
           </div>
 
-          <div
-            :if={length(@recommended_articles) == 0}
-            class="mt-6 rounded-2xl border border-dashed border-base-200 bg-base-50/80 p-6 text-base-content/70"
-          >
-            No recommendations available yet. Import some articles to get personalized suggestions.
-          </div>
+          <.async_result :let={recommended_articles} assign={@recommended_articles}>
+            <:loading>
+              <div class="mt-6 rounded-2xl border border-dashed border-base-200 bg-base-50/80 p-6 text-base-content/70">
+                <div class="flex items-center gap-2">
+                  <span class="loading loading-spinner loading-sm"></span>
+                  <span>Loading recommendations...</span>
+                </div>
+              </div>
+            </:loading>
+            <:failed :let={_failure}>
+              <div class="mt-6 rounded-2xl border border-dashed border-base-200 bg-base-50/80 p-6 text-base-content/70">
+                Unable to load recommendations.
+              </div>
+            </:failed>
+            <div
+              :if={length(recommended_articles) == 0}
+              class="mt-6 rounded-2xl border border-dashed border-base-200 bg-base-50/80 p-6 text-base-content/70"
+            >
+              No recommendations available yet. Import some articles to get personalized suggestions.
+            </div>
 
-          <div :if={length(@recommended_articles) > 0} class="grid gap-4 md:grid-cols-2">
-            <div :for={article <- @recommended_articles} class="relative group">
-              <div class="section-card card bg-base-100/90 shadow hover:-translate-y-1 hover:shadow-2xl transition">
-                <div class="card-body gap-5">
+            <div
+              :if={length(recommended_articles) > 0}
+              class="grid gap-4 md:grid-cols-2 recommendations-grid"
+            >
+              <.card
+                :for={article <- recommended_articles}
+                variant={:default}
+                hover
+                class="section-card bg-base-100/90"
+              >
+                <:header>
                   <div class="space-y-2">
-                    <p class="text-lg font-semibold text-base-content">
+                    <p class="card-title text-lg font-semibold text-base-content">
                       {article.title || article.url}
                     </p>
                     <p class="text-xs uppercase tracking-[0.2em] text-base-content/50">
@@ -59,13 +80,13 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                       </span>
                       <span
                         :if={article.is_discovered}
-                        class="badge badge-sm badge-info/80 text-white"
+                        class="badge badge-sm badge-info/80 text-base-content/50"
                       >
                         New
                       </span>
                       <span
-                        :for={topic <- Content.list_topics_for_article(article.id) |> Enum.take(3)}
-                        :if={article.id}
+                        :for={topic <- top_topics(article)}
+                        :if={top_topics(article) != []}
                         class="badge badge-sm badge-ghost"
                       >
                         {Topics.topic_name(article.language, topic.topic)}
@@ -73,7 +94,7 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                     </div>
                     <% difficulty = difficulty_info(article) %>
                     <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
-                      <span class="uppercase tracking-[0.2em] text-base-content/40">Difficulty</span>
+                      <span class="uppercase tracking-[0.2em] text-base-content/70">Difficulty</span>
                       <div
                         class="flex items-center gap-1"
                         aria-label={"Difficulty #{difficulty.rating} of 4"}
@@ -90,14 +111,18 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                       </div>
                     </div>
                   </div>
-                  <p
-                    :if={article.content && article.content != ""}
-                    class="line-clamp-3 text-sm text-base-content/70"
-                  >
-                    {article.content |> String.slice(0, 220)}
-                    {if String.length(article.content || "") > 220, do: "…"}
-                  </p>
-                  <div class="flex flex-wrap items-center justify-between gap-3 text-sm">
+                </:header>
+
+                <p
+                  :if={article.content && article.content != ""}
+                  class="line-clamp-3 text-sm text-base-content/70"
+                >
+                  {article.content |> String.slice(0, 220)}
+                  {if String.length(article.content || "") > 220, do: "…"}
+                </p>
+
+                <:actions>
+                  <div class="flex flex-wrap items-center justify-between gap-3 w-full text-sm">
                     <span class="text-xs text-base-content/60">
                       {if article.published_at do
                         "Published #{format_timestamp(article.published_at)}"
@@ -116,10 +141,10 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
                       <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import
                     </button>
                   </div>
-                </div>
-              </div>
+                </:actions>
+              </.card>
             </div>
-          </div>
+          </.async_result>
         </div>
       </div>
     </Layouts.app>
@@ -127,7 +152,8 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
   end
 
   def handle_event("import_recommended", %{"url" => url}, socket) do
-    user = socket.assigns.current_user
+    user = socket.assigns.current_scope.user
+    user_id = user.id
     socket = assign(socket, importing: true)
 
     case ArticleImporter.import_from_url(user, url) do
@@ -137,21 +163,20 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
           Content.mark_discovered_article_imported(discovered_article.id, user.id)
         end
 
-        # Remove from recommendations and refresh list
-        recommended_articles =
-          socket.assigns.recommended_articles
-          |> Enum.reject(&(&1.url == url))
-
         {:noreply,
          socket
          |> put_flash(:info, "Imported #{article.title}")
-         |> assign(importing: false, recommended_articles: recommended_articles)}
+         |> assign(:importing, false)
+         |> assign_async(:recommended_articles, fn ->
+           articles = Content.get_recommended_articles(user_id, 10)
+           {:ok, %{recommended_articles: articles}}
+         end)}
 
       {:error, reason} ->
         {:noreply,
          socket
          |> put_flash(:error, humanize_error(reason))
-         |> assign(importing: false)}
+         |> assign(:importing, false)}
     end
   end
 
@@ -262,4 +287,34 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
   defp format_timestamp(datetime) do
     Calendar.strftime(datetime, "%b %d, %Y")
   end
+
+  defp top_topics(%{article_topics: topics}) when is_list(topics) and topics != [] do
+    topics
+    |> Enum.sort_by(fn topic -> topic_confidence(topic) end, :desc)
+    |> Enum.take(3)
+  end
+
+  # For articles without topics (regular or discovered), classify them
+  defp top_topics(article) do
+    title = Map.get(article, :title, "")
+    content = Map.get(article, :content, "") || Map.get(article, :summary, "")
+    language = Map.get(article, :language, "spanish") || "spanish"
+
+    content_text = [title, content] |> Enum.filter(&(&1 && &1 != "")) |> Enum.join(" ")
+
+    if String.trim(content_text) != "" do
+      Classifier.classify(content_text, language)
+      |> Enum.map(fn {topic, confidence} ->
+        %{topic: topic, confidence: confidence}
+      end)
+      |> Enum.sort_by(&topic_confidence/1, :desc)
+      |> Enum.take(3)
+    else
+      []
+    end
+  end
+
+  defp topic_confidence(%{confidence: %Decimal{} = confidence}), do: Decimal.to_float(confidence)
+  defp topic_confidence(%{confidence: confidence}) when is_number(confidence), do: confidence
+  defp topic_confidence(_), do: 0.0
 end

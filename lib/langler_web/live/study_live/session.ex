@@ -120,98 +120,79 @@ defmodule LanglerWeb.StudyLive.Session do
     >
       <%!-- Front side (swap-off) - Word, Stats, Rating --%>
       <div class="swap-off w-full h-full">
-        <div class="card bg-base-100 shadow-xl h-full w-full flex flex-col">
-          <div class="card-body gap-4 overflow-y-auto flex-1 min-h-0">
-            <%!-- Word --%>
-            <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
-              <p class="text-4xl font-semibold text-base-content text-center">
-                {@word.lemma || @word.normalized_form}
-              </p>
-              <p class="text-sm text-base-content/70">
-                Click or press spacebar to see definition
-              </p>
+        <.card variant={:default} class="h-full w-full flex flex-col">
+          <%!-- Word --%>
+          <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
+            <p class="text-4xl font-semibold text-base-content text-center">
+              {@word.lemma || @word.normalized_form}
+            </p>
+            <p class="text-sm text-base-content/70">
+              Click or press spacebar to see definition
+            </p>
+          </div>
+
+          <div class="divider my-2"></div>
+
+          <%!-- Stats --%>
+          <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
+            <div>
+              <p class="font-semibold text-base-content">Ease factor</p>
+              <p>{format_decimal(@item.ease_factor || 2.5)}</p>
             </div>
-
-            <div class="divider my-2"></div>
-
-            <%!-- Stats --%>
-            <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
-              <div>
-                <p class="font-semibold text-base-content">Ease factor</p>
-                <p>{format_decimal(@item.ease_factor || 2.5)}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Interval</p>
-                <p>{interval_label(@item.interval)}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Repetitions</p>
-                <p>{@item.repetitions || 0}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Recent history</p>
-                <div class="flex gap-1">
-                  <span
-                    :for={score <- recent_history(@item.quality_history)}
-                    class={[
-                      "h-2.5 w-6 rounded-full bg-base-300",
-                      history_pill_class(score)
-                    ]}
-                    aria-label={"Score #{score}"}
-                  />
-                </div>
-              </div>
+            <div>
+              <p class="font-semibold text-base-content">Interval</p>
+              <p>{interval_label(@item.interval)}</p>
             </div>
-
-            <div class="divider my-2"></div>
-
-            <%!-- Rating buttons --%>
-            <div class="flex flex-col gap-2">
-              <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
-                Rate this card
-              </p>
-              <div class="flex flex-wrap gap-2">
-                <button
-                  :for={button <- @quality_buttons}
-                  type="button"
+            <div>
+              <p class="font-semibold text-base-content">Repetitions</p>
+              <p>{@item.repetitions || 0}</p>
+            </div>
+            <div>
+              <p class="font-semibold text-base-content">Recent history</p>
+              <div class="flex gap-1">
+                <span
+                  :for={score <- recent_history(@item.quality_history)}
                   class={[
-                    "btn btn-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring focus-visible:ring-offset-2 focus-visible:ring-primary/40",
-                    button.class
+                    "h-2.5 w-6 rounded-full bg-base-300",
+                    history_pill_class(score)
                   ]}
-                  phx-click="rate_card"
-                  phx-value-item-id={@item.id}
-                  phx-value-quality={button.score}
-                  phx-stop-propagation
-                >
-                  {button.label}
-                </button>
+                  aria-label={"Score #{score}"}
+                />
               </div>
             </div>
           </div>
-        </div>
+
+          <div class="divider my-2"></div>
+
+          <:actions>
+            <.card_rating
+              item_id={@item.id}
+              buttons={@quality_buttons}
+              event="rate_card"
+            />
+          </:actions>
+        </.card>
       </div>
 
       <%!-- Back side (swap-on) - Definition only --%>
       <div class="swap-on w-full h-full">
-        <div class="card bg-base-100 shadow-xl h-full w-full flex flex-col">
-          <div class="card-body gap-4 overflow-y-auto flex-1 min-h-0 flex flex-col items-center justify-center">
-            <div class="flex flex-col gap-2 w-full">
-              <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
-                Definition
-              </p>
-              <%= if @definitions != [] do %>
-                <ol class="space-y-2 text-sm leading-relaxed text-base-content/90">
-                  <li :for={{definition, idx} <- Enum.with_index(@definitions, 1)} class="break-words">
-                    <span class="font-semibold text-primary/80">{idx}.</span>
-                    <span class="ml-2 break-words">{definition}</span>
-                  </li>
-                </ol>
-              <% else %>
-                <p class="text-sm text-base-content/70">No definition available</p>
-              <% end %>
-            </div>
+        <.card variant={:default} class="h-full w-full flex flex-col">
+          <div class="flex flex-col gap-2 w-full items-center justify-center flex-1 min-h-0">
+            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
+              Definition
+            </p>
+            <%= if @definitions != [] do %>
+              <ol class="space-y-2 text-sm leading-relaxed text-base-content/90">
+                <li :for={{definition, idx} <- Enum.with_index(@definitions, 1)} class="break-words">
+                  <span class="font-semibold text-primary/80">{idx}.</span>
+                  <span class="ml-2 break-words">{definition}</span>
+                </li>
+              </ol>
+            <% else %>
+              <p class="text-sm text-base-content/70">No definition available</p>
+            <% end %>
           </div>
-        </div>
+        </.card>
       </div>
     </div>
     """

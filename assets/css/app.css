@@ -22,6 +22,16 @@
   animation: fade-in 0.3s ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
+  }
+
+  .study-card {
+    transition: none;
+  }
+}
+
 /* 3D Flip Card Container for Study Session */
 .study-card-container {
   perspective: 1000px;
@@ -590,20 +600,25 @@ body {
     border-bottom-left-radius: 1.25rem;
   }
 
-  body:has(#chat-drawer-container.chat-open) main {
-    width: 50vw;
-    max-width: 50vw;
-    margin-left: 0;
-    margin-right: auto;
-    padding-right: clamp(1rem, 2.5vw, 2.5rem);
-    transition: width 200ms ease, max-width 200ms ease, margin 200ms ease, padding 200ms ease;
-  }
+.body-chat-open main {
+  width: 50vw;
+  max-width: 50vw;
+  margin-left: 0;
+  margin-right: auto;
+  padding-right: clamp(1rem, 2.5vw, 2.5rem);
+  transition: width 200ms ease, max-width 200ms ease, margin 200ms ease, padding 200ms ease;
+}
 
-  body:has(#chat-drawer-container.chat-open) main > .page-shell {
-    width: 100%;
-    max-width: 100%;
-    transition: width 200ms ease, max-width 200ms ease;
-  }
+.body-chat-open main > .page-shell {
+  width: 100%;
+  max-width: 100%;
+  transition: width 200ms ease, max-width 200ms ease;
+}
+
+.body-chat-open main .recommendations-grid,
+.body-chat-open main .articles-grid {
+  grid-template-columns: 1fr !important;
+}
 
   /* Fullscreen mode */
   #chat-drawer-container.chat-fullscreen {
@@ -619,12 +634,12 @@ body {
     inset: 0;
   }
 
-  body:has(#chat-drawer-container.chat-fullscreen.chat-open) main {
-    width: 0;
-    max-width: 0;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+.body-chat-fullscreen main {
+  width: 0;
+  max-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   }
 
   .chat-drawer-main.chat-drawer-fullscreen {

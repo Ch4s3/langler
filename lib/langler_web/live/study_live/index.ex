@@ -14,6 +14,7 @@ defmodule LanglerWeb.StudyLive.Index do
   alias Langler.Vocabulary
   alias Langler.Vocabulary.Word
   alias MapSet
+  alias Phoenix.LiveView.JS
   require Logger
 
   @filters [
@@ -37,7 +38,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
     # Calculate user level and get recommendations
     user_level = Study.get_user_vocabulary_level(scope.user.id)
-    recommended_articles = Content.get_recommended_articles_for_user(scope.user.id, 5)
+    user_id = scope.user.id
 
     {:ok,
      socket
@@ -48,10 +49,15 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:quality_buttons, @quality_buttons)
      |> assign(:stats, build_stats(items))
      |> assign(:all_items, items)
+     |> assign(:visible_count, length(visible_items))
      |> assign(:flipped_cards, MapSet.new())
      |> assign(:expanded_conjugations, MapSet.new())
+     |> assign(:conjugations_loading, MapSet.new())
+     |> assign(:definitions_loading, MapSet.new())
      |> assign(:user_level, user_level)
-     |> assign(:recommended_articles, recommended_articles)
+     |> assign_async(:recommended_articles, fn ->
+       {:ok, %{recommended_articles: Content.get_recommended_articles_for_user(user_id, 5)}}
+     end)
      |> stream(:items, visible_items)}
   end
 
@@ -105,49 +111,64 @@ defmodule LanglerWeb.StudyLive.Index do
             <div class="flex flex-wrap gap-3 text-sm font-semibold">
               <.link
                 navigate={~p"/study/session"}
-                class="btn btn-sm btn-primary text-white shadow transition hover:-translate-y-0.5"
+                class="btn btn-sm btn-primary text-white shadow transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
                 <.icon name="hero-play" class="h-4 w-4" /> Start Study Session
               </.link>
               <.link
                 navigate={~p"/articles"}
-                class="btn btn-sm btn-ghost border border-dashed border-base-300"
+                class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
                 Go to library
               </.link>
               <.link
                 navigate={~p"/articles/new"}
-                class="btn btn-sm btn-ghost border border-dashed border-base-300"
+                class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
                 Import article
               </.link>
             </div>
 
-            <div class="flex flex-col gap-3 rounded-2xl border border-base-200 bg-base-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p class="text-sm font-semibold text-base-content/70">Search your deck</p>
+            <div class="flex flex-col gap-3 rounded-2xl border border-base-200 bg-base-200/30 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-base-content/80">Search your deck</p>
+                <p class="text-xs text-base-content/60">
+                  Type a lemma to narrow results across filters.
+                </p>
+              </div>
               <form id="study-search-form" phx-change="search_items" class="w-full sm:w-auto">
-                <label class="input input-bordered flex items-center gap-2 w-full sm:w-80">
+                <label class="input input-bordered flex items-center gap-2 w-full sm:w-96 focus-within:ring focus-within:ring-primary/30 phx-change-loading:opacity-70">
                   <.icon name="hero-magnifying-glass" class="h-4 w-4 text-base-content/60" />
                   <input
                     type="text"
                     name="search_query"
                     id="study-search-input"
                     value={@search_query}
-                    placeholder="Search words..."
+                    placeholder="Search words…"
                     phx-debounce="300"
                     autocomplete="off"
                     class="grow"
+                    aria-label="Search words"
                   />
+                  <button
+                    :if={@search_query != ""}
+                    type="button"
+                    class="btn btn-ghost btn-xs"
+                    phx-click={JS.push("clear_search") |> JS.focus(to: "#study-search-input")}
+                    aria-label="Clear search"
+                  >
+                    <.icon name="hero-x-mark" class="h-4 w-4" />
+                  </button>
                 </label>
               </form>
             </div>
 
-            <div class="tabs tabs-boxed bg-base-200/70 p-1 text-sm font-semibold text-base-content/70">
+            <div class="tabs tabs-boxed bg-base-200/70 p-1 text-sm font-semibold text-base-content/70 overflow-x-auto">
               <button
                 :for={filter <- @filters}
                 type="button"
                 class={[
-                  "tab tab-lg rounded-xl transition",
+                  "tab tab-sm sm:tab-lg rounded-xl whitespace-nowrap transition duration-200 focus-visible:ring focus-visible:ring-primary/40",
                   @filter == filter.id && "tab-active bg-base-100 text-base-content shadow"
                 ]}
                 phx-click="set_filter"
@@ -156,45 +177,74 @@ defmodule LanglerWeb.StudyLive.Index do
                 {filter.label}
               </button>
             </div>
+          </div>
+        </div>
 
-            <%!-- Recommended Articles Section --%>
-            <div
-              :if={@recommended_articles != [] && @filter == :now}
-              class="card section-card bg-base-100/95"
-            >
-              <div class="card-body">
-                <h2 class="card-title">
-                  <.icon name="hero-light-bulb" class="h-6 w-6 text-primary" /> Recommended Reading
-                  <span class="badge badge-primary badge-sm">
-                    {@user_level.cefr_level || "Learning"}
-                  </span>
-                </h2>
-                <p class="text-sm text-base-content/70">
-                  Articles matched to your vocabulary level
-                </p>
+        <%!-- Recommended Articles Section --%>
+        <.async_result :let={recommended_articles} assign={@recommended_articles}>
+          <:loading>
+            <div :if={@filter == :now} class="card section-card bg-base-100/95">
+              <div class="card-body gap-4">
+                <div class="flex items-center gap-2">
+                  <span class="loading loading-spinner loading-sm"></span>
+                  <span class="text-sm text-base-content/70">Loading recommendations...</span>
+                </div>
+              </div>
+            </div>
+          </:loading>
+          <:failed :let={_failure}>
+            <div :if={@filter == :now} class="card section-card bg-base-100/95">
+              <div class="card-body gap-4">
+                <p class="text-sm text-base-content/70">Unable to load recommendations.</p>
+              </div>
+            </div>
+          </:failed>
+          <div
+            :if={recommended_articles != [] && @filter == :now}
+            class="card section-card bg-base-100/95"
+          >
+            <div class="card-body gap-4">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="space-y-1">
+                  <h2 class="card-title">
+                    <.icon name="hero-light-bulb" class="h-6 w-6 text-primary" /> Recommended reading
+                    <span class="badge badge-primary badge-sm">
+                      {@user_level.cefr_level || "Learning"}
+                    </span>
+                  </h2>
+                  <p class="text-sm text-base-content/70">
+                    Hand-picked articles matched to your vocabulary level.
+                  </p>
+                </div>
+                <.link
+                  navigate={~p"/articles"}
+                  class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
+                >
+                  Browse more
+                </.link>
+              </div>
 
-                <div class="space-y-3 mt-4">
-                  <div
-                    :for={rec <- @recommended_articles}
-                    class="flex items-start gap-3 p-3 rounded-lg bg-base-200/50
-                              hover:bg-base-200 transition"
-                  >
-                    <div class="flex-1">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <.card
+                  :for={rec <- recommended_articles}
+                  variant={:border}
+                  hover
+                  class="bg-base-100/80"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
                       <.link
                         href={rec.article.url}
                         target="_blank"
-                        class="font-semibold hover:text-primary"
+                        class="inline-flex items-start gap-2 font-semibold text-base-content hover:text-primary focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/40 rounded"
                       >
-                        {rec.article.title}
+                        <span class="min-w-0 break-words">{rec.article.title}</span>
+                        <.icon
+                          name="hero-arrow-top-right-on-square"
+                          class="mt-0.5 h-4 w-4 shrink-0 opacity-60"
+                        />
                       </.link>
-                      <button
-                        phx-click="import_article"
-                        phx-value-id={rec.article.id}
-                        class="btn btn-xs btn-primary ml-2"
-                      >
-                        Import
-                      </button>
-                      <div class="flex gap-2 mt-1">
+                      <div class="mt-2 flex flex-wrap gap-2">
                         <span class="badge badge-sm">
                           Level {trunc(rec.article.difficulty_score || 0)}
                         </span>
@@ -207,15 +257,55 @@ defmodule LanglerWeb.StudyLive.Index do
                       </div>
                     </div>
                     <div class="text-right">
-                      <div class="text-xs text-base-content/60">Match</div>
+                      <div class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
+                        Match
+                      </div>
                       <div class="text-lg font-semibold text-primary">
-                        {trunc(rec.score * 100)}%
+                        {trunc((rec.score || 0) * 100)}%
                       </div>
                     </div>
                   </div>
-                </div>
+
+                  <progress
+                    value={trunc((rec.score || 0) * 100)}
+                    max="100"
+                    class="progress progress-primary h-2 w-full"
+                    aria-label="Article match"
+                  />
+
+                  <:actions>
+                    <div class="flex items-center justify-between gap-3 w-full">
+                      <div class="text-xs text-base-content/60">
+                        Import to your library to start highlighting.
+                      </div>
+                      <button
+                        type="button"
+                        phx-click="import_article"
+                        phx-value-id={rec.article.id}
+                        phx-disable-with="Importing…"
+                        class="btn btn-xs btn-primary text-white transition duration-200 active:scale-[0.99] phx-click-loading:opacity-70 phx-click-loading:cursor-wait"
+                      >
+                        Import
+                      </button>
+                    </div>
+                  </:actions>
+                </.card>
               </div>
             </div>
+          </div>
+        </.async_result>
+
+        <div class="flex flex-wrap items-end justify-between gap-4">
+          <div class="space-y-1">
+            <h2 class="text-base font-semibold text-base-content">Cards</h2>
+            <p class="text-sm text-base-content/70">
+              Showing <span class="font-semibold text-base-content">{@visible_count}</span>
+              <span class="text-base-content/50">·</span>
+              <span class="badge badge-sm badge-outline">{filter_label(@filter)}</span>
+            </p>
+          </div>
+          <div class="text-xs text-base-content/60">
+            Tip: click the word to copy, then tap to reveal.
           </div>
         </div>
 
@@ -229,109 +319,143 @@ defmodule LanglerWeb.StudyLive.Index do
               id="study-empty-state"
               class="hidden only:flex flex-col items-center justify-center rounded-3xl border border-dashed border-base-300 bg-base-100/80 px-8 py-10 text-center text-base-content/70"
             >
-              <p class="text-lg font-semibold">You're fully caught up</p>
-              <p class="text-sm">Switch filters or import more words from an article.</p>
-              <.link
-                navigate={~p"/articles"}
-                class="mt-4 btn btn-sm btn-primary text-white"
-              >
-                Explore library
-              </.link>
+              <p class="text-lg font-semibold text-base-content">
+                <%= cond do %>
+                  <% @search_query != "" -> %>
+                    No matches found
+                  <% @filter == :now -> %>
+                    You're fully caught up
+                  <% true -> %>
+                    No cards to show
+                <% end %>
+              </p>
+              <p class="text-sm">
+                <%= cond do %>
+                  <% @search_query != "" -> %>
+                    Try a different spelling, or clear your search to see everything again.
+                  <% @filter == :now -> %>
+                    Switch filters or import more words from an article.
+                  <% true -> %>
+                    Switch filters or import more words from an article.
+                <% end %>
+              </p>
+              <div class="mt-4 flex flex-wrap justify-center gap-2">
+                <button
+                  :if={@search_query != ""}
+                  id="study-empty-clear-search"
+                  type="button"
+                  class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
+                  phx-click={JS.push("clear_search") |> JS.focus(to: "#study-search-input")}
+                >
+                  Clear search
+                </button>
+                <.link
+                  navigate={~p"/articles"}
+                  class="btn btn-sm btn-primary text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
+                >
+                  Explore library
+                </.link>
+              </div>
             </div>
 
-            <div
+            <.card
               :for={{dom_id, item} <- @streams.items}
               id={dom_id}
-              class="card border border-base-200 bg-base-100/95 shadow-xl backdrop-blur transition duration-300 hover:-translate-y-1"
+              variant={:panel}
+              hover
+              class="border border-base-200 animate-fade-in"
             >
-              <div class="card-body gap-5">
-                <button
-                  type="button"
-                  phx-click="toggle_card"
-                  phx-value-id={item.id}
-                  phx-hook="WordCardToggle"
-                  id={"study-card-#{item.id}"}
-                  data-item-id={item.id}
-                  class="group relative w-full rounded-2xl border border-dashed border-base-200 bg-base-100/80 p-4 text-left transition duration-300 hover:border-primary/40 focus-visible:ring focus-visible:ring-primary/40"
-                >
-                  <% flipped = MapSet.member?(@flipped_cards, item.id) %>
-                  <% definitions = item.word && (item.word.definitions || []) %>
-                  <div class="relative min-h-[16rem]">
-                    <div class={[
-                      "space-y-4 transition-opacity duration-300",
-                      flipped && "hidden"
-                    ]}>
-                      <div class="flex flex-wrap items-start justify-between gap-4">
-                        <div class="flex flex-col gap-1">
-                          <p
-                            class="inline-flex items-center gap-2 text-3xl font-semibold text-base-content cursor-pointer transition hover:text-primary"
-                            phx-hook="CopyToClipboard"
-                            data-copy-text={
-                              item.word && (item.word.lemma || item.word.normalized_form)
-                            }
-                            title="Click to copy"
-                            id={"study-card-word-#{item.id}"}
+              <button
+                type="button"
+                phx-click="toggle_card"
+                phx-value-id={item.id}
+                phx-hook="WordCardToggle"
+                id={"study-card-#{item.id}"}
+                data-item-id={item.id}
+                class="group relative w-full rounded-2xl border border-dashed border-base-200 bg-base-100/80 p-4 text-left transition duration-300 hover:border-primary/40 active:scale-[0.995] focus-visible:ring focus-visible:ring-primary/40 phx-click-loading:opacity-70"
+              >
+                <% flipped = MapSet.member?(@flipped_cards, item.id) %>
+                <% definitions = item.word && (item.word.definitions || []) %>
+                <div class="relative min-h-[16rem]">
+                  <div class={[
+                    "space-y-4 transition-opacity duration-300",
+                    flipped && "hidden"
+                  ]}>
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                      <div class="flex flex-col gap-1">
+                        <p
+                          class="inline-flex items-center gap-2 text-3xl font-semibold text-base-content cursor-pointer transition hover:text-primary"
+                          phx-hook="CopyToClipboard"
+                          data-copy-text={item.word && (item.word.lemma || item.word.normalized_form)}
+                          title="Click to copy"
+                          id={"study-card-word-#{item.id}"}
+                        >
+                          <span>{item.word && (item.word.lemma || item.word.normalized_form)}</span>
+                          <span
+                            class="opacity-0 text-primary/80 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
+                            aria-hidden="true"
                           >
-                            <span>{item.word && (item.word.lemma || item.word.normalized_form)}</span>
-                            <span
-                              class="opacity-0 text-primary/80 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
-                              aria-hidden="true"
-                            >
-                              <.icon name="hero-clipboard-document" class="h-5 w-5" />
-                            </span>
-                          </p>
-                          <p class="text-sm text-base-content/70">
-                            Next review {format_due_label(item.due_date)}
-                          </p>
-                        </div>
-                        <span class={[
-                          "badge badge-lg border",
-                          due_badge_class(item.due_date)
-                        ]}>
-                          {due_status_label(item.due_date)}
-                        </span>
+                            <.icon name="hero-clipboard-document" class="h-5 w-5" />
+                          </span>
+                        </p>
+                        <p class="text-sm text-base-content/70">
+                          Next review {format_due_label(item.due_date)}
+                        </p>
                       </div>
-
-                      <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
-                        <div>
-                          <p class="font-semibold text-base-content">Ease factor</p>
-                          <p>{format_decimal(item.ease_factor || 2.5)}</p>
-                        </div>
-                        <div>
-                          <p class="font-semibold text-base-content">Interval</p>
-                          <p>{interval_label(item.interval)}</p>
-                        </div>
-                        <div>
-                          <p class="font-semibold text-base-content">Repetitions</p>
-                          <p>{item.repetitions || 0}</p>
-                        </div>
-                        <div>
-                          <p class="font-semibold text-base-content">Recent history</p>
-                          <div class="flex gap-1">
-                            <span
-                              :for={score <- recent_history(item.quality_history)}
-                              class={[
-                                "h-2.5 w-6 rounded-full bg-base-300",
-                                history_pill_class(score)
-                              ]}
-                              aria-label={"Score #{score}"}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
-                        Tap to reveal definition
-                      </p>
+                      <span class={[
+                        "badge badge-lg border",
+                        due_badge_class(item.due_date)
+                      ]}>
+                        {due_status_label(item.due_date)}
+                      </span>
                     </div>
 
-                    <div class={[
-                      "flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
-                      flipped && "block",
-                      !flipped && "hidden"
-                    ]}>
-                      <p class="text-sm font-semibold uppercase tracking-widest text-primary/70">
-                        Definition
-                      </p>
+                    <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
+                      <div>
+                        <p class="font-semibold text-base-content">Ease factor</p>
+                        <p>{format_decimal(item.ease_factor || 2.5)}</p>
+                      </div>
+                      <div>
+                        <p class="font-semibold text-base-content">Interval</p>
+                        <p>{interval_label(item.interval)}</p>
+                      </div>
+                      <div>
+                        <p class="font-semibold text-base-content">Repetitions</p>
+                        <p>{item.repetitions || 0}</p>
+                      </div>
+                      <div>
+                        <p class="font-semibold text-base-content">Recent history</p>
+                        <div class="flex gap-1">
+                          <span
+                            :for={score <- recent_history(item.quality_history)}
+                            class={[
+                              "h-2.5 w-6 rounded-full bg-base-300",
+                              history_pill_class(score)
+                            ]}
+                            aria-label={"Score #{score}"}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
+                      Tap to reveal definition
+                    </p>
+                  </div>
+
+                  <div class={[
+                    "flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
+                    flipped && "block",
+                    !flipped && "hidden"
+                  ]}>
+                    <p class="text-sm font-semibold uppercase tracking-widest text-primary/70">
+                      Definition
+                    </p>
+                    <%= if MapSet.member?(@definitions_loading || MapSet.new(), item.id) do %>
+                      <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span class="text-sm text-base-content/70">Loading definition...</span>
+                      </div>
+                    <% else %>
                       <ol class="space-y-3 text-sm leading-relaxed text-base-content/90">
                         <li
                           :for={{definition, idx} <- Enum.with_index(definitions, 1)}
@@ -344,11 +468,13 @@ defmodule LanglerWeb.StudyLive.Index do
                       <p :if={definitions == []} class="text-sm text-base-content/70">
                         We haven't saved a definition yet for this word. Tap refresh in the reader to fetch one.
                       </p>
-                      <p class="text-xs text-base-content/60">Tap again to return.</p>
-                    </div>
+                    <% end %>
+                    <p class="text-xs text-base-content/60">Tap again to return.</p>
                   </div>
-                </button>
+                </div>
+              </button>
 
+              <:conjugations>
                 <div
                   :if={
                     item.word &&
@@ -367,7 +493,7 @@ defmodule LanglerWeb.StudyLive.Index do
                     </div>
                     <button
                       type="button"
-                      class="btn btn-sm btn-primary/80 text-white hover:brightness-110"
+                      class="btn btn-sm btn-primary btn-soft transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40 phx-click-loading:opacity-70"
                       phx-click="toggle_conjugations"
                       phx-value-word-id={item.word.id}
                     >
@@ -383,32 +509,22 @@ defmodule LanglerWeb.StudyLive.Index do
                     id={"study-conjugations-#{item.word.id}"}
                     class="mt-4 rounded-xl border border-base-200 bg-base-100/90 p-4 shadow-inner"
                   >
-                    {render_conjugation_table(assigns, item.word.conjugations)}
+                    <%= if MapSet.member?(@conjugations_loading || MapSet.new(), item.word.id) do %>
+                      <div class="flex items-center gap-2">
+                        <span class="loading loading-spinner loading-sm"></span>
+                        <span class="text-sm text-base-content/70">Loading conjugations...</span>
+                      </div>
+                    <% else %>
+                      <.conjugation_table conjugations={item.word.conjugations} />
+                    <% end %>
                   </div>
                 </div>
+              </:conjugations>
 
-                <div class="flex flex-col gap-2">
-                  <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
-                    Rate this card
-                  </p>
-                  <div class="flex flex-wrap gap-2">
-                    <button
-                      :for={button <- @quality_buttons}
-                      type="button"
-                      class={[
-                        "btn btn-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:ring focus-visible:ring-offset-2 focus-visible:ring-primary/40",
-                        button.class
-                      ]}
-                      phx-click="rate_word"
-                      phx-value-item-id={item.id}
-                      phx-value-quality={button.score}
-                    >
-                      {button.label}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+              <:actions>
+                <.card_rating item_id={item.id} buttons={@quality_buttons} />
+              </:actions>
+            </.card>
           </div>
         </div>
       </div>
@@ -423,6 +539,7 @@ defmodule LanglerWeb.StudyLive.Index do
     {:noreply,
      socket
      |> assign(:filter, filter)
+     |> assign(:visible_count, length(visible))
      |> stream(:items, visible, reset: true)}
   end
 
@@ -444,6 +561,7 @@ defmodule LanglerWeb.StudyLive.Index do
        socket
        |> assign(:all_items, all_items)
        |> assign(:stats, stats)
+       |> assign(:visible_count, length(visible))
        |> stream(:items, visible, reset: true)
        |> put_flash(
          :info,
@@ -466,6 +584,17 @@ defmodule LanglerWeb.StudyLive.Index do
     {:noreply,
      socket
      |> assign(:search_query, query)
+     |> assign(:visible_count, length(visible))
+     |> stream(:items, visible, reset: true)}
+  end
+
+  def handle_event("clear_search", _params, socket) do
+    visible = filter_items(socket.assigns.all_items, socket.assigns.filter, "")
+
+    {:noreply,
+     socket
+     |> assign(:search_query, "")
+     |> assign(:visible_count, length(visible))
      |> stream(:items, visible, reset: true)}
   end
 
@@ -479,14 +608,14 @@ defmodule LanglerWeb.StudyLive.Index do
            ) do
       # Refresh recommendations
       user_level = Study.get_user_vocabulary_level(socket.assigns.current_user.id)
-
-      recommended_articles =
-        Content.get_recommended_articles_for_user(socket.assigns.current_user.id, 5)
+      user_id = socket.assigns.current_user.id
 
       {:noreply,
        socket
        |> assign(:user_level, user_level)
-       |> assign(:recommended_articles, recommended_articles)
+       |> assign_async(:recommended_articles, fn ->
+         {:ok, %{recommended_articles: Content.get_recommended_articles_for_user(user_id, 5)}}
+       end)
        |> put_flash(:info, "Article imported successfully")}
     else
       _ ->
@@ -496,20 +625,19 @@ defmodule LanglerWeb.StudyLive.Index do
 
   def handle_event("toggle_card", %{"id" => id}, socket) do
     with {item_id, ""} <- Integer.parse(to_string(id)),
-         {:ok, item} <- find_item(socket.assigns.all_items, item_id),
-         {:ok, ensured_item} <- ensure_word_definitions(item) do
+         {:ok, item} <- find_item(socket.assigns.all_items, item_id) do
       flipped = toggle_set_member(socket.assigns.flipped_cards, item_id)
-
-      updated_items = replace_item(socket.assigns.all_items, ensured_item)
       flipped_state = MapSet.member?(flipped, item_id)
+
+      # Check if we need to fetch definitions
+      socket = maybe_start_definition_fetch(socket, item_id, flipped_state, item)
 
       dom_id = "items-#{item_id}"
 
       {:noreply,
        socket
-       |> assign(:all_items, updated_items)
        |> assign(:flipped_cards, flipped)
-       |> stream_insert(:items, ensured_item, dom_id: dom_id)
+       |> stream_insert(:items, item, dom_id: dom_id)
        |> push_event("study:card-toggled", %{id: item_id, flipped: flipped_state})}
     else
       _ -> {:noreply, socket}
@@ -519,20 +647,110 @@ defmodule LanglerWeb.StudyLive.Index do
   def handle_event("toggle_conjugations", %{"word-id" => word_id_str}, socket) do
     case fetch_conjugation_item(socket.assigns.all_items, word_id_str) do
       {:ok, word_id, item} ->
-        updated_item = maybe_update_conjugations(item)
         expanded = toggle_set_member(socket.assigns.expanded_conjugations, word_id)
-        updated_items = replace_item(socket.assigns.all_items, updated_item)
-        dom_id = "items-#{updated_item.id}"
+
+        socket =
+          socket
+          |> assign(:expanded_conjugations, expanded)
+
+        # If expanding and conjugations are missing, fetch them async
+        expanded_state = MapSet.member?(expanded, word_id)
+        socket = maybe_start_conjugation_fetch(socket, word_id, expanded_state, item)
+
+        # Update the item in the stream immediately (conjugations will update via handle_async if async was started)
+        dom_id = "items-#{item.id}"
 
         {:noreply,
          socket
-         |> assign(:all_items, updated_items)
-         |> assign(:expanded_conjugations, expanded)
-         |> stream_insert(:items, updated_item, dom_id: dom_id)}
+         |> stream_insert(:items, item, dom_id: dom_id)}
 
       :error ->
         {:noreply, socket}
     end
+  end
+
+  defp filter_label(filter) do
+    Enum.find_value(@filters, "All words", fn %{id: id, label: label} ->
+      if id == filter, do: label
+    end)
+  end
+
+  def handle_async({:fetch_definitions, item_id}, {:ok, {_item_id, entry, word, flags}}, socket) do
+    definitions = List.wrap(entry.definitions)
+    updates = build_definition_updates(flags, entry, definitions)
+
+    case find_item(socket.assigns.all_items, item_id) do
+      {:ok, item} ->
+        {:ok, updated_item} = apply_word_updates(item, word, updates)
+        updated_items = replace_item(socket.assigns.all_items, updated_item)
+        dom_id = "items-#{item_id}"
+
+        {:noreply,
+         socket
+         |> assign(:all_items, updated_items)
+         |> assign(
+           :definitions_loading,
+           MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+         )
+         |> stream_insert(:items, updated_item, dom_id: dom_id)}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(
+           :definitions_loading,
+           MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+         )}
+    end
+  end
+
+  def handle_async({:fetch_definitions, item_id}, {:exit, reason}, socket) do
+    Logger.warning(
+      "StudyLive: failed to fetch definitions for item_id=#{item_id}: #{inspect(reason)}"
+    )
+
+    {:noreply,
+     socket
+     |> assign(
+       :definitions_loading,
+       MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+     )}
+  end
+
+  def handle_async({:fetch_conjugations, word_id}, {:ok, conjugations_map}, socket) do
+    Logger.debug("StudyLive: handle_async received conjugations for word_id=#{word_id}: #{inspect(conjugations_map)}")
+
+    case conjugations_map do
+      {:error, reason} ->
+        Logger.warning(
+          "StudyLive: failed to fetch conjugations for word_id=#{word_id}: #{inspect(reason)}"
+        )
+
+        {:noreply, clear_conjugations_loading(socket, word_id)}
+
+      conjugations when is_map(conjugations) ->
+        handle_conjugations_success(socket, word_id, conjugations)
+
+      _ ->
+        Logger.warning(
+          "StudyLive: unexpected conjugations format for word_id=#{word_id}: #{inspect(conjugations_map)}"
+        )
+
+        {:noreply, socket}
+    end
+  end
+
+  def handle_async({:fetch_conjugations, word_id}, {:exit, reason}, socket) do
+    Logger.warning(
+      "StudyLive: failed to fetch conjugations for word_id=#{word_id}: #{inspect(reason)}"
+    )
+
+    {:noreply,
+     socket
+     |> assign(
+       :conjugations_loading,
+       MapSet.delete(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
+     )}
   end
 
   defp extract_search_query(%{"search_query" => query}) when is_binary(query), do: query
@@ -644,62 +862,51 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  defp maybe_update_conjugations(%{word: nil} = item), do: item
-
-  defp maybe_update_conjugations(%{word: word} = item) do
-    if missing_conjugations?(word) do
-      update_conjugations(item, word)
-    else
-      item
-    end
-  end
-
   defp missing_conjugations?(word) do
     is_nil(word.conjugations) or word.conjugations == %{}
   end
 
-  defp update_conjugations(item, word) do
-    lookup_lemma = conjugation_lookup_lemma(word)
-
-    if lookup_lemma do
-      case fetch_and_store_conjugations(word, lookup_lemma) do
-        {:ok, updated_word} ->
-          %{item | word: updated_word}
-
-        {:error, :store, reason} ->
-          Logger.warning(
-            "StudyLive: failed to store conjugations for word_id=#{word.id}: #{inspect(reason)}"
-          )
-
-          item
-
-        {:error, :fetch, reason} ->
-          Logger.warning(
-            "StudyLive: failed to fetch conjugations for #{lookup_lemma}: #{inspect(reason)}"
-          )
-
-          item
-      end
+  defp fetch_conjugations_with_cache(word, lookup_lemma) do
+    # First check if word already has conjugations in DB
+    if word.conjugations && word.conjugations != %{} do
+      # Use DB value and populate ETS cache
+      Logger.debug("StudyLive: using DB conjugations for word_id=#{word.id}")
+      populate_ets_cache(lookup_lemma, word.language, word.conjugations)
+      word.conjugations
     else
-      item
+      # Fetch from external source (which uses ETS cache)
+      Logger.debug("StudyLive: fetching conjugations from external for word_id=#{word.id}, lemma=#{lookup_lemma}")
+      case Conjugations.fetch_conjugations(lookup_lemma, word.language) do
+        {:ok, conjugations_map} ->
+          Logger.debug("StudyLive: successfully fetched conjugations for word_id=#{word.id}")
+          conjugations_map
+        {:error, reason} ->
+          Logger.warning("StudyLive: failed to fetch conjugations for word_id=#{word.id}: #{inspect(reason)}")
+          {:error, reason}
+      end
     end
+  rescue
+    e ->
+      Logger.error("StudyLive: exception fetching conjugations for word_id=#{word.id}: #{inspect(e)}")
+      {:error, :exception}
+  catch
+    :exit, reason ->
+      Logger.error("StudyLive: exit while fetching conjugations for word_id=#{word.id}: #{inspect(reason)}")
+      {:error, :exit}
   end
 
-  defp fetch_and_store_conjugations(word, lookup_lemma) do
-    case Conjugations.fetch_conjugations(lookup_lemma, word.language) do
-      {:ok, conjugations_map} ->
-        case Vocabulary.update_word_conjugations(word, conjugations_map) do
-          {:ok, updated_word} ->
-            Logger.debug("StudyLive: stored conjugations for word_id=#{word.id}")
-            {:ok, updated_word}
+  defp populate_ets_cache(lemma, language, conjugations) do
+    normalized_language = String.downcase(language)
+    cache_key = {normalized_language, String.downcase(lemma)}
 
-          {:error, reason} ->
-            {:error, :store, reason}
-        end
+    # Get cache table from config (same as Conjugations module)
+    config = Application.get_env(:langler, Langler.External.Dictionary.Wiktionary, [])
+    table = Keyword.get(config, :conjugation_cache_table, :wiktionary_conjugation_cache)
+    ttl = Keyword.get(config, :conjugation_ttl, :timer.hours(24))
 
-      {:error, reason} ->
-        {:error, :fetch, reason}
-    end
+    # Populate ETS cache with DB value
+    alias Langler.External.Dictionary.Cache
+    Cache.put(table, cache_key, conjugations, ttl: ttl)
   end
 
   defp conjugation_lookup_lemma(word) do
@@ -709,19 +916,6 @@ defmodule LanglerWeb.StudyLive.Index do
       String.downcase(lemma)
     else
       nil
-    end
-  end
-
-  defp ensure_word_definitions(%{word: nil} = item), do: {:ok, item}
-
-  @dialyzer {:nowarn_function, ensure_word_definitions: 1}
-  defp ensure_word_definitions(%{word: word} = item) do
-    flags = definition_fetch_flags(word)
-
-    if needs_definition_fetch?(flags) do
-      maybe_fetch_and_update_definitions(item, word, flags)
-    else
-      {:ok, item}
     end
   end
 
@@ -736,29 +930,6 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp needs_definition_fetch?(%{needs_definitions: needs_definitions, needs_pos: needs_pos}) do
     needs_definitions || needs_pos
-  end
-
-  defp maybe_fetch_and_update_definitions(item, word, flags) do
-    term = definition_lookup_term(word)
-
-    if blank_term?(term) do
-      Logger.debug("StudyLive: skipping definition fetch for word #{word.id} (blank term)")
-      {:ok, item}
-    else
-      Logger.debug(
-        "StudyLive: fetching definitions for #{inspect(term)} (word_id=#{word.id}) needs_defs=#{flags.needs_definitions} needs_pos=#{flags.needs_pos}"
-      )
-
-      {entry, duration} = lookup_dictionary_entry(term, word.language)
-      definitions = List.wrap(entry.definitions)
-
-      Logger.debug(
-        "StudyLive: dictionary lookup complete word_id=#{word.id} defs=#{length(definitions)} pos=#{inspect(entry.part_of_speech)} duration_ms=#{duration}"
-      )
-
-      updates = build_definition_updates(flags, entry, definitions)
-      apply_word_updates(item, word, updates)
-    end
   end
 
   defp definition_lookup_term(word) do
@@ -925,150 +1096,6 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  defp render_conjugation_table(assigns, nil) do
-    assigns = assign(assigns, :conjugations, nil)
-
-    ~H"""
-    <p class="text-sm text-base-content/70">Loading conjugations...</p>
-    """
-  end
-
-  defp render_conjugation_table(assigns, %{} = conjugations) when map_size(conjugations) == 0 do
-    assigns = assign(assigns, :conjugations, conjugations)
-
-    ~H"""
-    <p class="text-sm text-base-content/70">Conjugations not available for this verb.</p>
-    """
-  end
-
-  defp render_conjugation_table(assigns, conjugations) when is_map(conjugations) do
-    assigns = assign(assigns, :conjugations, conjugations)
-
-    ~H"""
-    <div class="space-y-6">
-      <h3 class="text-lg font-semibold text-base-content">Conjugations</h3>
-
-      <%= if Map.has_key?(@conjugations, "indicative") do %>
-        <div class="space-y-3">
-          <h4 class="text-md font-semibold text-base-content/80">Indicative</h4>
-          {render_mood(assigns, @conjugations["indicative"])}
-        </div>
-      <% end %>
-
-      <%= if Map.has_key?(@conjugations, "subjunctive") do %>
-        <div class="space-y-3">
-          <h4 class="text-md font-semibold text-base-content/80">Subjunctive</h4>
-          {render_mood(assigns, @conjugations["subjunctive"])}
-        </div>
-      <% end %>
-
-      <%= if Map.has_key?(@conjugations, "imperative") do %>
-        <div class="space-y-3">
-          <h4 class="text-md font-semibold text-base-content/80">Imperative</h4>
-          {render_mood(assigns, @conjugations["imperative"])}
-        </div>
-      <% end %>
-
-      <%= if Map.has_key?(@conjugations, "non_finite") do %>
-        <div class="space-y-3">
-          <h4 class="text-md font-semibold text-base-content/80">Non-finite Forms</h4>
-          <div class="grid grid-cols-3 gap-2 text-sm">
-            <%= if Map.has_key?(@conjugations["non_finite"], "infinitive") do %>
-              <div>
-                <span class="font-semibold text-base-content/70">Infinitive:</span>
-                <span class="ml-2">{@conjugations["non_finite"]["infinitive"]}</span>
-              </div>
-            <% end %>
-            <%= if Map.has_key?(@conjugations["non_finite"], "gerund") do %>
-              <div>
-                <span class="font-semibold text-base-content/70">Gerund:</span>
-                <span class="ml-2">{@conjugations["non_finite"]["gerund"]}</span>
-              </div>
-            <% end %>
-            <%= if Map.has_key?(@conjugations["non_finite"], "past_participle") do %>
-              <div>
-                <span class="font-semibold text-base-content/70">Past Participle:</span>
-                <span class="ml-2">{@conjugations["non_finite"]["past_participle"]}</span>
-              </div>
-            <% end %>
-          </div>
-        </div>
-      <% end %>
-    </div>
-    """
-  end
-
-  defp render_mood(assigns, mood_conjugations) when is_map(mood_conjugations) do
-    assigns = assign(assigns, :mood_conjugations, mood_conjugations)
-
-    ~H"""
-    <div class="space-y-4">
-      <%= for {tense, forms} <- @mood_conjugations do %>
-        <div class="space-y-2">
-          <h5 class="text-sm font-semibold text-base-content/70 capitalize">{tense}</h5>
-          {render_two_column_conjugations(forms)}
-        </div>
-      <% end %>
-    </div>
-    """
-  end
-
-  defp render_mood(assigns, _) do
-    ~H"""
-    <p class="text-sm text-base-content/70">No conjugations available.</p>
-    """
-  end
-
-  defp render_two_column_conjugations(forms) do
-    assigns = %{forms: forms}
-
-    ~H"""
-    <div class="overflow-x-auto">
-      <table class="table table-sm whitespace-normal conjugation-table">
-        <tbody>
-          <tr class="bg-base-200/60 text-xs uppercase tracking-widest text-base-content/60">
-            <th class="w-32">Singular</th>
-            <th>Conjugation</th>
-            <th class="w-32">Plural</th>
-            <th>Conjugation</th>
-          </tr>
-          <%= for row <- conjugation_rows(@forms) do %>
-            <tr class="align-top">
-              <td class={["conjugation-person", "pair-left"]}>{row.left.person}</td>
-              <td class={["conjugation-form", "pair-left"]}>{row.left.form}</td>
-              <td class={["conjugation-person", "pair-right"]}>{row.right.person}</td>
-              <td class={["conjugation-form", "pair-right"]}>{row.right.form}</td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    </div>
-    """
-  end
-
-  defp conjugation_rows(forms) do
-    singular = [
-      {"yo", Map.get(forms, "yo")},
-      {"tú", Map.get(forms, "tú")},
-      {"él/ella/usted", Map.get(forms, "él/ella/usted")}
-    ]
-
-    plural = [
-      {"nosotros/nosotras", Map.get(forms, "nosotros/nosotras")},
-      {"vosotros/vosotras", Map.get(forms, "vosotros/vosotras")},
-      {"ellos/ellas/ustedes", Map.get(forms, "ellos/ellas/ustedes")}
-    ]
-
-    singular
-    |> Enum.zip(plural)
-    |> Enum.map(fn {{s_person, s_form}, {p_person, p_form}} ->
-      %{
-        left: %{person: s_person, form: s_form || "—"},
-        right: %{person: p_person, form: p_form || "—"}
-      }
-    end)
-  end
-
   defp extract_infinitive_lemma(word) do
     lemma = word.lemma || word.normalized_form || ""
     lemma_trimmed = String.trim(lemma)
@@ -1096,14 +1123,16 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp extract_verb_infinitive(def) do
-    case Regex.run(~r/\(verb\)\s*[—–-]\s*(\w+)/i, def) do
+    # Use Unicode-aware pattern to match Spanish characters like ñ
+    case Regex.run(~r/\(verb\)\s*[—–-]\s*([\p{L}\p{M}]+)/u, def) do
       [_, infinitive] -> String.trim(infinitive)
       _ -> nil
     end
   end
 
   defp extract_dash_infinitive(def) do
-    case Regex.run(~r/[—–-]\s*(\w+)/i, def) do
+    # Use Unicode-aware pattern to match Spanish characters like ñ
+    case Regex.run(~r/[—–-]\s*([\p{L}\p{M}]+)/u, def) do
       [_, possible_infinitive] -> validate_infinitive(possible_infinitive)
       _ -> nil
     end
@@ -1117,5 +1146,151 @@ defmodule LanglerWeb.StudyLive.Index do
     else
       nil
     end
+  end
+
+  defp maybe_start_definition_fetch(socket, item_id, flipped_state, item) do
+    if flipped_state && item.word do
+      maybe_start_definition_fetch_checked(socket, item_id, item)
+    else
+      socket
+    end
+  end
+
+  defp maybe_start_definition_fetch_checked(socket, item_id, item) do
+    flags = definition_fetch_flags(item.word)
+
+    if needs_definition_fetch?(flags) do
+      term = definition_lookup_term(item.word)
+
+      if blank_term?(term) do
+        socket
+      else
+        start_definition_fetch_async(socket, item_id, item)
+      end
+    else
+      socket
+    end
+  end
+
+  defp start_definition_fetch_async(socket, item_id, item) do
+    flags = definition_fetch_flags(item.word)
+    term = definition_lookup_term(item.word)
+
+    socket
+    |> assign(
+      :definitions_loading,
+      MapSet.put(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+    )
+    |> start_async({:fetch_definitions, item_id}, fn ->
+      {entry, _duration} = lookup_dictionary_entry(term, item.word.language)
+      {item_id, entry, item.word, flags}
+    end)
+  end
+
+  defp maybe_start_conjugation_fetch(socket, word_id, expanded_state, item) when is_boolean(expanded_state) do
+    cond do
+      not expanded_state ->
+        socket
+
+      not (item.word && missing_conjugations?(item.word)) ->
+        socket
+
+      is_nil(conjugation_lookup_lemma(item.word)) ->
+        socket
+
+      true ->
+        start_conjugation_fetch_async(socket, word_id, item)
+    end
+  end
+
+  defp start_conjugation_fetch_async(socket, word_id, item) do
+    lookup_lemma = conjugation_lookup_lemma(item.word)
+
+    socket
+    |> assign(
+      :conjugations_loading,
+      MapSet.put(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
+    )
+    |> start_async({:fetch_conjugations, word_id}, fn ->
+      fetch_conjugations_with_timeout(item.word, lookup_lemma, word_id)
+    end)
+  end
+
+  defp fetch_conjugations_with_timeout(word, lookup_lemma, word_id) do
+    # Refresh word from DB to get latest conjugations
+    refreshed_word =
+      if word && word.id do
+        Vocabulary.get_word(word.id) || word
+      else
+        word
+      end
+
+    # Use Task with timeout to prevent hanging
+    task = Task.async(fn -> fetch_conjugations_with_cache(refreshed_word, lookup_lemma) end)
+
+    case Task.yield(task, 30_000) || Task.shutdown(task) do
+      {:ok, result} -> result
+      nil ->
+        Logger.warning("StudyLive: timeout fetching conjugations for word_id=#{word_id}")
+        {:error, :timeout}
+      {:exit, reason} ->
+        Logger.warning("StudyLive: task exited while fetching conjugations for word_id=#{word_id}: #{inspect(reason)}")
+        {:error, :exit}
+    end
+  end
+
+  defp handle_conjugations_success(socket, word_id, conjugations) do
+    case find_item_by_word_id(socket.assigns.all_items, word_id) do
+      {:ok, item} ->
+        if item.word.conjugations != conjugations do
+          handle_conjugations_update(socket, word_id, item, conjugations)
+        else
+          handle_conjugations_no_change(socket, word_id, item)
+        end
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  defp handle_conjugations_update(socket, word_id, item, conjugations) do
+    case Vocabulary.update_word_conjugations(item.word, conjugations) do
+      {:ok, updated_word} ->
+        updated_item = %{item | word: updated_word}
+        updated_items = replace_item(socket.assigns.all_items, updated_item)
+        dom_id = "items-#{updated_item.id}"
+
+        {:noreply,
+         socket
+         |> assign(:all_items, updated_items)
+         |> clear_conjugations_loading(word_id)
+         |> stream_insert(:items, updated_item, dom_id: dom_id)}
+
+      {:error, reason} ->
+        Logger.warning(
+          "StudyLive: failed to store conjugations for word_id=#{word_id}: #{inspect(reason)}"
+        )
+
+        {:noreply, clear_conjugations_loading(socket, word_id)}
+    end
+  end
+
+  defp handle_conjugations_no_change(socket, word_id, item) do
+    updated_items = replace_item(socket.assigns.all_items, item)
+    dom_id = "items-#{item.id}"
+
+    {:noreply,
+     socket
+     |> assign(:all_items, updated_items)
+     |> clear_conjugations_loading(word_id)
+     |> stream_insert(:items, item, dom_id: dom_id)}
+  end
+
+  defp clear_conjugations_loading(socket, word_id) do
+    assign(
+      socket,
+      :conjugations_loading,
+      MapSet.delete(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
+    )
   end
 end

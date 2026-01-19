@@ -29,13 +29,14 @@ import ArticleStickyHeader from "./hooks/article_sticky_header"
 import ChatAutoScroll from "./hooks/chat_auto_scroll"
 import ChatMenuDropdown from "./hooks/chat_menu_dropdown"
 import StudySession from "./hooks/study_session"
+import ChatDrawerState from "./hooks/chat_drawer_state"
+import TextDownloader from "./hooks/text_downloader"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const WordCardToggle = {
   mounted() {
     this.itemId = Number(this.el.dataset.itemId)
-    this.log(`mounted for card ${this.itemId}`)
 
     this.clickHandler = () => {
       this.log(`click dispatched for card ${this.itemId}`)
@@ -84,6 +85,8 @@ const hooks = {
   ChatAutoScroll,
   ChatMenuDropdown,
   StudySession,
+  ChatDrawerState,
+  TextDownloader,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

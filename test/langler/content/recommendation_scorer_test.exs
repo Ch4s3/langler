@@ -212,4 +212,94 @@ defmodule Langler.Content.RecommendationScorerTest do
     assert difficulty >= 0.0
     assert difficulty <= 10.0
   end
+
+  describe "topic classification for discovered articles" do
+    test "scores discovered articles matching user topic preferences" do
+      user = user_fixture()
+      Langler.Accounts.set_user_topic_preference(user.id, "ciencia", 1.5)
+
+      discovered = %Langler.Content.DiscoveredArticle{
+        title: "Ciencia y tecnología avanzan rápidamente",
+        summary: "Los científicos descubren nuevas tecnologías cada día.",
+        difficulty_score: 3.0,
+        language: "spanish"
+      }
+
+      score = RecommendationScorer.score_discovered_article_match(discovered, user.id)
+      assert is_float(score)
+      assert score > 0.0
+    end
+
+    test "heavily penalizes sports articles when user has no preference" do
+      user = user_fixture()
+      # User has no topic preferences
+
+      discovered = %Langler.Content.DiscoveredArticle{
+        title: "Harden lleva a Clippers a vencer 121-117 a Raptors",
+        summary: "El jugador anotó 31 puntos en tiempo extra.",
+        difficulty_score: 3.0,
+        language: "spanish"
+      }
+
+      score = RecommendationScorer.score_discovered_article_match(discovered, user.id)
+      assert is_float(score)
+      # Should be heavily penalized (topic score is 0.05, which triggers 0.1 multiplier)
+      # The final score will be base_score * 0.1
+      # The score should be low enough that it gets filtered out in get_recommended_articles
+      # (which filters by score > 0.1)
+      assert score >= 0.0
+      # Verify the penalty is applied - score should be significantly reduced
+      # Even with good level match and vocab scores, the 0.1 multiplier should keep it low
+      assert score < 0.6
+    end
+
+    test "allows sports articles when user has sports preference" do
+      user = user_fixture()
+      Langler.Accounts.set_user_topic_preference(user.id, "deportes", 1.5)
+
+      discovered = %Langler.Content.DiscoveredArticle{
+        title: "Harden lleva a Clippers a vencer 121-117 a Raptors",
+        summary: "El jugador anotó 31 puntos en tiempo extra.",
+        difficulty_score: 3.0,
+        language: "spanish"
+      }
+
+      score = RecommendationScorer.score_discovered_article_match(discovered, user.id)
+      assert is_float(score)
+      # Should score higher when user has preference
+      assert score > 0.0
+    end
+
+    test "gives neutral score for non-matching topics without sports" do
+      user = user_fixture()
+      # User has no topic preferences
+
+      discovered = %Langler.Content.DiscoveredArticle{
+        title: "Arte y cultura en la ciudad",
+        summary: "Exposición de arte moderno en el museo.",
+        difficulty_score: 3.0,
+        language: "spanish"
+      }
+
+      score = RecommendationScorer.score_discovered_article_match(discovered, user.id)
+      assert is_float(score)
+      # Should get neutral score (0.3) for non-sports articles without preferences
+      assert score >= 0.0
+    end
+
+    test "handles empty title and summary gracefully" do
+      user = user_fixture()
+
+      discovered = %Langler.Content.DiscoveredArticle{
+        title: "",
+        summary: "",
+        difficulty_score: 3.0,
+        language: "spanish"
+      }
+
+      score = RecommendationScorer.score_discovered_article_match(discovered, user.id)
+      assert is_float(score)
+      assert score >= 0.0
+    end
+  end
 end

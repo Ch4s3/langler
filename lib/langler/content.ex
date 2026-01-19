@@ -14,6 +14,7 @@ defmodule Langler.Content do
     ArticleUser,
     DiscoveredArticle,
     DiscoveredArticleUser,
+    RecommendationScorer,
     Sentence,
     SourceSite
   }
@@ -24,11 +25,17 @@ defmodule Langler.Content do
     Repo.all(from a in Article, order_by: [desc: a.inserted_at])
   end
 
-  def list_articles_for_user(user_id) do
+  def list_articles_for_user(user_id, opts \\ []) do
+    topic = Keyword.get(opts, :topic)
+    query = opts |> Keyword.get(:query) |> normalize_search_query()
+
     Article
     |> join(:inner, [a], au in ArticleUser, on: au.article_id == a.id)
     |> where([_a, au], au.user_id == ^user_id and au.status not in ["archived", "finished"])
+    |> maybe_filter_article_topic(topic)
+    |> maybe_search_articles(query)
     |> order_by([a, _], desc: a.inserted_at)
+    |> distinct([a], a.id)
     |> preload(:article_topics)
     |> Repo.all()
   end
@@ -216,6 +223,36 @@ defmodule Langler.Content do
     |> Repo.all()
   end
 
+  defp normalize_search_query(nil), do: nil
+
+  defp normalize_search_query(query) when is_binary(query) do
+    query = String.trim(query)
+    if query == "", do: nil, else: query
+  end
+
+  defp normalize_search_query(query), do: query |> to_string() |> normalize_search_query()
+
+  defp maybe_search_articles(queryable, nil), do: queryable
+
+  defp maybe_search_articles(queryable, query) when is_binary(query) do
+    like = "%#{query}%"
+
+    where(
+      queryable,
+      [a, _au, ...],
+      ilike(a.title, ^like) or ilike(a.url, ^like) or ilike(a.source, ^like)
+    )
+  end
+
+  defp maybe_filter_article_topic(queryable, nil), do: queryable
+  defp maybe_filter_article_topic(queryable, ""), do: queryable
+
+  defp maybe_filter_article_topic(queryable, topic) when is_binary(topic) do
+    queryable
+    |> join(:inner, [a, _au], at in ArticleTopic, on: at.article_id == a.id)
+    |> where([_a, _au, at], at.topic == ^topic)
+  end
+
   @doc """
   Lists all topics for an article.
   """
@@ -274,10 +311,12 @@ defmodule Langler.Content do
   """
   @spec get_recommended_articles(integer(), integer()) :: [map()]
   def get_recommended_articles(user_id, limit \\ 10) do
-    # Get discovered articles first (if any)
-    discovered = list_recommendations_for_user(user_id, limit: limit * 2)
+    # Get discovered articles first (if any) - increase pool to find better matches
+    discovered = list_recommendations_for_user(user_id, limit: limit * 10)
 
-    # Also get regular articles not imported by user
+    # Also get regular articles not imported by user (limit to reasonable number for performance)
+    pool_size = limit * 50
+
     user_article_ids =
       ArticleUser
       |> where([au], au.user_id == ^user_id)
@@ -289,52 +328,233 @@ defmodule Langler.Content do
       if Enum.empty?(user_article_ids) do
         Article
         |> preload(:article_topics)
+        |> order_by([a], desc: a.inserted_at)
+        |> limit(^pool_size)
         |> Repo.all()
       else
         Article
         |> where([a], a.id not in ^user_article_ids)
         |> preload(:article_topics)
+        |> order_by([a], desc: a.inserted_at)
+        |> limit(^pool_size)
         |> Repo.all()
       end
 
+    # Build article map for regular articles (keep Article struct for scoring)
+    regular_article_data =
+      Enum.map(regular_articles, fn article ->
+        {article_to_map(article), article}
+      end)
+
     # Convert discovered articles to article-like maps
     # Fetch titles for articles that don't have them
-    discovered_article_maps =
+    discovered_article_data =
       discovered
       |> Enum.map(fn da ->
         if da.article do
           # Already imported - use the article
-          {da, article_to_map(da.article)}
+          {article_to_map(da.article), da.article}
         else
           # Not yet imported - will fetch title if needed
-          {da, nil}
+          {nil, da}
         end
       end)
-      |> fetch_titles_for_discovered_articles()
+      |> fetch_titles_for_discovered_articles_with_structs()
 
-    # Convert regular articles to maps
-    regular_article_maps = Enum.map(regular_articles, &article_to_map/1)
+    # Combine all articles
+    all_articles = regular_article_data ++ discovered_article_data
 
-    all_articles = discovered_article_maps ++ regular_article_maps
+    # Batch check which articles have words (for vocab scoring optimization)
+    article_ids_with_words = batch_check_articles_with_words(all_articles)
 
-    all_articles
-    |> Enum.map(fn article_map ->
-      # Score using the article if available, otherwise use a default score
-      score =
-        if article_map.id do
-          article = Repo.get(Article, article_map.id) |> Repo.preload(:article_topics)
-          score_article_for_user(article, user_id)
-        else
-          # For discovered articles without content, give a base score
-          0.5
-        end
+    # Pre-compute user word frequencies and FSRS word IDs once (used for all articles)
+    user_word_freqs = batch_get_user_word_frequencies(user_id)
+    fsrs_word_ids = batch_get_user_fsrs_word_ids(user_id)
 
-      {article_map, score}
-    end)
-    |> Enum.filter(fn {_article, score} -> score > 0.0 end)
-    |> Enum.sort_by(fn {_article, score} -> score end, :desc)
-    |> Enum.take(limit)
+    # Score all articles efficiently
+    scored_articles =
+      all_articles
+      |> Enum.map(fn {article_map, article_or_discovered} ->
+        score =
+          case {article_map, article_or_discovered} do
+            {%{id: id}, %Article{} = article} when not is_nil(id) ->
+              # Regular article - use preloaded struct
+              has_words = Map.has_key?(article_ids_with_words, id)
+
+              RecommendationScorer.score_article_for_user_optimized(
+                article,
+                user_id,
+                has_words,
+                %{topic: 0.7, vocab: 0.3},
+                user_word_freqs,
+                fsrs_word_ids
+              )
+
+            {article_map, _discovered} when is_map(article_map) ->
+              # Discovered article - use map-based scoring
+              score_discovered_article_map(article_map, user_id)
+
+            _ ->
+              # Fallback
+              0.0
+          end
+
+        {article_map, score}
+      end)
+      |> Enum.filter(fn {_article, score} -> score > 0.1 end)
+      |> Enum.sort_by(fn {_article, score} -> score end, :desc)
+
+    # Apply source diversity and return
+    select_with_source_diversity(scored_articles, limit)
     |> Enum.map(fn {article, _score} -> article end)
+  end
+
+  # Batch check which articles have words to avoid N+1 queries
+  @spec batch_check_articles_with_words(list({map(), Article.t() | nil})) ::
+          %{optional(integer()) => true}
+  defp batch_check_articles_with_words(all_articles) do
+    article_ids =
+      all_articles
+      |> Enum.flat_map(fn {article_map, article_or_discovered} ->
+        case {article_map, article_or_discovered} do
+          {%{id: id}, %Article{}} when not is_nil(id) -> [id]
+          _ -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    if Enum.empty?(article_ids) do
+      %{}
+    else
+      Sentence
+      |> where([s], s.article_id in ^article_ids)
+      |> select([s], s.article_id)
+      |> distinct([s], s.article_id)
+      |> Repo.all()
+      |> Enum.reduce(%{}, fn id, acc -> Map.put(acc, id, true) end)
+    end
+  end
+
+  # Batch get user word frequencies (used for all articles)
+  defp batch_get_user_word_frequencies(user_id) do
+    alias Langler.Content.RecommendationScorer
+    RecommendationScorer.get_user_word_frequencies(user_id)
+  end
+
+  # Batch get user FSRS word IDs (used for all articles)
+  defp batch_get_user_fsrs_word_ids(user_id) do
+    alias Langler.Content.RecommendationScorer
+    RecommendationScorer.get_user_fsrs_word_ids(user_id)
+  end
+
+  # Select articles ensuring source diversity
+  # Limits articles per source and uses round-robin to ensure variety
+  defp select_with_source_diversity(scored_articles, limit) do
+    # Group by source, keeping articles sorted by score within each source
+    by_source =
+      scored_articles
+      |> Enum.group_by(fn {article, _score} ->
+        get_article_source(article)
+      end)
+      |> Map.new(fn {source, articles} ->
+        {source, Enum.sort_by(articles, fn {_article, score} -> score end, :desc)}
+      end)
+
+    num_sources = map_size(by_source)
+
+    # If only one source or very few articles, just take top N
+    if num_sources <= 1 or length(scored_articles) <= limit do
+      Enum.take(scored_articles, limit)
+    else
+      # Calculate max per source (limit to 2-3 max to ensure diversity)
+      max_per_source = min(3, max(1, div(limit, num_sources) + 1))
+
+      # Round-robin: take articles from each source in turn
+      sources = Map.keys(by_source) |> Enum.shuffle()
+      select_diverse_round_robin(by_source, sources, max_per_source, limit, [])
+    end
+  end
+
+  defp select_diverse_round_robin(by_source, sources, max_per_source, limit, acc) do
+    # Base cases
+    cond do
+      limit <= 0 -> acc
+      sources == [] -> acc
+      true -> process_round_robin_round(by_source, sources, max_per_source, limit, acc)
+    end
+  end
+
+  defp process_round_robin_round(by_source, sources, max_per_source, limit, acc) do
+    # Take articles from each source in round-robin fashion
+    {new_selected, updated_by_source, active_sources} =
+      Enum.reduce(sources, {[], by_source, []}, fn source, state ->
+        take_from_source(source, state, max_per_source)
+      end)
+
+    # Add selected to accumulator, limiting to what we need
+    new_acc = acc ++ Enum.take(new_selected, limit)
+    new_remaining = limit - length(new_selected)
+
+    # Continue if we need more and have active sources
+    if new_remaining > 0 and active_sources != [] do
+      select_diverse_round_robin(
+        updated_by_source,
+        active_sources,
+        max_per_source,
+        new_remaining,
+        new_acc
+      )
+    else
+      new_acc
+    end
+  end
+
+  defp take_from_source(source, {selected, by_source_acc, active_acc}, max_per_source) do
+    source_articles = Map.get(by_source_acc, source, [])
+
+    if source_articles == [] do
+      {selected, by_source_acc, active_acc}
+    else
+      {to_take, remaining} = Enum.split(source_articles, max_per_source)
+      updated_by_source = update_source_map(by_source_acc, source, remaining)
+      updated_active = update_active_sources(active_acc, source, remaining)
+
+      {selected ++ to_take, updated_by_source, updated_active}
+    end
+  end
+
+  defp update_source_map(by_source_acc, source, []), do: Map.delete(by_source_acc, source)
+
+  defp update_source_map(by_source_acc, source, remaining),
+    do: Map.put(by_source_acc, source, remaining)
+
+  defp update_active_sources(active, _source, []), do: active
+  defp update_active_sources(active, source, _remaining), do: active ++ [source]
+
+  defp get_article_source(%{source: source}) when is_binary(source) and source != "", do: source
+  defp get_article_source(%{url: url}) when is_binary(url), do: extract_source_from_url(url)
+  defp get_article_source(_), do: :unknown
+
+  defp extract_source_from_url(url) do
+    case URI.parse(url) do
+      %URI{host: host} when is_binary(host) -> host
+      _ -> :unknown
+    end
+  rescue
+    _ -> :unknown
+  end
+
+  # Score a discovered article map using text classification
+  defp score_discovered_article_map(article_map, user_id) do
+    # Build a minimal DiscoveredArticle struct for scoring
+    discovered = %DiscoveredArticle{
+      title: article_map.title,
+      summary: article_map.content,
+      language: article_map.language,
+      difficulty_score: article_map.difficulty_score
+    }
+
+    RecommendationScorer.score_discovered_article_match(discovered, user_id)
   end
 
   defp article_to_map(%Article{} = article) do
@@ -355,23 +575,56 @@ defmodule Langler.Content do
     }
   end
 
-  # Fetch titles for discovered articles that don't have them
-  defp fetch_titles_for_discovered_articles(discovered_with_maps) do
-    {needs_fetch, already_mapped} = separate_articles_by_fetch_needs(discovered_with_maps)
+  # Fetch titles for discovered articles, handling new structure with Article structs
+  defp fetch_titles_for_discovered_articles_with_structs(discovered_with_data) do
+    {needs_fetch, already_mapped} = separate_discovered_by_fetch_needs(discovered_with_data)
 
-    fetched_titles = fetch_titles_if_needed(needs_fetch)
-    updated_needs_fetch = build_article_maps_from_fetched(needs_fetch, fetched_titles)
-    already_mapped_maps = extract_valid_article_maps(already_mapped)
+    fetched_titles = fetch_titles_if_needed_for_discovered(needs_fetch)
 
-    already_mapped_maps ++ updated_needs_fetch
+    updated_needs_fetch =
+      build_article_maps_from_fetched_with_structs(needs_fetch, fetched_titles)
+
+    already_mapped_data = extract_valid_article_data(already_mapped)
+
+    already_mapped_data ++ updated_needs_fetch
   end
 
-  defp fetch_titles_if_needed([]), do: %{}
-  defp fetch_titles_if_needed(needs_fetch), do: fetch_titles_concurrently(needs_fetch)
+  defp separate_discovered_by_fetch_needs(discovered_with_data) do
+    Enum.split_with(discovered_with_data, fn
+      {article_map, %Article{}} when is_map(article_map) -> false
+      {nil, %DiscoveredArticle{} = da} -> is_nil(da.title) or da.title == ""
+      {_article_map, %DiscoveredArticle{} = da} -> is_nil(da.title) or da.title == ""
+      _ -> false
+    end)
+  end
 
-  defp build_article_maps_from_fetched(needs_fetch, fetched_titles) do
-    Enum.map(needs_fetch, fn {da, _} ->
-      build_article_map_from_discovered(da, fetched_titles)
+  defp fetch_titles_if_needed_for_discovered([]), do: %{}
+
+  defp fetch_titles_if_needed_for_discovered(needs_fetch) do
+    needs_fetch
+    |> Enum.flat_map(fn {_article_map, %DiscoveredArticle{} = da} -> [da.url] end)
+    |> Enum.uniq()
+    |> Task.async_stream(
+      fn url ->
+        case fetch_title_from_url(url) do
+          {:ok, title} when is_binary(title) and title != "" -> {url, title}
+          _ -> {url, nil}
+        end
+      end,
+      max_concurrency: 5,
+      timeout: 5_000,
+      on_timeout: :kill_task
+    )
+    |> Enum.reduce(%{}, fn
+      {:ok, {url, title}}, acc when not is_nil(title) -> Map.put(acc, url, title)
+      _, acc -> acc
+    end)
+  end
+
+  defp build_article_maps_from_fetched_with_structs(needs_fetch, fetched_titles) do
+    Enum.map(needs_fetch, fn {_article_map, %DiscoveredArticle{} = da} ->
+      article_map = build_article_map_from_discovered(da, fetched_titles)
+      {article_map, da}
     end)
   end
 
@@ -395,38 +648,16 @@ defmodule Langler.Content do
     }
   end
 
-  defp extract_valid_article_maps(already_mapped) do
+  defp extract_valid_article_data(already_mapped) do
     already_mapped
-    |> Enum.map(fn {_da, article_map} -> article_map end)
+    |> Enum.map(fn {article_map, article_or_discovered} ->
+      if is_map(article_map) do
+        {article_map, article_or_discovered}
+      else
+        nil
+      end
+    end)
     |> Enum.filter(&(not is_nil(&1)))
-  end
-
-  defp separate_articles_by_fetch_needs(discovered_with_maps) do
-    Enum.split_with(discovered_with_maps, fn
-      {_da, article_map} when is_map(article_map) -> false
-      {_da, nil} -> true
-      {da, _} -> is_nil(da.title) or da.title == ""
-    end)
-  end
-
-  defp fetch_titles_concurrently(needs_fetch) do
-    needs_fetch
-    |> Enum.map(fn {da, _} -> da.url end)
-    |> Task.async_stream(
-      fn url ->
-        case fetch_title_from_url(url) do
-          {:ok, title} when is_binary(title) and title != "" -> {url, title}
-          _ -> {url, nil}
-        end
-      end,
-      max_concurrency: 5,
-      timeout: 5_000,
-      on_timeout: :kill_task
-    )
-    |> Enum.reduce(%{}, fn
-      {:ok, {url, title}}, acc when not is_nil(title) -> Map.put(acc, url, title)
-      _, acc -> acc
-    end)
   end
 
   # Fetch and extract title from a URL

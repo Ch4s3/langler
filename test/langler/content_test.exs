@@ -1,6 +1,8 @@
 defmodule Langler.ContentTest do
   use Langler.DataCase, async: true
 
+  import Langler.ContentFixtures
+
   alias Langler.AccountsFixtures
   alias Langler.Content
 
@@ -919,6 +921,180 @@ defmodule Langler.ContentTest do
       {:ok, updated} = Content.update_discovered_article_user(dau, %{status: "dismissed"})
 
       assert updated.status == "dismissed"
+    end
+  end
+
+  describe "get_recommended_articles/2" do
+    test "ensures source diversity in recommendations" do
+      user = AccountsFixtures.user_fixture()
+      other_user = AccountsFixtures.user_fixture()
+
+      # Create articles from different sources
+      article1 =
+        article_fixture(%{
+          user: other_user,
+          title: "Article 1",
+          source: "BBC Mundo",
+          url: "https://www.bbc.com/article1"
+        })
+
+      article2 =
+        article_fixture(%{
+          user: other_user,
+          title: "Article 2",
+          source: "El País",
+          url: "https://elpais.com/article2"
+        })
+
+      article3 =
+        article_fixture(%{
+          user: other_user,
+          title: "Article 3",
+          source: "BBC Mundo",
+          url: "https://www.bbc.com/article3"
+        })
+
+      article4 =
+        article_fixture(%{
+          user: other_user,
+          title: "Article 4",
+          source: "El País",
+          url: "https://elpais.com/article4"
+        })
+
+      # Tag articles with topics
+      Content.tag_article(article1, [{"cultura", 0.8}])
+      Content.tag_article(article2, [{"cultura", 0.8}])
+      Content.tag_article(article3, [{"cultura", 0.8}])
+      Content.tag_article(article4, [{"cultura", 0.8}])
+
+      Langler.Accounts.set_user_topic_preference(user.id, "cultura", 1.5)
+
+      # Get recommendations (limit 3)
+      recommendations = Content.get_recommended_articles(user.id, 3)
+
+      assert length(recommendations) <= 3
+
+      # Extract sources from recommendations
+      sources = Enum.map(recommendations, & &1.source) |> Enum.uniq()
+
+      # Should have multiple sources (not all from one source)
+      assert length(sources) > 1
+    end
+
+    test "filters out sports articles when user has no preference" do
+      user = AccountsFixtures.user_fixture()
+      other_user = AccountsFixtures.user_fixture()
+
+      # Create a sports article
+      sports_article =
+        article_fixture(%{
+          user: other_user,
+          title: "Harden lleva a Clippers a vencer 121-117 a Raptors",
+          source: "AP News",
+          url: "https://apnews.com/sports"
+        })
+
+      # Create a non-sports article
+      culture_article =
+        article_fixture(%{
+          user: other_user,
+          title: "Arte y cultura en la ciudad",
+          source: "El País",
+          url: "https://elpais.com/culture"
+        })
+
+      Content.tag_article(sports_article, [{"deportes", 0.9}])
+      Content.tag_article(culture_article, [{"cultura", 0.9}])
+
+      # User has no topic preferences
+      recommendations = Content.get_recommended_articles(user.id, 10)
+
+      # Sports article should be filtered out (scored too low)
+      sports_urls = Enum.filter(recommendations, &(&1.url == sports_article.url))
+      assert Enum.empty?(sports_urls)
+    end
+
+    test "includes sports articles when user has sports preference" do
+      user = AccountsFixtures.user_fixture()
+      other_user = AccountsFixtures.user_fixture()
+
+      # Create a sports article
+      sports_article =
+        article_fixture(%{
+          user: other_user,
+          title: "Harden lleva a Clippers a vencer 121-117 a Raptors",
+          source: "AP News",
+          url: "https://apnews.com/sports"
+        })
+
+      Content.tag_article(sports_article, [{"deportes", 0.9}])
+
+      # User has sports preference
+      Langler.Accounts.set_user_topic_preference(user.id, "deportes", 1.5)
+
+      recommendations = Content.get_recommended_articles(user.id, 10)
+
+      # Sports article should be included
+      sports_urls = Enum.filter(recommendations, &(&1.url == sports_article.url))
+      assert length(sports_urls) > 0
+    end
+
+    test "filters discovered articles by topic classification" do
+      user = AccountsFixtures.user_fixture()
+
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          discovery_method: "rss",
+          language: "spanish"
+        })
+
+      # Create discovered articles
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      {:ok, sports_discovered} =
+        %Langler.Content.DiscoveredArticle{}
+        |> Langler.Content.DiscoveredArticle.changeset(%{
+          source_site_id: source_site.id,
+          url: "https://example.com/sports",
+          title: "Harden lleva a Clippers a vencer 121-117 a Raptors",
+          summary: "El jugador anotó 31 puntos en tiempo extra.",
+          language: "spanish",
+          status: "new",
+          discovered_at: now
+        })
+        |> Langler.Repo.insert()
+
+      {:ok, culture_discovered} =
+        %Langler.Content.DiscoveredArticle{}
+        |> Langler.Content.DiscoveredArticle.changeset(%{
+          source_site_id: source_site.id,
+          url: "https://example.com/culture",
+          title: "Arte y cultura en la ciudad",
+          summary: "Exposición de arte moderno en el museo.",
+          language: "spanish",
+          status: "new",
+          discovered_at: now
+        })
+        |> Langler.Repo.insert()
+
+      # Mark as recommended for user
+      Content.get_or_create_discovered_article_user(sports_discovered.id, user.id, %{
+        status: "recommended"
+      })
+
+      Content.get_or_create_discovered_article_user(culture_discovered.id, user.id, %{
+        status: "recommended"
+      })
+
+      # User has no topic preferences
+      recommendations = Content.get_recommended_articles(user.id, 10)
+
+      # Sports discovered article should be filtered out
+      sports_urls = Enum.filter(recommendations, &(&1.url == sports_discovered.url))
+      assert Enum.empty?(sports_urls)
     end
   end
 end
