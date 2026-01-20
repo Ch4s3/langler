@@ -14,6 +14,7 @@ defmodule Langler.Content do
     ArticleUser,
     DiscoveredArticle,
     DiscoveredArticleUser,
+    RecommendationCache,
     RecommendationScorer,
     Sentence,
     SourceSite
@@ -120,28 +121,37 @@ defmodule Langler.Content do
   end
 
   def delete_article_for_user(user_id, article_id) do
-    Repo.transaction(fn ->
-      article_user = Repo.get_by(ArticleUser, article_id: article_id, user_id: user_id)
+    result =
+      Repo.transaction(fn ->
+        article_user = Repo.get_by(ArticleUser, article_id: article_id, user_id: user_id)
 
-      if is_nil(article_user) do
-        Repo.rollback(:not_found)
-      else
-        Repo.delete!(article_user)
-      end
+        if is_nil(article_user) do
+          Repo.rollback(:not_found)
+        else
+          Repo.delete!(article_user)
+        end
 
-      remaining =
-        ArticleUser
-        |> where(article_id: ^article_id)
-        |> select([au], count(au.id))
-        |> Repo.one()
+        remaining =
+          ArticleUser
+          |> where(article_id: ^article_id)
+          |> select([au], count(au.id))
+          |> Repo.one()
 
-      if remaining == 0 do
-        article = Repo.get!(Article, article_id)
-        Repo.delete!(article)
-      end
+        if remaining == 0 do
+          article = Repo.get!(Article, article_id)
+          Repo.delete!(article)
+        end
 
-      :ok
-    end)
+        :ok
+      end)
+
+    # Invalidate recommendation cache on successful delete
+    case result do
+      {:ok, _} -> RecommendationCache.invalidate(user_id)
+      _ -> :ok
+    end
+
+    result
   end
 
   def archive_article_for_user(user_id, article_id) do
@@ -174,21 +184,30 @@ defmodule Langler.Content do
   def ensure_article_user(%Article{} = article, user_id, attrs \\ %{}) do
     defaults = Map.merge(%{article_id: article.id, user_id: user_id}, attrs)
 
-    case Repo.get_by(ArticleUser, article_id: article.id, user_id: user_id) do
-      nil ->
-        %ArticleUser{}
-        |> ArticleUser.changeset(defaults)
-        |> Repo.insert()
+    result =
+      case Repo.get_by(ArticleUser, article_id: article.id, user_id: user_id) do
+        nil ->
+          %ArticleUser{}
+          |> ArticleUser.changeset(defaults)
+          |> Repo.insert()
 
-      article_user ->
-        attrs =
-          attrs
-          |> Enum.into(%{})
-          |> Map.put(:article_id, article_user.article_id)
-          |> Map.put(:user_id, article_user.user_id)
+        article_user ->
+          attrs =
+            attrs
+            |> Enum.into(%{})
+            |> Map.put(:article_id, article_user.article_id)
+            |> Map.put(:user_id, article_user.user_id)
 
-        update_article_user(article_user, attrs)
+          update_article_user(article_user, attrs)
+      end
+
+    # Invalidate recommendation cache when article association changes
+    case result do
+      {:ok, _} -> RecommendationCache.invalidate(user_id)
+      _ -> :ok
     end
+
+    result
   end
 
   def update_article_user(%ArticleUser{} = article_user, attrs) do
@@ -442,6 +461,29 @@ defmodule Langler.Content do
     # Apply source diversity and return
     select_with_source_diversity(scored_articles, limit)
     |> Enum.map(fn {article, _score} -> article end)
+  end
+
+  @doc """
+  Gets the count of recommended articles for a user, with caching.
+
+  Uses an ETS cache with TTL to avoid expensive scoring computations on every
+  page load. The cache is automatically invalidated when the user imports or
+  deletes articles.
+  """
+  @spec get_recommended_count(integer(), integer()) :: non_neg_integer()
+  def get_recommended_count(user_id, limit \\ 10) do
+    case RecommendationCache.get_count(user_id) do
+      {:ok, count} ->
+        count
+
+      :miss ->
+        count =
+          user_id
+          |> get_recommended_articles(limit)
+          |> length()
+
+        RecommendationCache.put_count(user_id, count)
+    end
   end
 
   # Batch check which articles have words to avoid N+1 queries

@@ -42,6 +42,7 @@ defmodule LanglerWeb.StudyLive.IndexRenderTest do
         %{score: 3, label: "Good", class: "btn-primary"}
       ],
       stats: %{due_now: 1, due_today: 1, total: 1, completion: 100},
+      items_loading: false,
       all_items: [item],
       visible_count: 1,
       flipped_cards: MapSet.new(),

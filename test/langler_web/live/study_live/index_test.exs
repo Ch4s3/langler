@@ -8,6 +8,23 @@ defmodule LanglerWeb.StudyLive.IndexTest do
   alias Langler.VocabularyFixtures
 
   describe "study index" do
+    # Helper to wait for async items loading to complete
+    # start_async tasks don't work with render_async, so we poll for completion
+    defp wait_for_async_loading(view) do
+      # Wait up to 500ms for async to complete
+      Enum.reduce_while(0..9, nil, fn _i, _acc ->
+        Process.sleep(50)
+        html = render(view)
+
+        # Check if study-items element exists (means loading is done) or if items are present
+        if (html =~ ~r/id="study-items"/ || html =~ ~r/items-\d+/) && not (html =~ ~r/study-card-skeleton/) do
+          {:halt, :ok}
+        else
+          {:cont, nil}
+        end
+      end)
+    end
+
     test "renders due items and stats", %{conn: conn} do
       user = AccountsFixtures.user_fixture()
       word = VocabularyFixtures.word_fixture()
@@ -21,6 +38,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
 
       assert has_element?(view, "#study-items")
       assert has_element?(view, "#items-#{item.id}")
@@ -49,6 +69,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
 
       # Both items should be visible initially
       assert has_element?(view, "#items-#{item_one.id}")
@@ -85,6 +108,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study?q=hablar")
 
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
+
       assert has_element?(view, "#items-#{item_one.id}")
       refute has_element?(view, "#items-#{item_two.id}")
       assert render(view) =~ ~r/value="hablar"/
@@ -112,6 +138,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study?q=hablar")
 
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
+
       # Only hablar item visible
       assert has_element?(view, "#items-#{item_one.id}")
       refute has_element?(view, "#items-#{item_two.id}")
@@ -120,6 +149,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       view
       |> element("button[phx-click='clear_search']")
       |> render_click()
+
+      # Wait for async loading after clearing search
+      wait_for_async_loading(view)
 
       # Both items should be visible
       assert has_element?(view, "#items-#{item_one.id}")
@@ -140,6 +172,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
 
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
+
       # Item is visible
       assert has_element?(view, "#items-#{item.id}")
 
@@ -147,6 +182,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       view
       |> form("form[phx-change='search_items']", %{"q" => "nonexistent"})
       |> render_change()
+
+      # Wait for async loading after search
+      wait_for_async_loading(view)
 
       # Item should be hidden, empty state should show
       refute has_element?(view, "#items-#{item.id}")
@@ -202,6 +240,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
 
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
+
       view
       |> element("button[phx-value-item-id='#{item.id}'][phx-value-quality='3']")
       |> render_click()
@@ -231,6 +272,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
 
       refute has_element?(view, "#study-conjugations-#{word.id}")
 
@@ -276,6 +320,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
 
       # Click toggle to expand conjugations
       view
@@ -331,6 +378,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for async items loading to complete
+      wait_for_async_loading(view)
 
       # Flip the card - should not crash even with nil word
       view

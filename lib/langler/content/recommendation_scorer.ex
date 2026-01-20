@@ -368,7 +368,10 @@ defmodule Langler.Content.RecommendationScorer do
     |> div(length(words_with_freq))
   end
 
-  defp calculate_cefr_level(avg_rank) do
+  @doc """
+  Calculates CEFR level from average frequency rank.
+  """
+  def calculate_cefr_level(avg_rank) do
     {cefr_level, numeric_level} =
       case avg_rank do
         rank when rank <= 1000 -> {"A1", 1.0 + rank / 1000.0}
@@ -382,7 +385,10 @@ defmodule Langler.Content.RecommendationScorer do
     %{cefr_level: cefr_level, numeric_level: min(numeric_level, 10.0)}
   end
 
-  defp default_user_level do
+  @doc """
+  Returns the default user level for new users with no study history.
+  """
+  def default_user_level do
     %{cefr_level: "A1", numeric_level: 1.0}
   end
 

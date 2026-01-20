@@ -7,27 +7,31 @@
     <.live_title default="Langler" suffix=" · Phoenix Framework">
       {assigns[:page_title]}
     </.live_title>
-    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
-    </script>
+    <%!-- Preload critical resources for faster FCP --%>
+    <link phx-track-static rel="preload" href={~p"/assets/css/app.css"} as="style" />
+    <link phx-track-static rel="preload" href={~p"/images/logo.svg"} as="image" fetchpriority="high" />
+    <%!-- Critical CSS: ultra-minimal styles for above-the-fold content --%>
+    <style>
+      /* Ultra-minimal critical CSS - only what's needed for FCP */
+      html{font-family:system-ui,-apple-system,sans-serif;line-height:1.5}
+      body{margin:0;min-height:100vh;background:#e5e7eb;color:#1f2937}
+      .primary-nav{border-bottom:1px solid #e5e7eb;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);position:sticky;top:0;z-index:50}
+      .primary-nav>div{max-width:72rem;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1rem}
+      .primary-nav a{text-decoration:none;color:inherit;display:flex;align-items:center;gap:.75rem;font-size:1.125rem;font-weight:600}
+      .primary-nav img{width:36px;height:36px;flex-shrink:0;display:block}
+      [data-theme="night"] body{background:#1f2937;color:#f9fafb}
+      [data-theme="cmyk"] body{background:#f3f4f6;color:#1f2937}
+    </style>
+    <%!-- Load full CSS asynchronously to avoid render blocking --%>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} media="print" onload="this.media='all';this.onload=null" />
+    <noscript>
+      <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    </noscript>
+    <%!-- Optimized theme script - runs immediately but non-blocking --%>
     <script>
-      (() => {
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-          }
-        };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
-      })();
+      !function(){var t=localStorage.getItem("phx:theme")||"system";if(!document.documentElement.hasAttribute("data-theme")){if("system"===t)document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}function e(e){if("system"===e)localStorage.removeItem("phx:theme"),document.documentElement.removeAttribute("data-theme");else localStorage.setItem("phx:theme",e),document.documentElement.setAttribute("data-theme",e)}window.addEventListener("storage",function(n){n.key==="phx:theme"&&e(n.newValue||"system")}),window.addEventListener("phx:set-theme",function(n){e(n.target.dataset.phxTheme)})}();
+    </script>
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
   </head>
   <body class="min-h-screen bg-base-200">

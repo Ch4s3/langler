@@ -56,6 +56,20 @@ defmodule Langler.Accounts do
     end
   end
 
+  @doc """
+  Gets the current deck for a user from a pre-fetched user preference.
+
+  This avoids duplicate preference lookups when the preference is already loaded.
+  """
+  def get_current_deck_from_pref(user_id, nil), do: get_default_deck(user_id)
+
+  def get_current_deck_from_pref(user_id, %UserPreference{current_deck_id: nil}),
+    do: get_default_deck(user_id)
+
+  def get_current_deck_from_pref(user_id, %UserPreference{current_deck_id: deck_id}) do
+    get_or_fallback_to_default_deck(user_id, deck_id)
+  end
+
   defp get_default_deck(user_id) do
     case Vocabulary.get_or_create_default_deck(user_id) do
       {:ok, deck} -> deck

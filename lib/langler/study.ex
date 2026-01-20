@@ -9,7 +9,7 @@ defmodule Langler.Study do
   import Ecto.Query, warn: false
   alias Langler.Repo
 
-  alias Langler.Study.{FSRS, FSRSItem}
+  alias Langler.Study.{FSRS, FSRSItem, LevelCache}
 
   @doc """
   Builds study statistics for a list of FSRS items.
@@ -148,16 +148,34 @@ defmodule Langler.Study do
   end
 
   def remove_item(user_id, word_id) do
-    case get_item_by_user_and_word(user_id, word_id) do
-      %FSRSItem{} = item -> Repo.delete(item)
-      nil -> {:error, :not_found}
+    result =
+      case get_item_by_user_and_word(user_id, word_id) do
+        %FSRSItem{} = item -> Repo.delete(item)
+        nil -> {:error, :not_found}
+      end
+
+    # Invalidate level cache when item is removed
+    case result do
+      {:ok, _} -> LevelCache.invalidate(user_id)
+      _ -> :ok
     end
+
+    result
   end
 
   def create_item(attrs \\ %{}) do
-    %FSRSItem{}
-    |> FSRSItem.changeset(attrs)
-    |> Repo.insert()
+    result =
+      %FSRSItem{}
+      |> FSRSItem.changeset(attrs)
+      |> Repo.insert()
+
+    # Invalidate level cache when new item is created
+    case result do
+      {:ok, item} -> LevelCache.invalidate(item.user_id)
+      _ -> :ok
+    end
+
+    result
   end
 
   def review_item(%FSRSItem{} = item, rating, opts \\ []) do
@@ -180,10 +198,19 @@ defmodule Langler.Study do
       step: result.step
     }
 
-    case append_quality(item, quality, attrs) do
-      {:ok, updated} -> {:ok, Repo.preload(updated, :word)}
-      error -> error
+    result =
+      case append_quality(item, quality, attrs) do
+        {:ok, updated} -> {:ok, Repo.preload(updated, :word)}
+        error -> error
+      end
+
+    # Invalidate level cache when user reviews an item
+    case result do
+      {:ok, _} -> LevelCache.invalidate(item.user_id)
+      _ -> :ok
     end
+
+    result
   end
 
   def update_item(%FSRSItem{} = item, attrs) do
@@ -225,9 +252,45 @@ defmodule Langler.Study do
   @doc """
   Gets the user's vocabulary level based on their FSRS study items.
   Returns %{cefr_level: "A1" | "A2" | "B1" | "B2" | "C1" | "C2", numeric_level: float()}
+
+  Uses ETS cache to avoid expensive recalculation on every page load.
   """
   def get_user_vocabulary_level(user_id) do
+    case LevelCache.get_level(user_id) do
+      {:ok, level} ->
+        level
+
+      :miss ->
+        alias Langler.Content.RecommendationScorer
+        level = RecommendationScorer.calculate_user_level(user_id)
+        LevelCache.put_level(user_id, level)
+    end
+  end
+
+  @doc """
+  Calculates vocabulary level from already-loaded FSRS items.
+
+  This avoids re-fetching items when they're already in memory.
+  Returns %{cefr_level: String.t(), numeric_level: float()}
+  """
+  def calculate_level_from_items(items) do
     alias Langler.Content.RecommendationScorer
-    RecommendationScorer.calculate_user_level(user_id)
+
+    words_with_freq =
+      items
+      |> Enum.map(& &1.word)
+      |> Enum.filter(fn word -> not is_nil(word) and not is_nil(word.frequency_rank) end)
+
+    if Enum.empty?(words_with_freq) do
+      RecommendationScorer.default_user_level()
+    else
+      avg_rank =
+        words_with_freq
+        |> Enum.map(& &1.frequency_rank)
+        |> Enum.sum()
+        |> div(length(words_with_freq))
+
+      RecommendationScorer.calculate_cefr_level(avg_rank)
+    end
   end
 end

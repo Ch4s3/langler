@@ -45,7 +45,7 @@ defmodule LanglerWeb.Layouts do
           navigate={~p"/articles"}
           class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
         >
-          <img src={~p"/images/logo.svg"} width="36" alt="Langler logo" />
+          <img src={~p"/images/logo.svg"} width="36" height="36" alt="Langler logo" loading="eager" fetchpriority="high" />
           <span>Langler</span>
         </.link>
 
@@ -62,23 +62,45 @@ defmodule LanglerWeb.Layouts do
           >
             Study
           </.link>
-          <.link
-            navigate={~p"/users/settings"}
-            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
-          >
-            Settings
-          </.link>
         </nav>
 
         <div class="flex items-center gap-3">
           <.theme_toggle />
           <div :if={@current_scope} class="flex items-center gap-3">
-            <div class="rounded-full bg-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70">
-              {@current_scope.user.email}
+            <div class="dropdown dropdown-end">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm rounded-full border border-base-200 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
+                aria-label="Account menu"
+              >
+                {@current_scope.user.email}
+                <span aria-hidden="true">▾</span>
+              </button>
+              <ul
+                class="dropdown-content menu rounded-box w-48 border border-base-200 bg-base-100 shadow-2xl mt-2"
+                role="menu"
+              >
+                <li role="none">
+                  <.link
+                    navigate={~p"/users/settings"}
+                    class="text-base text-base-content/80 w-full px-4 py-2"
+                    role="menuitem"
+                  >
+                    Settings
+                  </.link>
+                </li>
+                <li role="none">
+                  <.link
+                    href={~p"/users/log-out"}
+                    method="delete"
+                    class="text-base text-base-content/80 w-full px-4 py-2"
+                    role="menuitem"
+                  >
+                    Log out
+                  </.link>
+                </li>
+              </ul>
             </div>
-            <.link href={~p"/users/log-out"} method="delete" class="btn btn-sm btn-primary text-white">
-              Log out
-            </.link>
           </div>
           <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
             <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">

@@ -18,6 +18,8 @@ defmodule Langler.Application do
           {DNSCluster, query: Application.get_env(:langler, :dns_cluster_query) || :ignore},
           {Phoenix.PubSub, name: Langler.PubSub},
           Langler.Chat.RateLimiter,
+          Langler.Content.RecommendationCache,
+          Langler.Study.LevelCache,
           # Start a worker by calling: Langler.Worker.start_link(arg)
           # {Langler.Worker, arg},
           # Start to serve requests, typically the last entry

@@ -8,6 +8,22 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
 
   setup :register_and_log_in_user
 
+  # Helper to wait for async article loading to complete
+  # start_async tasks don't work with render_async, so we poll for completion
+  defp wait_for_async_loading(view) do
+    # Wait up to 500ms for async to complete
+    Enum.reduce_while(0..9, nil, fn _i, _acc ->
+      Process.sleep(50)
+      html = render(view)
+
+      if html =~ ~r/articles-\d+/ && not (html =~ ~r/loading.*spinner/) do
+        {:halt, :ok}
+      else
+        {:cont, nil}
+      end
+    end)
+  end
+
   test "renders the import form and reacts to URL validation", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/articles")
 
@@ -24,13 +40,19 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
     article = article_fixture(%{user: user})
     :ok = Content.tag_article(article, [{"culture", 0.9}])
 
-    {:ok, view, _html} = live(conn, "/articles")
+      {:ok, view, _html} = live(conn, "/articles")
 
-    assert has_element?(view, "a[href='/articles/#{article.id}']")
+      # Wait for async articles loading to complete
+      wait_for_async_loading(view)
+
+      assert has_element?(view, "a[href='/articles/#{article.id}']")
 
     view
     |> element("button[phx-click='filter_topic'][phx-value-topic='culture']")
     |> render_click()
+
+    # Wait for async loading after filter
+    wait_for_async_loading(view)
 
     assert has_element?(view, "a[href='/articles/#{article.id}']")
   end
@@ -42,6 +64,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
 
       {:ok, view, _html} = live(conn, "/articles")
 
+      # Wait for async articles loading to complete
+      render_async(view)
+
       # Both articles should be visible initially
       assert has_element?(view, "#articles-#{article1.id}")
       assert has_element?(view, "#articles-#{article2.id}")
@@ -50,6 +75,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
       view
       |> form("form[phx-change='search']", %{"q" => "Spanish"})
       |> render_change()
+
+      # Wait for async loading after search
+      wait_for_async_loading(view)
 
       # Only matching article should be visible
       assert has_element?(view, "#articles-#{article1.id}")
@@ -62,6 +90,10 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
 
       {:ok, view, _html} = live(conn, "/articles?q=Spanish")
 
+      # Wait for async articles loading to complete
+      # Poll until loading is done (start_async doesn't work with render_async)
+      wait_for_async_loading(view)
+
       assert has_element?(view, "#articles-#{article1.id}")
       refute has_element?(view, "#articles-#{article2.id}")
       assert render(view) =~ ~r/value="Spanish"/
@@ -73,6 +105,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
 
       {:ok, view, _html} = live(conn, "/articles?q=Spanish")
 
+      # Wait for async articles loading to complete
+      wait_for_async_loading(view)
+
       # Only Spanish article visible
       assert has_element?(view, "#articles-#{article1.id}")
       refute has_element?(view, "#articles-#{article2.id}")
@@ -81,6 +116,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
       view
       |> element("button[phx-click='clear_search']")
       |> render_click()
+
+      # Wait for async loading after clearing search
+      wait_for_async_loading(view)
 
       # Both articles should be visible
       assert has_element?(view, "#articles-#{article1.id}")
@@ -92,6 +130,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
 
       {:ok, view, _html} = live(conn, "/articles")
 
+      # Wait for async articles loading to complete
+      wait_for_async_loading(view)
+
       # Article is visible
       assert has_element?(view, "#articles-#{article.id}")
 
@@ -99,6 +140,9 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
       view
       |> form("form[phx-change='search']", %{"q" => "nonexistent"})
       |> render_change()
+
+      # Wait for async loading after search
+      render_async(view)
 
       # Article should be hidden when search doesn't match
       refute has_element?(view, "#articles-#{article.id}")
