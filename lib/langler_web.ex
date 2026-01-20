@@ -87,6 +87,7 @@ defmodule LanglerWeb do
       # Core UI components
       import LanglerWeb.CoreComponents
       import LanglerWeb.QuizComponents
+      import LanglerWeb.StudyComponents
 
       # Common modules used in templates
       alias LanglerWeb.Layouts

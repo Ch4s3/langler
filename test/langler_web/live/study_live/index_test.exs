@@ -341,5 +341,75 @@ defmodule LanglerWeb.StudyLive.IndexTest do
       html = render(view)
       assert html =~ "items-#{item.id}"
     end
+
+    test "opens CSV import modal", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      _deck = VocabularyFixtures.deck_fixture(%{user: user, name: "Test Deck"})
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Modal should not be visible initially
+      refute has_element?(view, ".modal[phx-click='hide_csv_import']")
+
+      # Click the import CSV button
+      view
+      |> element("button[phx-click='show_csv_import']")
+      |> render_click()
+
+      # Modal should now be visible
+      assert has_element?(view, ".modal[phx-click='hide_csv_import']")
+      assert render(view) =~ "Import words from CSV"
+    end
+
+    test "closes CSV import modal", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      _deck = VocabularyFixtures.deck_fixture(%{user: user, name: "Test Deck"})
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Open the modal
+      view
+      |> element("button[phx-click='show_csv_import']")
+      |> render_click()
+
+      assert has_element?(view, ".modal[phx-click='hide_csv_import']")
+
+      # Close the modal
+      view
+      |> element("button[phx-click='hide_csv_import']")
+      |> render_click()
+
+      # Modal should be closed
+      refute has_element?(view, ".modal[phx-click='hide_csv_import']")
+    end
+
+    test "CSV import modal has file input and deck selector", %{conn: conn} do
+      user = AccountsFixtures.user_fixture()
+      deck = VocabularyFixtures.deck_fixture(%{user: user, name: "Test Deck"})
+
+      conn = log_in_user(conn, user)
+      {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Open the modal
+      view
+      |> element("button[phx-click='show_csv_import']")
+      |> render_click()
+
+      assert has_element?(view, ".modal[phx-click='hide_csv_import']")
+      assert has_element?(view, "input[type='file']")
+      assert has_element?(view, "select[phx-change='validate_csv_deck']")
+      assert has_element?(view, "button[type='submit']")
+
+      # Select a deck - use element instead of form for select
+      view
+      |> element("select[phx-change='validate_csv_deck']")
+      |> render_change(%{"deck_id" => "#{deck.id}"})
+
+      # Verify deck is selected
+      html = render(view)
+      assert html =~ "Test Deck"
+    end
   end
 end

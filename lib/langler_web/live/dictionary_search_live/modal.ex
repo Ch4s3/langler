@@ -50,15 +50,24 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
           "modal modal-middle",
           @open && "modal-open"
         ]}
+        open={@open}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dictionary-search-title"
         phx-click-away="close_search"
         phx-target={@myself}
       >
         <div class="modal-box w-full max-w-2xl rounded-2xl bg-base-100/95 backdrop-blur-sm shadow-2xl border border-base-200">
           <%!-- Header with close button --%>
-          <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center justify-between gap-3 mb-4">
             <div class="flex items-center gap-2 text-base-content/60">
               <.icon name="hero-book-open" class="h-5 w-5" />
-              <span class="text-sm font-medium">Dictionary Search</span>
+              <h2
+                id="dictionary-search-title"
+                class="text-sm font-semibold text-base-content tracking-tight"
+              >
+                Dictionary Search
+              </h2>
               <kbd class="kbd kbd-sm">Cmd+J</kbd>
             </div>
             <button
@@ -79,16 +88,15 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
                 name="hero-magnifying-glass"
                 class="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-base-content/40"
               />
-              <input
+              <.input
                 type="text"
                 name="query"
                 value={@query}
                 placeholder="Search for a word..."
-                class={[
-                  "input input-lg input-bordered w-full rounded-xl focus:input-primary",
-                  "pl-12",
-                  if(@query != "", do: "pr-20", else: "pr-16")
-                ]}
+                class={
+                  "input input-lg input-bordered w-full rounded-xl focus:input-primary pl-12 " <>
+                    if(@query != "", do: "pr-20", else: "pr-16")
+                }
                 autocomplete="off"
                 id="dictionary-search-input"
               />

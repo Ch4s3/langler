@@ -1,6 +1,7 @@
 defmodule Langler.VocabularyFixtures do
   @moduledoc false
 
+  alias Langler.AccountsFixtures
   alias Langler.ContentFixtures
   alias Langler.Vocabulary
 
@@ -35,5 +36,21 @@ defmodule Langler.VocabularyFixtures do
       |> Vocabulary.create_occurrence()
 
     occurrence
+  end
+
+  def deck_fixture(attrs \\ %{}) do
+    user = Map.get(attrs, :user) || AccountsFixtures.user_fixture()
+
+    deck_attrs =
+      attrs
+      |> Map.drop([:user])
+      |> Enum.into(%{
+        name: "Test Deck #{System.unique_integer([:positive])}",
+        is_default: false
+      })
+
+    {:ok, deck} = Vocabulary.create_deck(user.id, deck_attrs)
+
+    deck
   end
 end

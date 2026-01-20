@@ -19,11 +19,22 @@ const ArticleStickyHeader = {
     window.addEventListener("scroll", this.handleScroll, {passive: true})
     window.addEventListener("resize", this.handleResize)
 
+    if (this.readerEl && typeof ResizeObserver !== "undefined") {
+      this.readerResizeObserver = new ResizeObserver(() => {
+        this.measureArticle()
+        this.handleScroll()
+      })
+      this.readerResizeObserver.observe(this.readerEl)
+    }
+
     this.handleScroll()
   },
   destroyed() {
     window.removeEventListener("scroll", this.handleScroll)
     window.removeEventListener("resize", this.handleResize)
+    if (this.readerResizeObserver) {
+      this.readerResizeObserver.disconnect()
+    }
     if (this.navEl) {
       this.navEl.classList.remove("nav--unpinned")
     }
@@ -90,7 +101,7 @@ const ArticleStickyHeader = {
     const heroInfluence = this.heroBottom
       ? this.heroBottom - window.innerHeight * 0.25
       : this.articleTop
-    const start = Math.min(this.articleTop, heroInfluence)
+    const start = heroInfluence
     const end = this.articleBottom - window.innerHeight
     const denominator = Math.max(end - start, 1)
     const progress = clamp((scrollY - start) / denominator)

@@ -29,7 +29,7 @@ defmodule LanglerWeb.StudyLive.IndexRenderTest do
 
     assigns = %{
       flash: %{},
-      current_scope: nil,
+      current_scope: %{user: %{id: 1, email: "test@example.com"}},
       filters: [
         %{id: :now, label: "Due now"},
         %{id: :today, label: "Due today"},
@@ -50,7 +50,20 @@ defmodule LanglerWeb.StudyLive.IndexRenderTest do
       definitions_loading: MapSet.new(),
       user_level: %{cefr_level: "A1"},
       recommended_articles: AsyncResult.ok([]),
-      streams: streams
+      streams: streams,
+      decks: [],
+      current_deck: nil,
+      filter_deck_id: nil,
+      show_deck_modal: false,
+      editing_deck: nil,
+      deck_form: Phoenix.Component.to_form(%{"name" => ""}),
+      show_csv_import: false,
+      csv_import_deck_id: nil,
+      csv_preview: nil,
+      csv_content: nil,
+      csv_importing: false,
+      default_language: "spanish",
+      uploads: %{csv_file: %Phoenix.LiveView.UploadConfig{ref: "csv_file", entries: []}}
     }
 
     html = render_component(&LanglerWeb.StudyLive.Index.render/1, assigns)

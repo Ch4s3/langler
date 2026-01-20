@@ -11,6 +11,63 @@ defmodule Langler.Study do
 
   alias Langler.Study.{FSRS, FSRSItem}
 
+  @doc """
+  Builds study statistics for a list of FSRS items.
+
+  Returns a map with:
+  - `:due_now` - Count of items due now
+  - `:due_today` - Count of items due today
+  - `:total` - Total number of items
+  - `:completion` - Completion percentage (0-100)
+  """
+  def build_study_stats(items) do
+    now = DateTime.utc_now()
+    end_of_day = end_of_day(now)
+    due_now = Enum.count(items, &due_now?(&1, now))
+    total = length(items)
+
+    completion =
+      if total == 0 do
+        100
+      else
+        Float.round((total - due_now) / total * 100, 0)
+      end
+
+    %{
+      due_now: due_now,
+      due_today: Enum.count(items, &due_today?(&1, end_of_day)),
+      total: total,
+      completion: trunc(completion)
+    }
+  end
+
+  @doc """
+  Checks if an item is due now (due_date is nil or in the past).
+  """
+  def due_now?(%{due_date: nil}, _now), do: true
+
+  def due_now?(%{due_date: due}, now) do
+    DateTime.compare(due, now) != :gt
+  end
+
+  @doc """
+  Checks if an item is due today (due_date is nil or before end of day).
+  """
+  def due_today?(item, end_of_day) do
+    case item.due_date do
+      nil -> true
+      due -> DateTime.compare(due, end_of_day) != :gt
+    end
+  end
+
+  @doc """
+  Calculates the end of day DateTime for a given DateTime.
+  """
+  def end_of_day(now) do
+    date = DateTime.to_date(now)
+    DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
+  end
+
   def list_items_for_user(user_id, opts \\ []) do
     word_ids = Keyword.get(opts, :word_ids)
 

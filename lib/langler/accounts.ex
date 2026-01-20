@@ -6,6 +6,7 @@ defmodule Langler.Accounts do
   import Ecto.Query, warn: false
   alias Langler.Accounts.{User, UserNotifier, UserPreference, UserToken, UserTopicPreference}
   alias Langler.Repo
+  alias Langler.Vocabulary
 
   def get_user_preference(user_id), do: Repo.get_by(UserPreference, user_id: user_id)
 
@@ -15,6 +16,78 @@ defmodule Langler.Accounts do
     pref
     |> UserPreference.changeset(Map.put(attrs, :user_id, user.id))
     |> Repo.insert_or_update()
+  end
+
+  ## Current Deck Management
+
+  @doc """
+  Sets the current deck for a user.
+  Validates that the deck belongs to the user.
+  """
+  def set_current_deck(user_id, deck_id) when is_integer(user_id) and is_integer(deck_id) do
+    case Vocabulary.get_deck_for_user(deck_id, user_id) do
+      nil ->
+        {:error, :deck_not_found}
+
+      _deck ->
+        pref = get_user_preference(user_id) || %UserPreference{user_id: user_id}
+
+        pref
+        |> UserPreference.changeset(%{user_id: user_id, current_deck_id: deck_id})
+        |> Repo.insert_or_update()
+    end
+  end
+
+  def set_current_deck(_user_id, _deck_id), do: {:error, :invalid_arguments}
+
+  @doc """
+  Gets the current deck for a user, falling back to the default deck if not set.
+  """
+  def get_current_deck(user_id) do
+    case get_user_preference(user_id) do
+      nil ->
+        get_default_deck(user_id)
+
+      %UserPreference{current_deck_id: nil} ->
+        get_default_deck(user_id)
+
+      %UserPreference{current_deck_id: deck_id} ->
+        get_or_fallback_to_default_deck(user_id, deck_id)
+    end
+  end
+
+  defp get_default_deck(user_id) do
+    case Vocabulary.get_or_create_default_deck(user_id) do
+      {:ok, deck} -> deck
+      {:error, _} -> nil
+    end
+  end
+
+  defp get_or_fallback_to_default_deck(user_id, deck_id) do
+    case Vocabulary.get_deck_for_user(deck_id, user_id) do
+      nil ->
+        # Deck was deleted, clear preference and return default
+        clear_current_deck(user_id)
+        get_default_deck(user_id)
+
+      deck ->
+        deck
+    end
+  end
+
+  @doc """
+  Clears the current deck preference, causing fallback to default deck.
+  """
+  def clear_current_deck(user_id) do
+    case get_user_preference(user_id) do
+      nil ->
+        {:ok, nil}
+
+      pref ->
+        pref
+        |> UserPreference.changeset(%{current_deck_id: nil})
+        |> Repo.update()
+    end
   end
 
   @doc """

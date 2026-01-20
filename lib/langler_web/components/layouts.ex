@@ -11,6 +11,8 @@ defmodule LanglerWeb.Layouts do
   # and other static content.
   embed_templates "layouts/*"
 
+  @dictionary_search_modal LanglerWeb.DictionarySearchLive.Modal
+
   @doc """
   Renders your app layout.
 
@@ -34,6 +36,8 @@ defmodule LanglerWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
+    assigns = assign_new(assigns, :dictionary_search_modal, fn -> @dictionary_search_modal end)
+
     ~H"""
     <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
       <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -106,7 +110,7 @@ defmodule LanglerWeb.Layouts do
 
       <%!-- Dictionary Search Modal (Cmd+J) --%>
       <.live_component
-        module={LanglerWeb.DictionarySearchLive.Modal}
+        module={@dictionary_search_modal}
         id="dictionary-search-modal"
         current_scope={@current_scope}
       />

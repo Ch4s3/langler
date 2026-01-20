@@ -6,11 +6,14 @@ defmodule Langler.Accounts.UserPreference do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Langler.Vocabulary.Deck
+
   schema "user_preferences" do
     field :target_language, :string, default: "spanish"
     field :native_language, :string, default: "en"
 
     belongs_to :user, Langler.Accounts.User
+    belongs_to :current_deck, Deck
 
     timestamps(type: :utc_datetime)
   end
@@ -18,7 +21,7 @@ defmodule Langler.Accounts.UserPreference do
   @doc false
   def changeset(pref, attrs) do
     pref
-    |> cast(attrs, [:target_language, :native_language, :user_id])
+    |> cast(attrs, [:target_language, :native_language, :user_id, :current_deck_id])
     |> validate_required([:target_language, :native_language, :user_id])
     |> unique_constraint(:user_id)
   end

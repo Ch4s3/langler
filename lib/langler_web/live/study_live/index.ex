@@ -5,6 +5,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   use LanglerWeb, :live_view
 
+  alias Langler.Accounts
   alias Langler.Content
   alias Langler.External.Dictionary
   alias Langler.External.Dictionary.Wiktionary.Conjugations
@@ -13,8 +14,11 @@ defmodule LanglerWeb.StudyLive.Index do
   alias Langler.Study.FSRS
   alias Langler.Vocabulary
   alias Langler.Vocabulary.Word
+  alias Langler.Vocabulary.Workers.ImportCsvWorker
   alias MapSet
+  alias Oban
   alias Phoenix.LiveView.JS
+  alias Phoenix.PubSub
   require Logger
 
   @filters [
@@ -30,6 +34,7 @@ defmodule LanglerWeb.StudyLive.Index do
     %{score: 4, label: "Easy", class: "btn-success"}
   ]
 
+  @impl true
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     items = Study.list_items_for_user(scope.user.id)
@@ -39,14 +44,27 @@ defmodule LanglerWeb.StudyLive.Index do
     user_level = Study.get_user_vocabulary_level(scope.user.id)
     user_id = scope.user.id
 
+    # Load decks and current deck
+    decks = Vocabulary.list_decks_for_user(user_id)
+    current_deck = Accounts.get_current_deck(user_id)
+
+    # Get user preference for default language
+    user_pref = Accounts.get_user_preference(user_id)
+    default_language = if user_pref, do: user_pref.target_language, else: "spanish"
+
     {:ok,
      socket
+     |> allow_upload(:csv_file,
+       accept: ~w(.csv),
+       max_entries: 1,
+       max_file_size: 5_000_000
+     )
      |> assign(:current_user, scope.user)
      |> assign(:filters, @filters)
      |> assign(:filter, filter)
      |> assign(:search_query, "")
      |> assign(:quality_buttons, @quality_buttons)
-     |> assign(:stats, build_stats(items))
+     |> assign(:stats, Study.build_study_stats(items))
      |> assign(:all_items, items)
      |> assign(:visible_count, 0)
      |> assign(:flipped_cards, MapSet.new())
@@ -54,11 +72,35 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:conjugations_loading, MapSet.new())
      |> assign(:definitions_loading, MapSet.new())
      |> assign(:user_level, user_level)
+     |> assign(:decks, decks)
+     |> assign(:current_deck, current_deck)
+     |> assign(:filter_deck_id, nil)
+     |> assign(:show_deck_modal, false)
+     |> assign(:editing_deck, nil)
+     |> assign(:deck_form, to_form(%{"name" => ""}))
+     |> assign(:show_csv_import, false)
+     |> assign(:csv_import_deck_id, if(current_deck, do: current_deck.id, else: nil))
+     |> assign(:csv_preview, nil)
+     |> assign(:csv_content, nil)
+     |> assign(:csv_importing, false)
+     |> assign(:csv_import_job_id, nil)
+     |> assign(:default_language, default_language)
+     |> subscribe_to_csv_imports(user_id)
      |> assign_async(:recommended_articles, fn ->
        {:ok, %{recommended_articles: Content.get_recommended_articles_for_user(user_id, 5)}}
      end)}
   end
 
+  defp subscribe_to_csv_imports(socket, user_id) do
+    # Subscribe to all CSV import notifications for this user
+    # The topic pattern is "csv_import:user_id:*" but PubSub doesn't support wildcards
+    # So we'll subscribe to a base topic and filter in handle_info
+    topic = "csv_import:#{user_id}"
+    PubSub.subscribe(Langler.PubSub, topic)
+    socket
+  end
+
+  @impl true
   def handle_params(params, _uri, socket) do
     query = Map.get(params, "q", "") |> String.trim()
     filter = parse_filter_from_params(params, socket.assigns.filter)
@@ -100,13 +142,19 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp refresh_visible_items(socket) do
     visible =
-      filter_items(socket.assigns.all_items, socket.assigns.filter, socket.assigns.search_query)
+      filter_items(
+        socket.assigns.all_items,
+        socket.assigns.filter,
+        socket.assigns.search_query,
+        socket.assigns.filter_deck_id
+      )
 
     socket
     |> assign(:visible_count, length(visible))
     |> stream(:items, visible, reset: true)
   end
 
+  @impl true
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
@@ -121,25 +169,21 @@ defmodule LanglerWeb.StudyLive.Index do
               </p>
             </div>
 
-            <div class="kpi-grid">
-              <div class="kpi-card">
-                <p class="kpi-card__title">Due now</p>
-                <p class="kpi-card__value text-primary">{@stats.due_now}</p>
-                <p class="kpi-card__meta">Ready for immediate review</p>
-              </div>
-
-              <div class="kpi-card">
-                <p class="kpi-card__title">Due today</p>
-                <p class="kpi-card__value text-secondary">{@stats.due_today}</p>
-                <p class="kpi-card__meta">Includes overdue &amp; later today</p>
-              </div>
-
-              <div class="kpi-card">
-                <p class="kpi-card__title">Total tracked</p>
-                <p class="kpi-card__value text-base-content">{@stats.total}</p>
-                <p class="kpi-card__meta">Words in your study bank</p>
-              </div>
-            </div>
+            <.kpi_cards cards={[
+              %{
+                title: "Due now",
+                value: @stats.due_now,
+                meta: "Ready for immediate review",
+                value_class: "text-primary"
+              },
+              %{
+                title: "Due today",
+                value: @stats.due_today,
+                meta: "Includes overdue & later today",
+                value_class: "text-secondary"
+              },
+              %{title: "Total tracked", value: @stats.total, meta: "Words in your study bank"}
+            ]} />
 
             <div class="space-y-1">
               <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-widest text-base-content/60">
@@ -156,7 +200,11 @@ defmodule LanglerWeb.StudyLive.Index do
 
             <div class="flex flex-wrap gap-3 text-sm font-semibold">
               <.link
-                navigate={~p"/study/session"}
+                navigate={
+                  if @filter_deck_id,
+                    do: ~p"/study/session?deck_id=#{@filter_deck_id}",
+                    else: ~p"/study/session"
+                }
                 class="btn btn-sm btn-primary text-white shadow transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
                 <.icon name="hero-play" class="h-4 w-4" /> Start Study Session
@@ -179,7 +227,7 @@ defmodule LanglerWeb.StudyLive.Index do
               <div class="space-y-1">
                 <p class="text-sm font-semibold text-base-content/80">Search your deck</p>
                 <p class="text-xs text-base-content/60">
-                  Type a lemma to narrow results across filters.
+                  Type a word to narrow results across filters.
                 </p>
               </div>
               <.search_input
@@ -193,137 +241,73 @@ defmodule LanglerWeb.StudyLive.Index do
               />
             </div>
 
-            <div class="tabs tabs-boxed bg-base-200/70 p-1 text-sm font-semibold text-base-content/70 overflow-x-auto">
-              <button
-                :for={filter <- @filters}
-                type="button"
-                class={[
-                  "tab tab-sm sm:tab-lg rounded-xl whitespace-nowrap transition duration-200 focus-visible:ring focus-visible:ring-primary/40",
-                  @filter == filter.id && "tab-active bg-base-100 text-base-content shadow"
-                ]}
-                phx-click="set_filter"
-                phx-value-filter={filter.id}
-              >
-                {filter.label}
-              </button>
+            <div class="flex flex-col gap-4 rounded-2xl border border-base-200 bg-base-200/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold text-base-content/80">Filter by deck</p>
+                <p class="text-xs text-base-content/60">
+                  {if @filter_deck_id do
+                    "Showing words from selected deck only"
+                  else
+                    "Showing words from all decks"
+                  end}
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <.deck_selector
+                  decks={@decks}
+                  current_deck={
+                    if @filter_deck_id, do: Enum.find(@decks, &(&1.id == @filter_deck_id)), else: nil
+                  }
+                  event="set_filter_deck"
+                  show_all_option={true}
+                />
+                <button
+                  :if={@filter_deck_id}
+                  type="button"
+                  phx-click="set_filter_deck"
+                  phx-value-deck_id=""
+                  class="btn btn-sm btn-ghost"
+                  title="Show all decks"
+                >
+                  <.icon name="hero-x-mark" class="h-4 w-4" />
+                  <span class="hidden sm:inline">Clear filter</span>
+                </button>
+                <button
+                  type="button"
+                  phx-click="show_deck_modal"
+                  class="btn btn-sm btn-primary text-white"
+                >
+                  <.icon name="hero-plus" class="h-4 w-4" />
+                  <span class="hidden sm:inline">New deck</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-base-200 bg-base-200/30 p-4 backdrop-blur sm:p-4 transition-shadow">
+              <div class="tabs tabs-boxed bg-transparent p-1 text-sm font-semibold text-base-content/70 overflow-x-auto">
+                <button
+                  :for={filter <- @filters}
+                  type="button"
+                  class={[
+                    "tab tab-sm sm:tab-lg rounded-xl whitespace-nowrap transition duration-200 focus-visible:ring focus-visible:ring-primary/40",
+                    @filter == filter.id && "tab-active bg-base-100 text-base-content shadow"
+                  ]}
+                  phx-click="set_filter"
+                  phx-value-filter={filter.id}
+                >
+                  {filter.label}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         <%!-- Recommended Articles Section --%>
-        <.async_result :let={recommended_articles} assign={@recommended_articles}>
-          <:loading>
-            <div :if={@filter == :now} class="card section-card bg-base-100/95">
-              <div class="card-body gap-4">
-                <div class="flex items-center gap-2">
-                  <span class="loading loading-spinner loading-sm"></span>
-                  <span class="text-sm text-base-content/70">Loading recommendations...</span>
-                </div>
-              </div>
-            </div>
-          </:loading>
-          <:failed :let={_failure}>
-            <div :if={@filter == :now} class="card section-card bg-base-100/95">
-              <div class="card-body gap-4">
-                <p class="text-sm text-base-content/70">Unable to load recommendations.</p>
-              </div>
-            </div>
-          </:failed>
-          <div
-            :if={recommended_articles != [] && @filter == :now}
-            class="card section-card bg-base-100/95"
-          >
-            <div class="card-body gap-4">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="space-y-1">
-                  <h2 class="card-title">
-                    <.icon name="hero-light-bulb" class="h-6 w-6 text-primary" /> Recommended reading
-                    <span class="badge badge-primary badge-sm">
-                      {@user_level.cefr_level || "Learning"}
-                    </span>
-                  </h2>
-                  <p class="text-sm text-base-content/70">
-                    Hand-picked articles matched to your vocabulary level.
-                  </p>
-                </div>
-                <.link
-                  navigate={~p"/articles"}
-                  class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
-                >
-                  Browse more
-                </.link>
-              </div>
-
-              <.card_grid>
-                <.card
-                  :for={rec <- recommended_articles}
-                  variant={:border}
-                  hover
-                  class="bg-base-100/80"
-                >
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <.link
-                        href={rec.article.url}
-                        target="_blank"
-                        class="inline-flex items-start gap-2 font-semibold text-base-content hover:text-primary focus-visible:outline-none focus-visible:ring focus-visible:ring-primary/40 rounded"
-                      >
-                        <span class="min-w-0 break-words">{rec.article.title}</span>
-                        <.icon
-                          name="hero-arrow-top-right-on-square"
-                          class="mt-0.5 h-4 w-4 shrink-0 opacity-60"
-                        />
-                      </.link>
-                      <div class="mt-2 flex flex-wrap gap-2">
-                        <span class="badge badge-sm">
-                          Level {trunc(rec.article.difficulty_score || 0)}
-                        </span>
-                        <span
-                          :if={rec.article.avg_sentence_length}
-                          class="badge badge-sm badge-outline"
-                        >
-                          {trunc(rec.article.avg_sentence_length)} words/sentence
-                        </span>
-                      </div>
-                    </div>
-                    <div class="text-right">
-                      <div class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
-                        Match
-                      </div>
-                      <div class="text-lg font-semibold text-primary">
-                        {trunc((rec.score || 0) * 100)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  <progress
-                    value={trunc((rec.score || 0) * 100)}
-                    max="100"
-                    class="progress progress-primary h-2 w-full"
-                    aria-label="Article match"
-                  />
-
-                  <:actions>
-                    <div class="flex items-center justify-between gap-3 w-full">
-                      <div class="text-xs text-base-content/60">
-                        Import to your library to start highlighting.
-                      </div>
-                      <button
-                        type="button"
-                        phx-click="import_article"
-                        phx-value-id={rec.article.id}
-                        phx-disable-with="Importing…"
-                        class="btn btn-xs btn-primary text-white transition duration-200 active:scale-[0.99] phx-click-loading:opacity-70 phx-click-loading:cursor-wait"
-                      >
-                        Import
-                      </button>
-                    </div>
-                  </:actions>
-                </.card>
-              </.card_grid>
-            </div>
-          </div>
-        </.async_result>
+        <.recommended_articles_section
+          recommended_articles={@recommended_articles}
+          filter={@filter}
+          user_level={@user_level}
+        />
 
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div class="space-y-1">
@@ -388,122 +372,22 @@ defmodule LanglerWeb.StudyLive.Index do
               </:actions>
             </.list_empty_state>
 
-            <.card
+            <.study_card
               :for={{dom_id, item} <- @streams.items}
               id={dom_id}
-              variant={:panel}
-              hover
-              class="border border-base-200 animate-fade-in"
+              item={item}
+              flipped={MapSet.member?(@flipped_cards, item.id)}
+              definitions_loading={MapSet.member?(@definitions_loading || MapSet.new(), item.id)}
+              conjugations_loading={
+                if item.word,
+                  do: MapSet.member?(@conjugations_loading || MapSet.new(), item.word.id),
+                  else: false
+              }
+              expanded_conjugations={
+                if item.word, do: MapSet.member?(@expanded_conjugations, item.word.id), else: false
+              }
+              quality_buttons={@quality_buttons}
             >
-              <button
-                type="button"
-                phx-click="toggle_card"
-                phx-value-id={item.id}
-                phx-hook="WordCardToggle"
-                id={"study-card-#{item.id}"}
-                data-item-id={item.id}
-                class="group relative w-full rounded-2xl border border-dashed border-base-200 bg-base-100/80 p-4 text-left transition duration-300 hover:border-primary/40 active:scale-[0.995] focus-visible:ring focus-visible:ring-primary/40 phx-click-loading:opacity-70"
-              >
-                <% flipped = MapSet.member?(@flipped_cards, item.id) %>
-                <% definitions = item.word && (item.word.definitions || []) %>
-                <div class="relative min-h-[16rem]">
-                  <div class={[
-                    "space-y-4 transition-opacity duration-300",
-                    flipped && "hidden"
-                  ]}>
-                    <div class="flex flex-wrap items-start justify-between gap-4">
-                      <div class="flex flex-col gap-1">
-                        <p
-                          class="inline-flex items-center gap-2 text-3xl font-semibold text-base-content cursor-pointer transition hover:text-primary"
-                          phx-hook="CopyToClipboard"
-                          data-copy-text={item.word && (item.word.lemma || item.word.normalized_form)}
-                          title="Click to copy"
-                          id={"study-card-word-#{item.id}"}
-                        >
-                          <span>{item.word && (item.word.lemma || item.word.normalized_form)}</span>
-                          <span
-                            class="opacity-0 text-primary/80 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
-                            aria-hidden="true"
-                          >
-                            <.icon name="hero-clipboard-document" class="h-5 w-5" />
-                          </span>
-                        </p>
-                        <p class="text-sm text-base-content/70">
-                          Next review {format_due_label(item.due_date)}
-                        </p>
-                      </div>
-                      <span class={[
-                        "badge badge-lg border",
-                        due_badge_class(item.due_date)
-                      ]}>
-                        {due_status_label(item.due_date)}
-                      </span>
-                    </div>
-
-                    <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
-                      <div>
-                        <p class="font-semibold text-base-content">Ease factor</p>
-                        <p>{format_decimal(item.ease_factor || 2.5)}</p>
-                      </div>
-                      <div>
-                        <p class="font-semibold text-base-content">Interval</p>
-                        <p>{interval_label(item.interval)}</p>
-                      </div>
-                      <div>
-                        <p class="font-semibold text-base-content">Repetitions</p>
-                        <p>{item.repetitions || 0}</p>
-                      </div>
-                      <div>
-                        <p class="font-semibold text-base-content">Recent history</p>
-                        <div class="flex gap-1">
-                          <span
-                            :for={score <- recent_history(item.quality_history)}
-                            class={[
-                              "h-2.5 w-6 rounded-full bg-base-300",
-                              history_pill_class(score)
-                            ]}
-                            aria-label={"Score #{score}"}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
-                      Tap to reveal definition
-                    </p>
-                  </div>
-
-                  <div class={[
-                    "flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
-                    flipped && "block",
-                    !flipped && "hidden"
-                  ]}>
-                    <p class="text-sm font-semibold uppercase tracking-widest text-primary/70">
-                      Definition
-                    </p>
-                    <%= if MapSet.member?(@definitions_loading || MapSet.new(), item.id) do %>
-                      <div class="flex items-center gap-2">
-                        <span class="loading loading-spinner loading-sm"></span>
-                        <span class="text-sm text-base-content/70">Loading definition...</span>
-                      </div>
-                    <% else %>
-                      <ol class="space-y-3 text-sm leading-relaxed text-base-content/90">
-                        <li
-                          :for={{definition, idx} <- Enum.with_index(definitions, 1)}
-                          class="break-words"
-                        >
-                          <span class="font-semibold text-primary/80">{idx}.</span>
-                          <span class="ml-2 break-words">{definition}</span>
-                        </li>
-                      </ol>
-                      <p :if={definitions == []} class="text-sm text-base-content/70">
-                        We haven't saved a definition yet for this word. Tap refresh in the reader to fetch one.
-                      </p>
-                    <% end %>
-                    <p class="text-xs text-base-content/60">Tap again to return.</p>
-                  </div>
-                </div>
-              </button>
-
               <:conjugations>
                 <div
                   :if={
@@ -554,14 +438,35 @@ defmodule LanglerWeb.StudyLive.Index do
               <:actions>
                 <.card_rating item_id={item.id} buttons={@quality_buttons} />
               </:actions>
-            </.card>
+            </.study_card>
           </div>
         </div>
       </div>
+
+      <%!-- Deck Management Modal --%>
+      <.deck_modal
+        show={@show_deck_modal}
+        editing_deck={@editing_deck}
+        form={@deck_form}
+      />
+
+      <%!-- Deck List Section --%>
+      <.decks_section decks={@decks} />
+
+      <.csv_import_modal
+        show={@show_csv_import}
+        decks={@decks}
+        csv_import_deck_id={@csv_import_deck_id}
+        csv_preview={@csv_preview}
+        csv_importing={@csv_importing}
+        default_language={@default_language}
+        uploads={@uploads}
+      />
     </Layouts.app>
     """
   end
 
+  @impl true
   def handle_event("set_filter", %{"filter" => filter}, socket) do
     filter = parse_filter(filter)
     visible = filter_items(socket.assigns.all_items, filter, socket.assigns.search_query)
@@ -584,7 +489,7 @@ defmodule LanglerWeb.StudyLive.Index do
          rating <- parse_quality(quality),
          {:ok, updated} <- Study.review_item(item, rating) do
       all_items = replace_item(socket.assigns.all_items, updated)
-      stats = build_stats(all_items)
+      stats = Study.build_study_stats(all_items)
       visible = filter_items(all_items, socket.assigns.filter, socket.assigns.search_query)
 
       {:noreply,
@@ -634,14 +539,7 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   def handle_event("clear_search", _params, socket) do
-    filter_param = filter_to_param(socket.assigns.filter)
-
-    path =
-      if filter_param != "" do
-        ~p"/study?filter=#{filter_param}"
-      else
-        ~p"/study"
-      end
+    path = build_study_path("", socket.assigns.filter)
 
     visible = filter_items(socket.assigns.all_items, socket.assigns.filter, "")
 
@@ -724,6 +622,404 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
+  ## Deck Management Events
+
+  def handle_event("set_current_deck", %{"deck_id" => deck_id_str}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      case Accounts.set_current_deck(user_id, deck_id) do
+        {:ok, _pref} ->
+          current_deck = Accounts.get_current_deck(user_id)
+          decks = Vocabulary.list_decks_for_user(user_id)
+
+          {:noreply,
+           socket
+           |> assign(:current_deck, current_deck)
+           |> assign(:decks, decks)
+           |> assign(:filter_deck_id, deck_id)
+           |> refresh_visible_items()
+           |> put_flash(:info, "Current deck updated")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Unable to set current deck: #{inspect(reason)}")}
+      end
+    end)
+  end
+
+  def handle_event("set_filter_deck", %{"deck_id" => ""}, socket) do
+    {:noreply,
+     socket
+     |> assign(:filter_deck_id, nil)
+     |> refresh_visible_items()}
+  end
+
+  def handle_event("set_filter_deck", %{"deck_id" => deck_id_str}, socket) do
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      {:noreply,
+       socket
+       |> assign(:filter_deck_id, deck_id)
+       |> refresh_visible_items()}
+    end)
+  end
+
+  def handle_event("show_deck_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_deck_modal, true)
+     |> assign(:editing_deck, nil)
+     |> assign(:deck_form, to_form(%{"name" => ""}))}
+  end
+
+  def handle_event("hide_deck_modal", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_deck_modal, false)
+     |> assign(:editing_deck, nil)
+     |> assign(:deck_form, to_form(%{"name" => ""}))}
+  end
+
+  def handle_event("stop_propagation", _params, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("validate_deck", %{"name" => name}, socket) do
+    form = to_form(%{"name" => name})
+    {:noreply, assign(socket, :deck_form, form)}
+  end
+
+  def handle_event("create_deck", %{"name" => name}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    name = String.trim(name)
+
+    if name == "" do
+      {:noreply, put_flash(socket, :error, "Deck name cannot be empty")}
+    else
+      case Vocabulary.create_deck(user_id, %{name: name}) do
+        {:ok, _deck} ->
+          decks = Vocabulary.list_decks_for_user(user_id)
+
+          {:noreply,
+           socket
+           |> assign(:decks, decks)
+           |> assign(:show_deck_modal, false)
+           |> assign(:deck_form, to_form(%{"name" => ""}))
+           |> put_flash(:info, "Deck created successfully")}
+
+        {:error, changeset} ->
+          errors = translate_errors(changeset)
+
+          {:noreply,
+           socket
+           |> put_flash(:error, "Unable to create deck: #{errors}")}
+      end
+    end
+  end
+
+  def handle_event("edit_deck", %{"deck_id" => deck_id_str}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      case Vocabulary.get_deck_for_user(deck_id, user_id) do
+        nil ->
+          {:noreply, put_flash(socket, :error, "Deck not found")}
+
+        deck ->
+          {:noreply,
+           socket
+           |> assign(:show_deck_modal, true)
+           |> assign(:editing_deck, deck)
+           |> assign(:deck_form, to_form(%{"name" => deck.name}))}
+      end
+    end)
+  end
+
+  def handle_event("update_deck", %{"deck_id" => deck_id_str, "name" => name}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    name = String.trim(name)
+
+    case Integer.parse(deck_id_str) do
+      {deck_id, ""} ->
+        if name == "" do
+          {:noreply, put_flash(socket, :error, "Deck name cannot be empty")}
+        else
+          handle_deck_update(socket, deck_id, user_id, name)
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+    end
+  end
+
+  def handle_event("delete_deck", %{"deck_id" => deck_id_str}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      case Vocabulary.delete_deck(deck_id, user_id) do
+        {:ok, _deck} ->
+          decks = Vocabulary.list_decks_for_user(user_id)
+          current_deck = Accounts.get_current_deck(user_id)
+
+          {:noreply,
+           socket
+           |> assign(:decks, decks)
+           |> assign(:current_deck, current_deck)
+           |> put_flash(:info, "Deck deleted successfully")}
+
+        {:error, :cannot_delete_default} ->
+          {:noreply, put_flash(socket, :error, "Cannot delete the default deck")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Unable to delete deck: #{inspect(reason)}")}
+      end
+    end)
+  end
+
+  ## CSV Import Events
+
+  def handle_event("show_csv_import", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_csv_import, true)
+     |> assign(:csv_preview, nil)
+     |> assign(
+       :csv_import_deck_id,
+       if(socket.assigns.current_deck, do: socket.assigns.current_deck.id, else: nil)
+     )}
+  end
+
+  def handle_event("hide_csv_import", _params, socket) do
+    {entries, _errors} = uploaded_entries(socket, :csv_file)
+
+    socket =
+      Enum.reduce(entries, socket, fn entry, acc -> cancel_upload(acc, :csv_file, entry.ref) end)
+
+    {:noreply,
+     socket
+     |> assign(:show_csv_import, false)
+     |> assign(:csv_preview, nil)
+     |> assign(:csv_content, nil)}
+  end
+
+  def handle_event("validate_csv_deck", %{"deck_id" => deck_id_str}, socket) do
+    deck_id = if deck_id_str != "", do: String.to_integer(deck_id_str), else: nil
+    {:noreply, assign(socket, :csv_import_deck_id, deck_id)}
+  end
+
+  def handle_event("validate_csv_file", _params, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("parse_csv", _params, socket) do
+    # consume_uploaded_entries returns a list of callback return values
+    uploaded_files =
+      consume_uploaded_entries(socket, :csv_file, fn %{path: path}, _entry ->
+        File.read!(path)
+      end)
+
+    case uploaded_files do
+      [content] when is_binary(content) ->
+        handle_csv_preview(socket, content)
+
+      [] ->
+        {:noreply, put_flash(socket, :error, "Please select a CSV file")}
+
+      results when is_list(results) and results != [] ->
+        # Handle any list format - extract content from first result
+        content = List.first(results)
+        handle_csv_preview(socket, content)
+
+      other ->
+        # Catch-all for unexpected formats
+        Logger.error("Unexpected upload format in parse_csv: #{inspect(other)}")
+        {:noreply, put_flash(socket, :error, "Unexpected upload format. Please try again.")}
+    end
+  end
+
+  def handle_event("import_csv", %{"deck_id" => deck_id_str}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+    default_language = socket.assigns.default_language
+
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      content = socket.assigns[:csv_content]
+
+      if is_nil(content) do
+        {:noreply,
+         put_flash(socket, :error, "No CSV file to import. Please upload a file first.")}
+      else
+        handle_csv_import_with_content(socket, deck_id, user_id, default_language, content)
+      end
+    end)
+  end
+
+  defp handle_csv_import_with_content(socket, deck_id, user_id, default_language, content) do
+    # Get deck name for completion message
+    deck = Enum.find(socket.assigns.decks, &(&1.id == deck_id))
+    deck_name = if deck, do: deck.name, else: "deck"
+
+    # Generate unique job ID for tracking
+    job_id = System.unique_integer([:positive, :monotonic])
+
+    # Enqueue the background job
+    args = %{
+      "csv_content" => content,
+      "deck_id" => deck_id,
+      "user_id" => user_id,
+      "default_language" => default_language,
+      "job_id" => job_id,
+      "deck_name" => deck_name
+    }
+
+    handle_csv_job_insertion(socket, args, job_id)
+  end
+
+  defp handle_csv_job_insertion(socket, args, job_id) do
+    args
+    |> ImportCsvWorker.new()
+    |> Oban.insert()
+    |> case do
+      {:ok, _job} ->
+        {:noreply,
+         socket
+         |> assign(:csv_import_job_id, job_id)
+         |> assign(:show_csv_import, false)
+         |> assign(:csv_preview, nil)
+         |> assign(:csv_content, nil)
+         |> put_flash(:info, "Cards are being built. You'll be notified when complete.")}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Failed to start import: #{inspect(reason)}")}
+    end
+  end
+
+  defp handle_deck_update(socket, deck_id, user_id, name) do
+    case Vocabulary.update_deck(deck_id, user_id, %{name: name}) do
+      {:ok, _deck} ->
+        decks = Vocabulary.list_decks_for_user(user_id)
+        current_deck = Accounts.get_current_deck(user_id)
+
+        {:noreply,
+         socket
+         |> assign(:decks, decks)
+         |> assign(:current_deck, current_deck)
+         |> assign(:filter_deck_id, nil)
+         |> assign(:show_deck_modal, false)
+         |> assign(:editing_deck, nil)
+         |> assign(:deck_form, to_form(%{"name" => ""}))
+         |> put_flash(:info, "Deck updated successfully")}
+
+      {:error, changeset} ->
+        errors = translate_errors(changeset)
+
+        {:noreply,
+         socket
+         |> put_flash(:error, "Unable to update deck: #{errors}")}
+    end
+  end
+
+  @impl true
+  def handle_info({:csv_import_complete, job_id, {:ok, %{message: message}}}, socket) do
+    # Only process if this is the job we're waiting for
+    if socket.assigns.csv_import_job_id == job_id do
+      user_id = socket.assigns.current_scope.user.id
+      decks = Vocabulary.list_decks_for_user(user_id)
+      items = Study.list_items_for_user(user_id)
+
+      {:noreply,
+       socket
+       |> assign(:decks, decks)
+       |> assign(:all_items, items)
+       |> assign(:csv_import_job_id, nil)
+       |> refresh_visible_items()
+       |> put_flash(:info, message)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:csv_import_complete, job_id, {:error, error_message}}, socket) do
+    # Only process if this is the job we're waiting for
+    if socket.assigns.csv_import_job_id == job_id do
+      {:noreply,
+       socket
+       |> assign(:csv_import_job_id, nil)
+       |> put_flash(:error, error_message)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp handle_csv_preview(socket, content) when is_binary(content) do
+    {:ok, preview_rows} = parse_csv_preview(content)
+
+    {:noreply,
+     socket
+     |> assign(:csv_preview, preview_rows)
+     |> assign(:csv_content, content)}
+  end
+
+  defp handle_csv_preview(socket, {:ok, content}) when is_binary(content) do
+    handle_csv_preview(socket, content)
+  end
+
+  defp handle_csv_preview(socket, {:error, reason}) do
+    {:noreply, put_flash(socket, :error, "Failed to read file: #{inspect(reason)}")}
+  end
+
+  defp parse_csv_preview(content) do
+    rows =
+      content
+      |> String.trim()
+      |> String.split(~r/\r?\n/)
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.take(10)
+      |> Enum.map(fn line ->
+        case String.split(line, ",") do
+          [word] ->
+            {String.trim(word), nil}
+
+          [word, language] ->
+            {String.trim(word), String.trim(language)}
+
+          parts when length(parts) > 2 ->
+            [word, language | _] = parts
+            {String.trim(word), String.trim(language)}
+        end
+      end)
+
+    {:ok, rows}
+  end
+
+  defp translate_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, errors} ->
+      "#{field}: #{Enum.join(errors, ", ")}"
+    end)
+  end
+
+  defp parse_deck_id(deck_id_str) do
+    case Integer.parse(to_string(deck_id_str)) do
+      {deck_id, ""} -> {:ok, deck_id}
+      _ -> {:error, :invalid_deck_id}
+    end
+  end
+
+  defp with_deck_id(deck_id_str, socket, fun) do
+    case parse_deck_id(deck_id_str) do
+      {:ok, deck_id} -> fun.(deck_id)
+      {:error, _} -> {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+    end
+  end
+
   defp filter_to_param(:now), do: "now"
   defp filter_to_param(:today), do: "today"
   defp filter_to_param(:all), do: "all"
@@ -735,6 +1031,7 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
+  @impl true
   def handle_async({:fetch_definitions, item_id}, {:ok, {_item_id, entry, word, flags}}, socket) do
     definitions = List.wrap(entry.definitions)
     updates = build_definition_updates(flags, entry, definitions)
@@ -755,12 +1052,7 @@ defmodule LanglerWeb.StudyLive.Index do
          |> stream_insert(:items, updated_item, dom_id: dom_id)}
 
       {:error, _} ->
-        {:noreply,
-         socket
-         |> assign(
-           :definitions_loading,
-           MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
-         )}
+        {:noreply, remove_loading(socket, :definitions_loading, item_id)}
     end
   end
 
@@ -807,12 +1099,7 @@ defmodule LanglerWeb.StudyLive.Index do
       "StudyLive: failed to fetch conjugations for word_id=#{word_id}: #{inspect(reason)}"
     )
 
-    {:noreply,
-     socket
-     |> assign(
-       :conjugations_loading,
-       MapSet.delete(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
-     )}
+    {:noreply, remove_loading(socket, :conjugations_loading, word_id)}
   end
 
   defp parse_filter(value) do
@@ -831,23 +1118,34 @@ defmodule LanglerWeb.StudyLive.Index do
     ArgumentError -> :good
   end
 
-  defp filter_items(items, filter, query) do
+  defp filter_items(items, filter, query, filter_deck_id \\ nil) do
     now = DateTime.utc_now()
-    end_of_day = end_of_day(now)
+    end_of_day = Study.end_of_day(now)
     downcased_query = String.downcase(query || "")
 
     Enum.filter(items, fn item ->
-      matches_filter =
-        case filter do
-          :now -> due_now?(item, now)
-          :today -> due_today?(item, end_of_day)
-          :all -> true
-        end
-
-      matches_query = downcased_query == "" or match_query?(item.word, downcased_query)
-
-      matches_filter and matches_query
+      matches_filter?(item, filter, now, end_of_day) and
+        matches_query?(item.word, downcased_query) and
+        matches_deck?(item, filter_deck_id)
     end)
+  end
+
+  defp matches_filter?(item, filter, now, end_of_day) do
+    case filter do
+      :now -> Study.due_now?(item, now)
+      :today -> Study.due_today?(item, end_of_day)
+      :all -> true
+    end
+  end
+
+  defp matches_query?(_word, query) when query == "", do: true
+  defp matches_query?(word, query), do: match_query?(word, query)
+
+  defp matches_deck?(_item, nil), do: true
+
+  defp matches_deck?(item, filter_deck_id) do
+    word_id = item.word.id
+    Repo.get_by(Langler.Vocabulary.DeckWord, deck_id: filter_deck_id, word_id: word_id) != nil
   end
 
   defp match_query?(%Word{} = word, query) do
@@ -859,46 +1157,6 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp match_query?(_, _), do: false
-
-  defp build_stats(items) do
-    now = DateTime.utc_now()
-    end_of_day = end_of_day(now)
-
-    due_now = Enum.count(items, &due_now?(&1, now))
-    total = length(items)
-
-    completion =
-      if total == 0 do
-        100
-      else
-        Float.round((total - due_now) / total * 100, 0)
-      end
-
-    %{
-      due_now: due_now,
-      due_today: Enum.count(items, &due_today?(&1, end_of_day)),
-      total: total,
-      completion: trunc(completion)
-    }
-  end
-
-  defp due_now?(%{due_date: nil}, _now), do: true
-
-  defp due_now?(%{due_date: due}, now) do
-    DateTime.compare(due, now) != :gt
-  end
-
-  defp due_today?(item, end_of_day) do
-    case item.due_date do
-      nil -> true
-      due -> DateTime.compare(due, end_of_day) != :gt
-    end
-  end
-
-  defp end_of_day(now) do
-    date = DateTime.to_date(now)
-    DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
-  end
 
   defp replace_item(items, updated) do
     Enum.map(items, fn item ->
@@ -1092,49 +1350,6 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  defp format_decimal(nil), do: "0.0×"
-  defp format_decimal(value), do: "#{Float.round(value, 2)}×"
-
-  defp interval_label(nil), do: "New"
-  defp interval_label(0), do: "Learning"
-  defp interval_label(days), do: "#{days}d"
-
-  defp due_badge_class(due_date) do
-    if due_now?(%{due_date: due_date}, DateTime.utc_now()) do
-      "badge-error/20 text-error border-error/40"
-    else
-      "badge-success/20 text-success border-success/40"
-    end
-  end
-
-  defp due_status_label(due_date) do
-    if due_now?(%{due_date: due_date}, DateTime.utc_now()) do
-      "Due"
-    else
-      "Scheduled"
-    end
-  end
-
-  defp format_due_label(nil), do: "immediately"
-
-  defp format_due_label(due_date) do
-    Calendar.strftime(due_date, "%b %d, %Y · %H:%M")
-  end
-
-  defp recent_history(nil), do: []
-  defp recent_history(history), do: history |> Enum.take(-5)
-
-  defp history_pill_class(score) do
-    case score do
-      0 -> "bg-error/50"
-      1 -> "bg-error/30"
-      2 -> "bg-warning/50"
-      3 -> "bg-primary/50"
-      4 -> "bg-success/60"
-      _ -> "bg-base-200"
-    end
-  end
-
   defp verb?(nil), do: false
   defp verb?(pos) when is_binary(pos), do: String.downcase(pos) == "verb"
   defp verb?(_), do: false
@@ -1279,10 +1494,7 @@ defmodule LanglerWeb.StudyLive.Index do
     lookup_lemma = conjugation_lookup_lemma(item.word)
 
     socket
-    |> assign(
-      :conjugations_loading,
-      MapSet.put(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
-    )
+    |> add_loading(:conjugations_loading, word_id)
     |> start_async({:fetch_conjugations, word_id}, fn ->
       fetch_conjugations_with_timeout(item.word, lookup_lemma, word_id)
     end)
@@ -1365,10 +1577,38 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp clear_conjugations_loading(socket, word_id) do
-    assign(
-      socket,
-      :conjugations_loading,
-      MapSet.delete(socket.assigns[:conjugations_loading] || MapSet.new(), word_id)
-    )
+    remove_loading(socket, :conjugations_loading, word_id)
+  end
+
+  # Loading state helpers for MapSet-based loading indicators
+  defp add_loading(socket, key, id) do
+    set = socket.assigns[key] || MapSet.new()
+    assign(socket, key, MapSet.put(set, id))
+  end
+
+  defp remove_loading(socket, key, id) do
+    set = socket.assigns[key] || MapSet.new()
+    assign(socket, key, MapSet.delete(set, id))
+  end
+
+  # URL building helper for study page with query and filter params
+  defp build_study_path(query, filter) do
+    base_path = ~p"/study"
+    query = String.trim(to_string(query))
+    filter_param = if filter, do: filter_to_param(filter), else: ""
+
+    cond do
+      query != "" && filter_param != "" ->
+        ~p"/study?q=#{URI.encode(query)}&filter=#{filter_param}"
+
+      query != "" ->
+        ~p"/study?q=#{URI.encode(query)}"
+
+      filter_param != "" ->
+        ~p"/study?filter=#{filter_param}"
+
+      true ->
+        base_path
+    end
   end
 end

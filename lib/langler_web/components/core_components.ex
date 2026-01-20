@@ -1001,4 +1001,80 @@ defmodule LanglerWeb.CoreComponents do
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
+
+  @doc """
+  Renders a deck selector dropdown.
+
+  ## Examples
+
+      <.deck_selector
+        decks={@decks}
+        current_deck={@current_deck}
+        event="set_current_deck"
+      />
+  """
+  attr :decks, :list, required: true, doc: "List of deck structs"
+  attr :current_deck, :map, default: nil, doc: "Currently selected deck"
+  attr :event, :string, default: "set_current_deck", doc: "Event name to trigger on selection"
+  attr :class, :string, default: "", doc: "Additional CSS classes"
+  attr :show_all_option, :boolean, default: false, doc: "Show 'All decks' option at the top"
+
+  def deck_selector(assigns) do
+    ~H"""
+    <div class={["dropdown dropdown-bottom dropdown-end", @class]}>
+      <div
+        tabindex="0"
+        role="button"
+        class="btn btn-sm btn-outline w-full sm:w-auto"
+      >
+        {if @current_deck, do: @current_deck.name, else: "All decks"}
+        <.icon name="hero-chevron-down" class="ml-2 h-4 w-4" />
+      </div>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg"
+      >
+        <%= if @show_all_option do %>
+          <li>
+            <button
+              type="button"
+              phx-click={@event}
+              phx-value-deck_id=""
+              class={[
+                "flex items-center justify-between",
+                is_nil(@current_deck) && "active"
+              ]}
+            >
+              <span>All decks</span>
+              <%= if is_nil(@current_deck) do %>
+                <.icon name="hero-check" class="h-4 w-4" />
+              <% end %>
+            </button>
+          </li>
+        <% end %>
+        <li :for={deck <- @decks}>
+          <button
+            type="button"
+            phx-click={@event}
+            phx-value-deck_id={deck.id}
+            class={[
+              "flex items-center justify-between",
+              @current_deck && @current_deck.id == deck.id && "active"
+            ]}
+          >
+            <span>
+              {deck.name}
+              <%= if deck.is_default do %>
+                <span class="badge badge-xs badge-primary ml-2">Default</span>
+              <% end %>
+            </span>
+            <%= if @current_deck && @current_deck.id == deck.id do %>
+              <.icon name="hero-check" class="h-4 w-4" />
+            <% end %>
+          </button>
+        </li>
+      </ul>
+    </div>
+    """
+  end
 end

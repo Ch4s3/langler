@@ -98,7 +98,8 @@ defmodule Langler.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:tidewave, "~> 0.5", only: :dev},
-      {:live_isolated_component, "~> 0.10.0", only: [:dev, :test]}
+      {:live_isolated_component, "~> 0.10.0", only: [:dev, :test]},
+      {:nimble_csv, "~> 1.2"}
     ]
   end
 

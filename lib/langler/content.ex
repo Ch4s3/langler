@@ -19,7 +19,9 @@ defmodule Langler.Content do
     SourceSite
   }
 
+  alias Langler.Content.Workers.CalculateArticleDifficultyWorker
   alias Langler.Repo
+  alias Oban
 
   def list_articles do
     Repo.all(from a in Article, order_by: [desc: a.inserted_at])
@@ -821,10 +823,33 @@ defmodule Langler.Content do
       end)
 
     # Use on_conflict to update title and summary if they're missing or changed
-    Repo.insert_all(DiscoveredArticle, entries,
-      on_conflict: {:replace_all_except, [:id, :inserted_at, :article_id, :status]},
-      conflict_target: [:source_site_id, :url]
-    )
+    # Get URLs of entries to find which ones were newly inserted
+    urls = Enum.map(entries, & &1.url)
+
+    {count, _} =
+      Repo.insert_all(DiscoveredArticle, entries,
+        on_conflict: {:replace_all_except, [:id, :inserted_at, :article_id, :status]},
+        conflict_target: [:source_site_id, :url]
+      )
+
+    # Enqueue difficulty calculation for newly discovered articles (those without difficulty_score)
+    if count > 0 do
+      newly_discovered_ids =
+        DiscoveredArticle
+        |> where([da], da.source_site_id == ^source_site_id)
+        |> where([da], da.url in ^urls)
+        |> where([da], is_nil(da.difficulty_score))
+        |> select([da], da.id)
+        |> Repo.all()
+
+      Enum.each(newly_discovered_ids, fn discovered_article_id ->
+        %{"discovered_article_id" => discovered_article_id}
+        |> CalculateArticleDifficultyWorker.new()
+        |> Oban.insert()
+      end)
+    end
+
+    {count, nil}
   end
 
   defp build_discovered_article_entry(attrs, source_site_id, now) do

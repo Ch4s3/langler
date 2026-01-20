@@ -5,8 +5,10 @@ defmodule LanglerWeb.StudyLive.Session do
 
   use LanglerWeb, :live_view
 
+  alias Langler.Repo
   alias Langler.Study
   alias Langler.Study.FSRS
+  alias Langler.Vocabulary.DeckWord
 
   @quality_buttons [
     %{score: 0, label: "Again", class: "btn-error"},
@@ -15,9 +17,10 @@ defmodule LanglerWeb.StudyLive.Session do
     %{score: 4, label: "Easy", class: "btn-success"}
   ]
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     scope = socket.assigns.current_scope
-    cards = load_due_today_cards(scope.user.id)
+    deck_id = parse_deck_id(params)
+    cards = load_due_today_cards(scope.user.id, deck_id)
 
     {:ok,
      socket
@@ -30,7 +33,21 @@ defmodule LanglerWeb.StudyLive.Session do
      |> assign(:session_start, DateTime.utc_now())
      |> assign(:ratings, %{again: 0, hard: 0, good: 0, easy: 0})
      |> assign(:completed, false)
-     |> assign(:quality_buttons, @quality_buttons)}
+     |> assign(:quality_buttons, @quality_buttons)
+     |> assign(:deck_id, deck_id)}
+  end
+
+  defp parse_deck_id(params) do
+    case Map.get(params, "deck_id") do
+      nil ->
+        nil
+
+      deck_id_str ->
+        case Integer.parse(deck_id_str) do
+          {deck_id, ""} -> deck_id
+          _ -> nil
+        end
+    end
   end
 
   def render(assigns) do
@@ -352,25 +369,31 @@ defmodule LanglerWeb.StudyLive.Session do
     end
   end
 
-  defp load_due_today_cards(user_id) do
+  defp load_due_today_cards(user_id, deck_id) do
     now = DateTime.utc_now()
-    end_of_day = end_of_day(now)
+    end_of_day = Study.end_of_day(now)
 
     Study.list_items_for_user(user_id)
-    |> Enum.filter(fn item -> due_today?(item, end_of_day) and not is_nil(item.word) end)
+    |> Enum.filter(fn item ->
+      Study.due_today?(item, end_of_day) and not is_nil(item.word) and
+        matches_deck?(item, deck_id)
+    end)
     |> Enum.sort_by(& &1.due_date, {:asc, DateTime})
   end
 
-  defp due_today?(item, end_of_day) do
-    case item.due_date do
-      nil -> true
-      due -> DateTime.compare(due, end_of_day) != :gt
-    end
-  end
+  defp matches_deck?(_item, nil), do: true
 
-  defp end_of_day(now) do
-    date = DateTime.to_date(now)
-    DateTime.new!(date, ~T[23:59:59], "Etc/UTC")
+  defp matches_deck?(item, deck_id) when is_integer(deck_id) do
+    case item.word do
+      %{id: word_id} ->
+        case Repo.get_by(DeckWord, deck_id: deck_id, word_id: word_id) do
+          nil -> false
+          _ -> true
+        end
+
+      _ ->
+        false
+    end
   end
 
   defp find_item(items, item_id) do

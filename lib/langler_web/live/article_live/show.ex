@@ -6,6 +6,7 @@ defmodule LanglerWeb.ArticleLive.Show do
   use LanglerWeb, :live_view
   require Logger
 
+  alias Langler.Accounts
   alias Langler.Accounts.LlmConfig
   alias Langler.Content
   alias Langler.Content.ArticleImporter
@@ -261,7 +262,9 @@ defmodule LanglerWeb.ArticleLive.Show do
                     ]
                 ]
               }
-            >{token.text}</span>
+            >
+              {token.text}
+            </span>
           </p>
         </article>
       </div>
@@ -575,7 +578,8 @@ defmodule LanglerWeb.ArticleLive.Show do
         %{assigns: %{current_scope: scope}} = socket
       ) do
     with {:ok, word} <- fetch_word(word_id),
-         {:ok, item} <- Study.schedule_new_item(scope.user.id, word.id) do
+         {:ok, item} <- Study.schedule_new_item(scope.user.id, word.id),
+         {:ok, _deck_word} <- add_word_to_current_deck(scope.user.id, word.id) do
       studied_word_ids = MapSet.put(socket.assigns.studied_word_ids, word.id)
 
       studied_forms =
@@ -605,6 +609,16 @@ defmodule LanglerWeb.ArticleLive.Show do
     else
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Unable to add word: #{inspect(reason)}")}
+    end
+  end
+
+  defp add_word_to_current_deck(user_id, word_id) do
+    case Accounts.get_current_deck(user_id) do
+      nil ->
+        {:error, :no_deck_available}
+
+      deck ->
+        Vocabulary.add_word_to_deck(deck.id, word_id, user_id)
     end
   end
 
