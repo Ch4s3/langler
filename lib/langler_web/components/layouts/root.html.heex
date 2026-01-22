@@ -9,7 +9,13 @@
     </.live_title>
     <%!-- Preload critical resources for faster FCP --%>
     <link phx-track-static rel="preload" href={~p"/assets/css/app.css"} as="style" />
-    <link phx-track-static rel="preload" href={~p"/images/logo.svg"} as="image" fetchpriority="high" />
+    <link
+      phx-track-static
+      rel="preload"
+      href={~p"/images/logo.svg"}
+      as="image"
+      fetchpriority="high"
+    />
     <%!-- Critical CSS: ultra-minimal styles for above-the-fold content --%>
     <style>
       /* Ultra-minimal critical CSS - only what's needed for FCP */
@@ -21,17 +27,74 @@
       .primary-nav img{width:36px;height:36px;flex-shrink:0;display:block}
       [data-theme="night"] body{background:#1f2937;color:#f9fafb}
       [data-theme="cmyk"] body{background:#f3f4f6;color:#1f2937}
+      [data-theme="night"] .primary-nav{border-color:rgba(148,163,184,.5);background:rgba(15,23,42,.9)}
+      [data-theme="night"] .primary-nav a{color:#f8fafc}
+      [data-theme="cmyk"] .primary-nav{border-color:rgba(15,23,42,.1);background:rgba(248,250,252,.95)}
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme]) body{background:#1f2937;color:#f9fafb}
+        :root:not([data-theme]) .primary-nav{border-color:rgba(148,163,184,.5);background:rgba(15,23,42,.9)}
+        :root:not([data-theme]) .primary-nav a{color:#f8fafc}
+      }
     </style>
     <%!-- Load full CSS asynchronously to avoid render blocking --%>
-    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} media="print" onload="this.media='all';this.onload=null" />
+    <link
+      phx-track-static
+      rel="stylesheet"
+      href={~p"/assets/css/app.css"}
+      media="print"
+      onload="this.media='all';this.onload=null"
+    />
     <noscript>
       <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     </noscript>
     <%!-- Optimized theme script - runs immediately but non-blocking --%>
     <script>
-      !function(){var t=localStorage.getItem("phx:theme")||"system";if(!document.documentElement.hasAttribute("data-theme")){if("system"===t)document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t)}function e(e){if("system"===e)localStorage.removeItem("phx:theme"),document.documentElement.removeAttribute("data-theme");else localStorage.setItem("phx:theme",e),document.documentElement.setAttribute("data-theme",e)}window.addEventListener("storage",function(n){n.key==="phx:theme"&&e(n.newValue||"system")}),window.addEventListener("phx:set-theme",function(n){e(n.target.dataset.phxTheme)})}();
+      (function () {
+        var storedTheme = localStorage.getItem("phx:theme") || "system";
+
+        if (!document.documentElement.hasAttribute("data-theme")) {
+          if (storedTheme === "system") {
+            document.documentElement.removeAttribute("data-theme");
+          } else {
+            document.documentElement.setAttribute("data-theme", storedTheme);
+          }
+        }
+
+        var applyTheme = function (theme) {
+          if (theme === "system") {
+            localStorage.removeItem("phx:theme");
+            document.documentElement.removeAttribute("data-theme");
+            return;
+          }
+
+          localStorage.setItem("phx:theme", theme);
+          document.documentElement.setAttribute("data-theme", theme);
+        };
+
+        window.addEventListener("storage", function (event) {
+          if (event.key !== "phx:theme") {
+            return;
+          }
+
+          applyTheme(event.newValue || "system");
+        });
+
+        window.addEventListener("phx:set-theme", function (event) {
+          var trigger = event.target;
+          var theme = trigger.dataset && trigger.dataset.phxTheme;
+
+          if (!theme && typeof trigger.closest === "function") {
+            var closest = trigger.closest("[data-phx-theme]");
+            theme = closest && closest.dataset && closest.dataset.phxTheme;
+          }
+
+          if (theme) {
+            applyTheme(theme);
+          }
+        });
+      })();
     </script>
-    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    <script defer phx-track-static type="module" src={~p"/assets/js/app.js"}>
     </script>
   </head>
   <body class="min-h-screen bg-base-200">

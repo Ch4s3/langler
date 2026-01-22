@@ -44,3 +44,5 @@ lib/langler/creds.txt
 
 # Assay build artifacts
 _build/assay
+
+priv/static/audio/

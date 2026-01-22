@@ -80,6 +80,7 @@ defmodule LanglerWeb.ChatLive.SessionItem do
           type="button"
           class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity"
           aria-label="Chat options"
+          aria-expanded={if(@menu_open, do: "true", else: "false")}
           phx-click="toggle_chat_menu"
           phx-value-session-id={@session.id}
           phx-target={@myself}

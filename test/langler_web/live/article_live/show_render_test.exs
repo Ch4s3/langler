@@ -90,7 +90,8 @@ defmodule LanglerWeb.ArticleLive.ShowRenderTest do
       reading_time_minutes: 1.0,
       article_short_title: "Sample",
       page_title: "Sample Article",
-      article_status: "imported"
+      article_status: "imported",
+      tts_enabled: false
     }
 
     Map.merge(defaults, overrides)

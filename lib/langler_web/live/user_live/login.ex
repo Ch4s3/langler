@@ -46,6 +46,7 @@ defmodule LanglerWeb.UserLive.Login do
           action={~p"/users/log-in"}
           phx-submit="submit_magic"
         >
+          <input type="hidden" name="user[magic]" value="true" />
           <.input
             readonly={!!@current_scope}
             field={f[:email]}
@@ -58,6 +59,9 @@ defmodule LanglerWeb.UserLive.Login do
           <.button class="btn btn-primary w-full">
             Log in with email <span aria-hidden="true">→</span>
           </.button>
+          <p class="text-sm text-gray-500 mt-2">
+            We’ll email a secure link so you can log in without a password.
+          </p>
         </.form>
 
         <div class="divider">or</div>

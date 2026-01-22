@@ -16,6 +16,23 @@ defmodule LanglerWeb.UserSessionController do
     create(conn, params, "Welcome back!")
   end
 
+  # magic link request
+  defp create(conn, %{"user" => %{"email" => email, "magic" => "true"}}, _info) do
+    if user = Accounts.get_user_by_email(email) do
+      Accounts.deliver_login_instructions(
+        user,
+        &url(~p"/users/log-in/#{&1}")
+      )
+    end
+
+    info =
+      "If your email is in our system, you will receive instructions for logging in shortly."
+
+    conn
+    |> put_flash(:info, info)
+    |> redirect(to: ~p"/users/log-in")
+  end
+
   # magic link login
   defp create(conn, %{"user" => %{"token" => token} = user_params}, info) do
     case Accounts.login_user_by_magic_link(token) do

@@ -45,7 +45,14 @@ defmodule LanglerWeb.Layouts do
           navigate={~p"/articles"}
           class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
         >
-          <img src={~p"/images/logo.svg"} width="36" height="36" alt="Langler logo" loading="eager" fetchpriority="high" />
+          <%!-- <img
+            src={~p"/images/logo.svg"}
+            width="36"
+            height="36"
+            alt="Langler logo"
+            loading="eager"
+            fetchpriority="high"
+          /> --%>
           <span>Langler</span>
         </.link>
 

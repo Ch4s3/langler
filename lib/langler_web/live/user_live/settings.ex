@@ -41,6 +41,24 @@ defmodule LanglerWeb.UserLive.Settings do
             </div>
           </.link>
 
+          <.link
+            navigate={~p"/users/settings/tts"}
+            class="card border border-base-200 bg-base-100 shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
+            <div class="card-body flex flex-row items-center gap-4 p-4">
+              <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-accent/10">
+                <.icon name="hero-speaker-wave" class="h-6 w-6 text-accent" />
+              </div>
+              <div class="flex-1 min-w-0">
+                <h2 class="font-semibold text-base-content">TTS Settings</h2>
+                <p class="text-sm text-base-content/60 truncate">
+                  Configure Text-to-Speech provider for listening
+                </p>
+              </div>
+              <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
+            </div>
+          </.link>
+
           <div class="card border border-base-200 bg-base-100 shadow-md opacity-60">
             <div class="card-body flex flex-row items-center gap-4 p-4">
               <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-secondary/10">

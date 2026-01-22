@@ -30,6 +30,12 @@ defmodule LanglerWeb.Endpoint do
     gzip: not code_reloading?,
     only: LanglerWeb.static_paths()
 
+  # Serve audio files from priv/static/audio
+  plug Plug.Static,
+    at: "/audio",
+    from: "priv/static/audio",
+    gzip: false
+
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if Code.ensure_loaded?(Tidewave) do

@@ -126,6 +126,35 @@ defmodule LanglerWeb.UserSessionControllerTest do
     end
   end
 
+  describe "POST /users/log-in - magic link request" do
+    test "sends magic link email when user exists", %{conn: conn, user: user} do
+      conn =
+        post(conn, ~p"/users/log-in", %{
+          "user" => %{"email" => user.email, "magic" => "true"}
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "If your email is in our system, you will receive instructions for logging in shortly."
+
+      assert redirected_to(conn) == ~p"/users/log-in"
+
+      assert Langler.Repo.get_by!(Langler.Accounts.UserToken, user_id: user.id).context ==
+               "login"
+    end
+
+    test "does not disclose if the user is registered", %{conn: conn} do
+      conn =
+        post(conn, ~p"/users/log-in", %{
+          "user" => %{"email" => "idonotexist@example.com", "magic" => "true"}
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "If your email is in our system, you will receive instructions for logging in shortly."
+
+      assert redirected_to(conn) == ~p"/users/log-in"
+    end
+  end
+
   describe "DELETE /users/log-out" do
     test "logs the user out", %{conn: conn, user: user} do
       conn = conn |> log_in_user(user) |> delete(~p"/users/log-out")

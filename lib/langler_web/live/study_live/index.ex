@@ -1135,7 +1135,11 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
-  def handle_async(:load_items, {:ok, %{items: items, stats: stats, user_level: user_level}}, socket) do
+  def handle_async(
+        :load_items,
+        {:ok, %{items: items, stats: stats, user_level: user_level}},
+        socket
+      ) do
     visible =
       filter_items(
         items,

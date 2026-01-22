@@ -8,6 +8,7 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   alias Langler.Accounts
   alias Langler.Accounts.LlmConfig
+  alias Langler.Accounts.TtsConfig
   alias Langler.Content
   alias Langler.Content.ArticleImporter
   alias Langler.Content.ArticleUser
@@ -151,6 +152,36 @@ defmodule LanglerWeb.ArticleLive.Show do
                   </button>
                 </div>
                 <div
+                  :if={@article_status in ["imported", "finished"]}
+                  class="tooltip tooltip-right"
+                  data-tip={
+                    if @tts_enabled,
+                      do: "Listen to this article",
+                      else: "Configure TTS to listen to articles"
+                  }
+                >
+                  <%= if @tts_enabled do %>
+                    <.link
+                      navigate={~p"/articles/#{@article.id}/listen"}
+                      class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
+                      aria-label="Listen to article"
+                    >
+                      <.icon name="hero-speaker-wave" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Listen</span>
+                    </.link>
+                  <% else %>
+                    <button
+                      type="button"
+                      class="article-meta__btn btn btn-ghost btn-sm gap-2 opacity-60"
+                      aria-label="Listen to article"
+                      phx-click="navigate_tts_settings"
+                    >
+                      <.icon name="hero-speaker-wave" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Listen</span>
+                    </button>
+                  <% end %>
+                </div>
+                <div
                   :if={@article_status == "imported"}
                   class="dropdown dropdown-bottom dropdown-start tooltip tooltip-right"
                   data-tip="Mark this article as finished"
@@ -290,6 +321,9 @@ defmodule LanglerWeb.ArticleLive.Show do
     article_user = get_article_user(user_id, article.id)
     article_status = if article_user, do: article_user.status, else: "imported"
 
+    # Check if TTS is enabled (never blocks article access)
+    tts_enabled = TtsConfig.tts_enabled?(user_id)
+
     socket
     |> assign(:article, article)
     |> assign(:sentences, sentences)
@@ -302,6 +336,7 @@ defmodule LanglerWeb.ArticleLive.Show do
     |> assign(:article_short_title, truncated_title(article))
     |> assign(:page_title, article.title || humanize_source(article))
     |> assign(:article_status, article_status)
+    |> assign(:tts_enabled, tts_enabled)
   end
 
   defp calculate_reading_time(sentences) do
@@ -398,6 +433,13 @@ defmodule LanglerWeb.ArticleLive.Show do
        socket
        |> put_flash(:error, "Add an LLM provider in settings before starting a quiz")}
     end
+  end
+
+  def handle_event("navigate_tts_settings", _, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, "Configure a Text-to-Speech provider to listen to articles")
+     |> push_navigate(to: ~p"/users/settings/tts")}
   end
 
   def handle_event(

@@ -91,12 +91,13 @@ defmodule LanglerWeb.ChatLive.DrawerTest do
 
       # Verify menu is open (should have the menu visible)
       assert has_element?(view, "ul.menu")
+      assert has_element?(view, "button[aria-label='Chat options'][aria-expanded='true']")
 
       # Click again to close
       render_click(kebab_button)
 
-      # Menu should be closed (no menu visible)
-      refute has_element?(view, "ul.menu")
+      # Menu should be closed (no menu flagged as expanded)
+      refute has_element?(view, "button[aria-label='Chat options'][aria-expanded='true']")
     end
 
     test "closes chat menu when toggling again", %{conn: conn} do
@@ -123,12 +124,13 @@ defmodule LanglerWeb.ChatLive.DrawerTest do
       render_click(kebab_button)
 
       assert has_element?(view, "ul.menu")
+      assert has_element?(view, "button[aria-label='Chat options'][aria-expanded='true']")
 
       # Click the kebab button again to close
       render_click(kebab_button)
 
       # Menu should be closed
-      refute has_element?(view, "ul.menu")
+      refute has_element?(view, "button[aria-label='Chat options'][aria-expanded='true']")
     end
   end
 end

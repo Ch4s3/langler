@@ -40,12 +40,12 @@ defmodule LanglerWeb.ArticleLive.IndexTest do
     article = article_fixture(%{user: user})
     :ok = Content.tag_article(article, [{"culture", 0.9}])
 
-      {:ok, view, _html} = live(conn, "/articles")
+    {:ok, view, _html} = live(conn, "/articles")
 
-      # Wait for async articles loading to complete
-      wait_for_async_loading(view)
+    # Wait for async articles loading to complete
+    wait_for_async_loading(view)
 
-      assert has_element?(view, "a[href='/articles/#{article.id}']")
+    assert has_element?(view, "a[href='/articles/#{article.id}']")
 
     view
     |> element("button[phx-click='filter_topic'][phx-value-topic='culture']")

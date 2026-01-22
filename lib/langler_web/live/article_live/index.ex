@@ -5,6 +5,8 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   use LanglerWeb, :live_view
 
+  require Logger
+
   alias Langler.Content
   alias Langler.Content.ArticleImporter
   alias Langler.Content.FrontPage
@@ -30,7 +32,7 @@ defmodule LanglerWeb.ArticleLive.Index do
      |> assign(:target_language, target_language)
      |> assign(:user_topics, user_topics)
      |> assign(:articles_count, 0)
-     |> assign(:articles_loading, true)
+     |> assign(:articles_loading, false)
      |> stream(:articles, [])
      |> assign_async(:recommended_count, fn ->
        {:ok, %{recommended_count: Content.get_recommended_count(user_id, @recommendations_limit)}}
@@ -51,13 +53,19 @@ defmodule LanglerWeb.ArticleLive.Index do
     # Only update if different (idempotent - prevents rerenders)
     socket =
       cond do
-        socket.assigns[:query] == query && not socket.assigns.articles_loading ->
+        socket.assigns[:query] == query &&
+            not socket.assigns.articles_loading &&
+            socket.assigns.articles_count > 0 ->
           # Query unchanged and articles already loaded
           socket
 
         socket.assigns[:query] == query ->
-          # Query unchanged but articles not loaded yet (initial mount)
-          load_articles_async(socket)
+          # Query unchanged but articles not loaded yet
+          if socket.assigns.articles_count == 0 do
+            load_articles_async(socket)
+          else
+            socket
+          end
 
         true ->
           # Query changed
@@ -630,6 +638,8 @@ defmodule LanglerWeb.ArticleLive.Index do
   end
 
   def handle_async(:load_articles, {:exit, reason}, socket) do
+    Logger.error("ArticleLive: Failed to load articles: #{inspect(reason)}")
+
     {:noreply,
      socket
      |> assign(:articles_loading, false)
