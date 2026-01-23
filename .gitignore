@@ -46,3 +46,5 @@ lib/langler/creds.txt
 _build/assay
 
 priv/static/audio/
+
+/node_modules/

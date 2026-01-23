@@ -283,61 +283,87 @@ defmodule LanglerWeb.ChatLive.Drawer do
                   :if={msg.role in ["user", "assistant"]}
                   id={id}
                   class={[
-                    "chat",
-                    msg.role == "user" && "chat-end",
-                    msg.role != "user" && "chat-start"
+                    "chat-message-enter flex gap-3",
+                    msg.role == "user" && "justify-end",
+                    msg.role != "user" && "justify-start"
                   ]}
                 >
-                  <div class="chat-bubble">
-                    <%= if msg.role == "assistant" && @current_session do %>
-                      <div class="markdown-content prose prose-sm max-w-none dark:prose-invert">
-                        {raw(
-                          add_word_tooltips(
-                            render_markdown(msg.content),
-                            @current_session.target_language,
-                            @studied_word_ids,
-                            @studied_forms,
-                            id,
-                            @myself.cid
-                          )
-                        )}
+                  <%= if msg.role == "user" do %>
+                    <div class="flex flex-col items-end gap-2 max-w-[80%] sm:max-w-[70%]">
+                      <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-4 py-3 shadow-lg">
+                        <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                          {msg.content}
+                        </p>
                       </div>
-                      <div class="flex items-center gap-2 mt-2 text-xs text-base-content/60">
-                        <button
-                          type="button"
-                          class="btn btn-ghost btn-sm gap-1 px-2 py-1 transition hover:bg-base-200/60"
-                          phx-hook="CopyToClipboard"
-                          id={"copy-message-#{id}"}
-                          data-copy-text={msg.content}
-                          aria-label="Copy message"
-                        >
-                          <.icon name="hero-clipboard-document" class="h-4 w-4" /> Copy
-                        </button>
-                        <button
-                          type="button"
-                          class="btn btn-ghost btn-sm gap-1 px-2 py-1 transition hover:bg-base-200/60"
-                          phx-hook="TextDownloader"
-                          id={"download-message-#{id}"}
-                          data-download-text={msg.content}
-                          data-download-filename={"langler-response-" <> id <> ".txt"}
-                          aria-label="Download message"
-                        >
-                          <.icon name="hero-arrow-down-tray" class="h-4 w-4" /> Download
-                        </button>
+                    </div>
+                  <% else %>
+                    <div class="flex items-start gap-3 max-w-[80%] sm:max-w-[70%]">
+                      <div class="avatar placeholder">
+                        <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center">
+                          <.icon name="hero-sparkles" class="h-4 w-4" />
+                        </div>
                       </div>
-                    <% else %>
-                      {msg.content}
-                    <% end %>
-                  </div>
+                      <div class="flex flex-col gap-2 flex-1">
+                        <div class="chat-bubble bg-base-200 text-base-content rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
+                          <%= if @current_session do %>
+                            <div class="markdown-content prose prose-sm max-w-none dark:prose-invert">
+                              {raw(
+                                add_word_tooltips(
+                                  render_markdown(msg.content),
+                                  @current_session.target_language,
+                                  @studied_word_ids,
+                                  @studied_forms,
+                                  id,
+                                  @myself.cid
+                                )
+                              )}
+                            </div>
+                          <% else %>
+                            <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                              {msg.content}
+                            </p>
+                          <% end %>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-base-content/50">
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-xs gap-1 px-2 py-1 transition hover:bg-base-200/60 rounded-full"
+                            phx-hook="CopyToClipboard"
+                            id={"copy-message-#{id}"}
+                            data-copy-text={msg.content}
+                            aria-label="Copy message"
+                          >
+                            <.icon name="hero-clipboard-document" class="h-3 w-3" /> Copy
+                          </button>
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-xs gap-1 px-2 py-1 transition hover:bg-base-200/60 rounded-full"
+                            phx-hook="TextDownloader"
+                            id={"download-message-#{id}"}
+                            data-download-text={msg.content}
+                            data-download-filename={"langler-response-" <> id <> ".txt"}
+                            aria-label="Download message"
+                          >
+                            <.icon name="hero-arrow-down-tray" class="h-3 w-3" /> Download
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  <% end %>
                 </div>
               </div>
               <div
                 :if={@sending}
-                class="chat chat-start animate-pulse mt-4"
+                class="flex items-start gap-3 mt-4"
                 aria-live="polite"
                 aria-label="Assistant is typing"
               >
-                <div class="chat-bubble bg-base-200 text-base-content/70 flex items-center gap-2">
+                <div class="avatar placeholder">
+                  <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center">
+                    <.icon name="hero-sparkles" class="h-4 w-4" />
+                  </div>
+                </div>
+                <div class="chat-bubble bg-base-200 text-base-content/70 flex items-center gap-2 rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
                   <span class="loading loading-dots loading-sm text-primary"></span>
                   <span class="text-xs uppercase tracking-wide text-base-content/50">
                     Thinking...

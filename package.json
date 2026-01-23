@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "howler": "^2.2.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
   }
 }

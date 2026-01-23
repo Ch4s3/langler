@@ -17,7 +17,8 @@ defmodule LanglerWeb.StudyLive.IndexTest do
         html = render(view)
 
         # Check if study-items element exists (means loading is done) or if items are present
-        if (html =~ ~r/id="study-items"/ || html =~ ~r/items-\d+/) && not (html =~ ~r/study-card-skeleton/) do
+        if (html =~ ~r/id="study-items"/ || html =~ ~r/items-\d+/) &&
+             not (html =~ ~r/study-card-skeleton/) do
           {:halt, :ok}
         else
           {:cont, nil}
@@ -38,6 +39,8 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      wait_for_async_loading(view)
 
       # Wait for async items loading to complete
       wait_for_async_loading(view)

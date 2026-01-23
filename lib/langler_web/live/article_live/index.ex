@@ -54,7 +54,7 @@ defmodule LanglerWeb.ArticleLive.Index do
     socket =
       cond do
         socket.assigns[:query] == query &&
-            not socket.assigns.articles_loading &&
+          not socket.assigns.articles_loading &&
             socket.assigns.articles_count > 0 ->
           # Query unchanged and articles already loaded
           socket

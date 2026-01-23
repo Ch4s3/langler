@@ -13,6 +13,7 @@ defmodule Langler.Audio.AudioFile do
     field :file_path, :string
     field :file_size, :integer
     field :duration_seconds, :float
+    field :last_position_seconds, :float, default: 0.0
     field :error_message, :string
 
     timestamps(type: :utc_datetime)
@@ -30,6 +31,7 @@ defmodule Langler.Audio.AudioFile do
       :file_path,
       :file_size,
       :duration_seconds,
+      :last_position_seconds,
       :error_message
     ])
     |> validate_required([:user_id, :article_id, :status])

@@ -191,38 +191,61 @@ defmodule LanglerWeb.Layouts do
   end
 
   @doc """
-  Provides dark vs light theme toggle based on themes defined in app.css.
+  Provides theme toggle for Sage, Ocean, and Midnight themes.
 
   See <head> in root.html.heex which applies the theme before page load.
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=cmyk]_&]:left-1/3 [[data-theme=night]_&]:left-2/3 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
+    <div class="dropdown dropdown-end">
+      <div tabindex="0" role="button" class="btn btn-ghost btn-sm rounded-full">
+        <.icon name="hero-swatch" class="h-5 w-5" />
+        <span class="hidden sm:inline">Theme</span>
+      </div>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-base-100 rounded-box z-[1] w-48 border border-base-300 p-2 shadow-lg"
       >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="cmyk"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="night"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
-      </button>
+        <li class="text-base-content">
+          <button
+            type="button"
+            phx-click={JS.dispatch("phx:set-theme")}
+            data-theme="sage"
+            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
+            onclick="this.closest('.dropdown').removeAttribute('open')"
+          >
+            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 shrink-0">
+            </span>
+            <span>Sage</span>
+          </button>
+        </li>
+        <li class="text-base-content">
+          <button
+            type="button"
+            phx-click={JS.dispatch("phx:set-theme")}
+            data-theme="ocean"
+            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
+            onclick="this.closest('.dropdown').removeAttribute('open')"
+          >
+            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shrink-0">
+            </span>
+            <span>Ocean</span>
+          </button>
+        </li>
+        <li class="text-base-content">
+          <button
+            type="button"
+            phx-click={JS.dispatch("phx:set-theme")}
+            data-theme="midnight"
+            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
+            onclick="this.closest('.dropdown').removeAttribute('open')"
+          >
+            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 shrink-0">
+            </span>
+            <span>Midnight</span>
+          </button>
+        </li>
+      </ul>
     </div>
     """
   end

@@ -16,25 +16,15 @@
       as="image"
       fetchpriority="high"
     />
-    <%!-- Critical CSS: ultra-minimal styles for above-the-fold content --%>
+    <%!-- Critical CSS: ultra-minimal styles for layout only --%>
     <style>
-      /* Ultra-minimal critical CSS - only what's needed for FCP */
+      /* Structural-only critical CSS - colors come from theme variables */
       html{font-family:system-ui,-apple-system,sans-serif;line-height:1.5}
-      body{margin:0;min-height:100vh;background:#e5e7eb;color:#1f2937}
-      .primary-nav{border-bottom:1px solid #e5e7eb;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);position:sticky;top:0;z-index:50}
+      body{margin:0;min-height:100vh}
+      .primary-nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
       .primary-nav>div{max-width:72rem;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1rem}
-      .primary-nav a{text-decoration:none;color:inherit;display:flex;align-items:center;gap:.75rem;font-size:1.125rem;font-weight:600}
+      .primary-nav a{text-decoration:none;display:flex;align-items:center;gap:.75rem;font-size:1.125rem;font-weight:600}
       .primary-nav img{width:36px;height:36px;flex-shrink:0;display:block}
-      [data-theme="night"] body{background:#1f2937;color:#f9fafb}
-      [data-theme="cmyk"] body{background:#f3f4f6;color:#1f2937}
-      [data-theme="night"] .primary-nav{border-color:rgba(148,163,184,.5);background:rgba(15,23,42,.9)}
-      [data-theme="night"] .primary-nav a{color:#f8fafc}
-      [data-theme="cmyk"] .primary-nav{border-color:rgba(15,23,42,.1);background:rgba(248,250,252,.95)}
-      @media (prefers-color-scheme: dark) {
-        :root:not([data-theme]) body{background:#1f2937;color:#f9fafb}
-        :root:not([data-theme]) .primary-nav{border-color:rgba(148,163,184,.5);background:rgba(15,23,42,.9)}
-        :root:not([data-theme]) .primary-nav a{color:#f8fafc}
-      }
     </style>
     <%!-- Load full CSS asynchronously to avoid render blocking --%>
     <link
@@ -47,57 +37,40 @@
     <noscript>
       <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     </noscript>
-    <%!-- Optimized theme script - runs immediately but non-blocking --%>
+    <%!-- Theme switcher for DaisyUI data-theme attribute --%>
     <script>
-      (function () {
-        var storedTheme = localStorage.getItem("phx:theme") || "system";
+      // Apply saved theme on load
+      const theme = localStorage.getItem('theme') || 'sage';
+      document.documentElement.setAttribute('data-theme', theme);
 
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          if (storedTheme === "system") {
-            document.documentElement.removeAttribute("data-theme");
-          } else {
-            document.documentElement.setAttribute("data-theme", storedTheme);
-          }
+      // Listen for theme change events
+      window.addEventListener('phx:set-theme', (e) => {
+        const newTheme = e.target?.dataset?.theme;
+        if (newTheme) {
+          const html = document.documentElement;
+          
+          // Remove old theme attribute
+          html.removeAttribute('data-theme');
+          
+          // Force reflow
+          void html.offsetHeight;
+          
+          // Set new theme
+          html.setAttribute('data-theme', newTheme);
+          localStorage.setItem('theme', newTheme);
+          
+          // Verify CSS variables updated
+          const styles = getComputedStyle(html);
+          console.log('[Theme] Applied:', newTheme);
+          console.log('[Theme] base-100:', styles.getPropertyValue('--color-base-100').trim());
+          console.log('[Theme] base-content:', styles.getPropertyValue('--color-base-content').trim());
         }
-
-        var applyTheme = function (theme) {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.removeAttribute("data-theme");
-            return;
-          }
-
-          localStorage.setItem("phx:theme", theme);
-          document.documentElement.setAttribute("data-theme", theme);
-        };
-
-        window.addEventListener("storage", function (event) {
-          if (event.key !== "phx:theme") {
-            return;
-          }
-
-          applyTheme(event.newValue || "system");
-        });
-
-        window.addEventListener("phx:set-theme", function (event) {
-          var trigger = event.target;
-          var theme = trigger.dataset && trigger.dataset.phxTheme;
-
-          if (!theme && typeof trigger.closest === "function") {
-            var closest = trigger.closest("[data-phx-theme]");
-            theme = closest && closest.dataset && closest.dataset.phxTheme;
-          }
-
-          if (theme) {
-            applyTheme(theme);
-          }
-        });
-      })();
+      });
     </script>
     <script defer phx-track-static type="module" src={~p"/assets/js/app.js"}>
     </script>
   </head>
-  <body class="min-h-screen bg-base-200">
+  <body class="min-h-screen bg-base-200 text-base-content">
     {@inner_content}
   </body>
 </html>

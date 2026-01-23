@@ -46,3 +46,5 @@ config :langler, Oban,
 config :langler, Langler.Content.Readability, use_nif: false
 
 config :langler, Langler.External.Dictionary.CacheLoader, enabled: false
+
+config :langler, :study_live_async_fetch_enabled, false

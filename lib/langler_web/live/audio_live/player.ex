@@ -44,6 +44,7 @@ defmodule LanglerWeb.AudioLive.Player do
     article = Content.get_article_for_user!(user_id, article_id)
     sentences = Content.list_sentences(article)
     audio_file = Audio.get_audio_file(user_id, article_id)
+    initial_listening_position = listening_position(audio_file)
 
     # Enqueue generation if needed
     if audio_file == nil or audio_file.status == "pending" do
@@ -79,6 +80,7 @@ defmodule LanglerWeb.AudioLive.Player do
       |> assign(:sentences, sentences)
       |> assign(:audio_file, audio_file)
       |> assign(:audio_url, get_audio_url(audio_file))
+      |> assign(:initial_listening_position, initial_listening_position)
       |> assign(:current_sentence_idx, 0)
       |> assign(:subtitles_visible, false)
       |> assign(:playback_rate, 1.0)
@@ -92,7 +94,7 @@ defmodule LanglerWeb.AudioLive.Player do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-4xl space-y-8 py-8">
+      <div class="mx-auto max-w-4xl space-y-6 py-8">
         <div class="flex items-center justify-between">
           <div>
             <h1 class="text-3xl font-bold text-base-content">Listen to Article</h1>
@@ -113,110 +115,123 @@ defmodule LanglerWeb.AudioLive.Player do
           </div>
         </div>
 
-        <div :if={!@audio_loading && @audio_url} class="space-y-6">
-          <%!-- Audio Player and Subtitles --%>
-          <div class="card border border-base-200 bg-base-100 shadow-xl">
-            <div class="card-body">
-              <%!-- Audio Controls (ignored by LiveView) --%>
-              <div
-                id="audio-player"
-                phx-hook="AudioPlayer"
-                phx-update="ignore"
-                data-audio-url={@audio_url}
-                data-playback-rate={@playback_rate}
-                data-sentences={
-                  Jason.encode!(Enum.map(@sentences, &%{id: &1.id, content: &1.content}))
-                }
-              >
-                <div class="flex items-center gap-4">
-                  <button
-                    type="button"
-                    class="btn btn-circle btn-primary audio-play-button"
-                    aria-label={if @is_playing, do: "Pause", else: "Play"}
+        <%!-- Combined Audio Player & Subtitles --%>
+        <div
+          :if={!@audio_loading && @audio_url}
+          class="card border border-base-200 bg-base-100 shadow-xl"
+        >
+          <div class="card-body p-6 space-y-6">
+            <%!-- Player Controls (with phx-update ignore) --%>
+            <div
+              id="audio-player"
+              phx-hook="AudioPlayer"
+              phx-update="ignore"
+              data-audio-url={@audio_url}
+              data-playback-rate={@playback_rate}
+              data-sentences={Jason.encode!(Enum.map(@sentences, &%{id: &1.id, content: &1.content}))}
+              data-initial-position={@initial_listening_position}
+            >
+              <div class="flex items-center gap-4">
+                <button
+                  type="button"
+                  class="btn btn-circle btn-primary btn-lg audio-play-button shadow-lg hover:scale-110 transition-transform"
+                  aria-label={if @is_playing, do: "Pause", else: "Play"}
+                >
+                  <%= if @is_playing do %>
+                    <.icon name="hero-pause" class="h-6 w-6" />
+                  <% else %>
+                    <.icon name="hero-play" class="h-6 w-6" />
+                  <% end %>
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-circle btn-ghost audio-skip-back-button"
+                  aria-label="Skip backward 10 seconds"
+                >
+                  <.icon name="hero-arrow-uturn-left" class="h-5 w-5" />
+                </button>
+
+                <span
+                  id="audio-time-display"
+                  class="text-sm font-mono min-w-[120px] text-center text-base-content/80"
+                >
+                  0:00 / 0:00
+                </span>
+
+                <div class="flex-1">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value="0"
+                    class="range range-primary range-lg"
+                    id="audio-seek"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  class="btn btn-circle btn-ghost audio-skip-forward-button"
+                  aria-label="Skip forward 10 seconds"
+                >
+                  <.icon name="hero-arrow-uturn-right" class="h-5 w-5" />
+                </button>
+
+                <div class="flex items-center gap-3">
+                  <.form
+                    for={%{}}
+                    as={:playback_rate}
+                    phx-change="change_playback_rate"
+                    phx-target="#audio-player"
                   >
-                    <%= if @is_playing do %>
-                      <.icon name="hero-pause" class="h-6 w-6" />
-                    <% else %>
-                      <.icon name="hero-play" class="h-6 w-6" />
-                    <% end %>
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn btn-circle btn-ghost audio-skip-back-button"
-                    aria-label="Skip backward 10 seconds"
-                  >
-                    <.icon name="hero-arrow-uturn-left" class="h-5 w-5" />
-                  </button>
-
-                  <span id="audio-time-display" class="text-sm font-mono min-w-[100px] text-center">
-                    0:00 / 0:00
-                  </span>
-
-                  <div class="flex-1">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value="0"
-                      class="range range-primary"
-                      id="audio-seek"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    class="btn btn-circle btn-ghost audio-skip-forward-button"
-                    aria-label="Skip forward 10 seconds"
-                  >
-                    <.icon name="hero-arrow-uturn-right" class="h-5 w-5" />
-                  </button>
+                    <select
+                      class="select select-bordered select-sm bg-base-100"
+                      name="playback_rate[rate]"
+                      value={@playback_rate}
+                    >
+                      <option value="0.5">0.5x</option>
+                      <option value="1.0">1.0x</option>
+                      <option value="1.5">1.5x</option>
+                      <option value="2.0">2.0x</option>
+                    </select>
+                  </.form>
 
                   <div class="flex items-center gap-2">
-                    <.form
-                      for={%{}}
-                      as={:playback_rate}
-                      phx-change="change_playback_rate"
-                      phx-target="#audio-player"
-                    >
-                      <select
-                        class="select select-bordered select-sm"
-                        name="playback_rate[rate]"
-                        value={@playback_rate}
-                      >
-                        <option value="0.5">0.5x</option>
-                        <option value="1.0">1.0x</option>
-                        <option value="1.5">1.5x</option>
-                        <option value="2.0">2.0x</option>
-                      </select>
-                    </.form>
-
+                    <.icon name="hero-speaker-wave" class="h-4 w-4 text-base-content/60" />
                     <input
                       type="range"
                       min="0"
                       max="100"
                       value="100"
-                      class="range range-secondary range-sm w-24"
+                      class="range range-secondary range-sm w-20"
                       id="audio-volume"
                     />
                   </div>
                 </div>
               </div>
+            </div>
 
-              <%!-- Subtitles (updated by LiveView) --%>
+            <%!-- Subtitles (Limited to 4 lines) --%>
+            <div :if={@subtitles_visible} class="border-t border-base-300 pt-6 overflow-hidden">
               <div
-                :if={@subtitles_visible}
-                class="mt-6 space-y-2 overflow-y-auto"
-                style="max-height: calc(4 * (1.5rem + 1.5rem) + 3 * 0.5rem);"
+                class="space-y-3 overflow-y-auto overflow-x-hidden"
+                style="max-height: 24rem;"
                 id="subtitles-container"
               >
                 <p
                   :for={{sentence, idx} <- Enum.with_index(@sentences)}
                   class={[
-                    "p-3 rounded-lg transition",
+                    "p-3 rounded-xl transition-all duration-300 cursor-pointer text-base break-words",
                     if(idx == @current_sentence_idx,
-                      do: "bg-primary/20 border-2 border-primary",
-                      else: "bg-base-200"
+                      do: [
+                        "bg-primary/15 border-2 border-primary/40 text-primary",
+                        "scale-[1.02] shadow-lg"
+                      ],
+                      else: [
+                        "bg-base-200/50 border-2 border-transparent",
+                        "hover:bg-base-200 hover:border-base-300"
+                      ]
                     )
                   ]}
                   id={"sentence-#{idx}"}
@@ -228,59 +243,47 @@ defmodule LanglerWeb.AudioLive.Player do
               </div>
             </div>
 
-            <%!-- Card Footer with Actions (updated by LiveView) --%>
-            <div class="card-footer flex items-center justify-between p-4 border-t border-base-200">
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm"
-                phx-click="toggle_subtitles"
-              >
-                {if @subtitles_visible, do: "Hide", else: "Show"} Subtitles
+            <%!-- Actions --%>
+            <div class="flex items-center justify-between gap-4 border-t border-base-300 pt-6">
+              <button type="button" class="btn btn-ghost" phx-click="toggle_subtitles">
+                {if @subtitles_visible, do: "Hide Subtitles", else: "Show Subtitles"}
               </button>
 
-              <div class="flex gap-4">
-                <button
-                  type="button"
-                  class="btn btn-primary btn-sm"
-                  phx-click="start_listening_quiz"
-                >
-                  <.icon name="hero-academic-cap" class="h-4 w-4" /> Take Listening Quiz
+              <div class="flex gap-3">
+                <button type="button" class="btn btn-primary" phx-click="start_listening_quiz">
+                  <.icon name="hero-academic-cap" class="h-5 w-5" /> Take Listening Quiz
                 </button>
 
-                <a
-                  href={@audio_url}
-                  download
-                  class="btn btn-outline btn-sm"
-                >
-                  <.icon name="hero-arrow-down-tray" class="h-4 w-4" /> Download Audio
+                <a href={@audio_url} download class="btn btn-outline">
+                  <.icon name="hero-arrow-down-tray" class="h-5 w-5" /> Download
                 </a>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div
-          :if={!@audio_loading && !@audio_url}
-          class="card border border-base-200 bg-base-100 shadow-xl"
-        >
-          <div class="card-body text-center">
-            <p class="text-base-content/70 mb-4">
-              Audio generation failed. Please try again later.
-            </p>
-            <p
-              :if={@audio_file && @audio_file.error_message}
-              class="text-sm text-base-content/50 mb-4"
-            >
-              Error: {@audio_file.error_message}
-            </p>
-            <button
-              type="button"
-              class="btn btn-primary"
-              phx-click="retry_audio_generation"
-            >
-              <.icon name="hero-arrow-path" class="h-4 w-4" /> Retry Generation
-            </button>
-          </div>
+      <div
+        :if={!@audio_loading && !@audio_url}
+        class="card border border-base-200 bg-base-100 shadow-xl"
+      >
+        <div class="card-body text-center">
+          <p class="text-base-content/70 mb-4">
+            Audio generation failed. Please try again later.
+          </p>
+          <p
+            :if={@audio_file && @audio_file.error_message}
+            class="text-sm text-base-content/50 mb-4"
+          >
+            Error: {@audio_file.error_message}
+          </p>
+          <button
+            type="button"
+            class="btn btn-primary"
+            phx-click="retry_audio_generation"
+          >
+            <.icon name="hero-arrow-path" class="h-4 w-4" /> Retry Generation
+          </button>
         </div>
       </div>
     </Layouts.app>
@@ -335,6 +338,23 @@ defmodule LanglerWeb.AudioLive.Player do
      |> assign(:audio_loading, false)}
   end
 
+  def handle_event("save_listening_position", %{"position_seconds" => position_param}, socket) do
+    case parse_listening_position(position_param) do
+      position when is_number(position) and position >= 0 ->
+        _ =
+          Audio.update_listening_position(
+            socket.assigns.current_scope.user.id,
+            socket.assigns.article.id,
+            position
+          )
+
+      _ ->
+        :noop
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("retry_audio_generation", _, socket) do
     user_id = socket.assigns.current_scope.user.id
     article_id = socket.assigns.article.id
@@ -370,7 +390,8 @@ defmodule LanglerWeb.AudioLive.Player do
          |> put_flash(:info, "Audio generation restarted. Please wait a moment.")
          |> assign(:audio_loading, true)
          |> assign(:audio_file, nil)
-         |> assign(:audio_url, nil)}
+         |> assign(:audio_url, nil)
+         |> assign(:initial_listening_position, 0)}
 
       {:error, reason} ->
         {:noreply,
@@ -423,6 +444,7 @@ defmodule LanglerWeb.AudioLive.Player do
       socket
       |> assign(:audio_file, audio_file)
       |> assign(:audio_url, get_audio_url(audio_file))
+      |> assign(:initial_listening_position, listening_position(audio_file))
       |> assign(:audio_loading, false)
 
     {:noreply, socket}
@@ -444,4 +466,22 @@ defmodule LanglerWeb.AudioLive.Player do
       URI.parse(article.url).host || "Article"
     end
   end
+
+  defp parse_listening_position(position) when is_number(position), do: position
+
+  defp parse_listening_position(position) when is_binary(position) do
+    case Float.parse(position) do
+      {value, _} -> value
+      :error -> nil
+    end
+  end
+
+  defp parse_listening_position(_), do: nil
+
+  defp listening_position(%AudioFile{last_position_seconds: last_position_seconds})
+       when is_number(last_position_seconds) and last_position_seconds >= 0 do
+    last_position_seconds
+  end
+
+  defp listening_position(_), do: 0.0
 end

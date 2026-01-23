@@ -1506,7 +1506,7 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp maybe_start_definition_fetch(socket, item_id, flipped_state, item) do
-    if flipped_state && item.word do
+    if flipped_state && item.word && study_live_async_fetch_enabled?() do
       maybe_start_definition_fetch_checked(socket, item_id, item)
     else
       socket
@@ -1557,7 +1557,11 @@ defmodule LanglerWeb.StudyLive.Index do
         socket
 
       true ->
-        start_conjugation_fetch_async(socket, word_id, item)
+        if study_live_async_fetch_enabled?() do
+          start_conjugation_fetch_async(socket, word_id, item)
+        else
+          socket
+        end
     end
   end
 
@@ -1722,5 +1726,9 @@ defmodule LanglerWeb.StudyLive.Index do
       </div>
     </div>
     """
+  end
+
+  defp study_live_async_fetch_enabled? do
+    Application.get_env(:langler, :study_live_async_fetch_enabled, true)
   end
 end

@@ -27,7 +27,7 @@ defmodule LanglerWeb.StudyLive.SessionTest do
       {:ok, view, html} = live(conn, ~p"/study/session")
 
       assert html =~ "Card 1 of 1"
-      assert has_element?(view, ".swap-off")
+      assert has_element?(view, ".study-card-face.study-card-front")
       assert has_element?(view, "#study-session-container")
     end
 
@@ -59,7 +59,7 @@ defmodule LanglerWeb.StudyLive.SessionTest do
 
       # Should show the card with a word
       assert html =~ "Card 1 of 1"
-      assert has_element?(view, ".swap-off")
+      assert has_element?(view, ".study-card-face.study-card-front")
     end
   end
 
@@ -86,7 +86,7 @@ defmodule LanglerWeb.StudyLive.SessionTest do
       {:ok, view, html} = live(conn, ~p"/study/session")
 
       assert html =~ "hablar"
-      assert has_element?(view, ".swap-off")
+      assert has_element?(view, ".study-card-face.study-card-front")
     end
 
     test "shows progress indicator", %{conn: conn} do
@@ -143,7 +143,7 @@ defmodule LanglerWeb.StudyLive.SessionTest do
         |> render_click()
 
       # After click, card should have "flipped" class
-      assert html =~ ~r/class="[^"]*swap-active/
+      assert html =~ ~r/class="[^"]*flipped/
       assert html =~ "to speak"
     end
 
@@ -309,12 +309,12 @@ defmodule LanglerWeb.StudyLive.SessionTest do
 
       # Verify initial state
       assert html =~ "Card 1 of 3"
-      assert has_element?(view, ".swap-off")
+      assert has_element?(view, ".study-card-face.study-card-front")
       assert render(view) =~ "hablar"
 
       # Flip first card
       view |> element("#study-card") |> render_click()
-      assert has_element?(view, ".swap-on")
+      assert has_element?(view, "#study-card.flipped")
       assert render(view) =~ "to speak"
 
       # Rate first card as "Good"

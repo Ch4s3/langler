@@ -33,7 +33,7 @@ defmodule LanglerWeb.ChatLive.ChatInputTest do
       document = document(html)
 
       assert has_selector?(document, "form[phx-submit='send_message']")
-      assert has_selector?(document, "input[name='message'][value='Hello']")
+      assert has_selector?(document, "textarea[name='message'][value='Hello']")
       assert has_selector?(document, "button[type='submit']")
     end
 
@@ -80,7 +80,7 @@ defmodule LanglerWeb.ChatLive.ChatInputTest do
 
       document = document(html)
 
-      assert has_selector?(document, "input[disabled]")
+      assert has_selector?(document, "textarea[disabled]")
       assert has_selector?(document, "button[disabled]")
     end
 

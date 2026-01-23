@@ -64,240 +64,248 @@ defmodule LanglerWeb.ArticleLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="space-y-8">
-        <div
-          id="article-hero"
-          phx-hook="ArticleStickyHeader"
-          data-article-target="article-reader"
-          class="surface-panel article-meta section-card card w-full rounded-3xl bg-base-100/90"
-        >
-          <div class="card-body gap-6 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between lg:col-span-2">
-              <div class="space-y-2">
-                <p class="article-meta__full text-sm font-semibold uppercase tracking-widest text-base-content/60">
-                  {humanize_source(@article)}
-                </p>
-                <h1 class="article-meta__full text-2xl font-bold text-base-content sm:text-3xl">
-                  {display_title(@article)}
-                </h1>
-                <p class="article-meta__full text-sm text-base-content/70 flex flex-wrap items-center gap-2">
-                  <span>Imported {format_timestamp(@article.inserted_at)}</span>
-                  <span
-                    :if={@reading_time_minutes}
-                    class="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary/80"
-                  >
-                    <.icon name="hero-clock" class="h-4 w-4" />
-                    {@reading_time_minutes} min read
-                  </span>
-                </p>
-                <div
-                  :if={@article_topics != []}
-                  class="article-meta__full flex flex-wrap items-center gap-2"
-                >
-                  <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
-                    Topics
-                  </span>
-                  <span
-                    :for={topic <- @article_topics}
-                    class="badge badge-sm rounded-full border border-primary/30 bg-primary/10 text-primary"
-                  >
-                    {topic.topic}
-                  </span>
-                </div>
-              </div>
-              <span class="article-meta__full badge badge-lg badge-outline self-start uppercase tracking-wide text-base-content/80">
-                {@article.language}
-              </span>
-            </div>
-
-            <div class="article-meta__controls flex flex-wrap items-center justify-between gap-2 lg:col-span-2 lg:flex-nowrap">
-              <.link
-                navigate={~p"/articles"}
-                class="btn btn-ghost btn-sm gap-2 text-base-content/80 article-meta__back"
-              >
-                <.icon name="hero-arrow-left" class="h-4 w-4" />
-                <span class="article-meta__button-label">Back to library</span>
-              </.link>
-
-              <p class="article-meta__sticky-title text-base font-semibold text-base-content">
-                {@article_short_title}
-              </p>
-
-              <div class="flex flex-wrap items-center gap-2 article-meta__actions lg:flex-nowrap">
-                <div class="tooltip tooltip-right" data-tip="Start a practice chat for this article">
-                  <button
-                    :if={@article_status in ["imported", "finished"]}
-                    type="button"
-                    class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
-                    aria-label="Practice with chat"
-                    phx-click="start_article_chat"
-                  >
-                    <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
-                    <span class="article-meta__button-label">Practice with chat</span>
-                  </button>
-                </div>
-                <div
-                  class="tooltip tooltip-right"
-                  data-tip="Launch the comprehension quiz for this article"
-                >
-                  <button
-                    :if={@article_status in ["imported", "finished"]}
-                    type="button"
-                    class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
-                    aria-label="Take quiz"
-                    phx-click="start_article_quiz"
-                  >
-                    <.icon name="hero-academic-cap" class="h-4 w-4" />
-                    <span class="article-meta__button-label">Take quiz</span>
-                  </button>
-                </div>
-                <div
-                  :if={@article_status in ["imported", "finished"]}
-                  class="tooltip tooltip-right"
-                  data-tip={
-                    if @tts_enabled,
-                      do: "Listen to this article",
-                      else: "Configure TTS to listen to articles"
-                  }
-                >
-                  <%= if @tts_enabled do %>
-                    <.link
-                      navigate={~p"/articles/#{@article.id}/listen"}
-                      class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
-                      aria-label="Listen to article"
+      <div class="mx-auto max-w-6xl">
+        <div class="surface-panel section-card w-full rounded-3xl bg-base-100 shadow-lg">
+          <div
+            id="article-hero"
+            phx-hook="ArticleStickyHeader"
+            data-article-target="article-reader"
+            class="article-meta rounded-t-3xl"
+          >
+            <div class="card-body gap-6 lg:grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between lg:col-span-2">
+                <div class="space-y-2">
+                  <p class="article-meta__full text-sm font-semibold uppercase tracking-widest text-base-content/60">
+                    {humanize_source(@article)}
+                  </p>
+                  <h1 class="article-meta__full text-2xl font-bold text-base-content sm:text-3xl">
+                    {display_title(@article)}
+                  </h1>
+                  <p class="article-meta__full text-sm text-base-content/70 flex flex-wrap items-center gap-2">
+                    <span>Imported {format_timestamp(@article.inserted_at)}</span>
+                    <span
+                      :if={@reading_time_minutes}
+                      class="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary/80"
                     >
-                      <.icon name="hero-speaker-wave" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Listen</span>
-                    </.link>
-                  <% else %>
-                    <button
-                      type="button"
-                      class="article-meta__btn btn btn-ghost btn-sm gap-2 opacity-60"
-                      aria-label="Listen to article"
-                      phx-click="navigate_tts_settings"
-                    >
-                      <.icon name="hero-speaker-wave" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Listen</span>
-                    </button>
-                  <% end %>
-                </div>
-                <div
-                  :if={@article_status == "imported"}
-                  class="dropdown dropdown-bottom dropdown-start tooltip tooltip-right"
-                  data-tip="Mark this article as finished"
-                >
-                  <button
-                    type="button"
-                    tabindex="0"
-                    class="article-meta__btn btn btn-ghost btn-sm gap-2"
-                    aria-label="Finish article"
-                  >
-                    <span class="flex items-center gap-2">
-                      <.icon name="hero-flag" class="h-4 w-4" />
-                      <span class="article-meta__button-label hidden sm:inline">Finish</span>
+                      <.icon name="hero-clock" class="h-4 w-4" />
+                      {@reading_time_minutes} min read
                     </span>
-                  </button>
-                  <ul
-                    tabindex="0"
-                    class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg right-0 left-auto mt-2"
+                  </p>
+                  <div
+                    :if={@article_topics != []}
+                    class="article-meta__full flex flex-wrap items-center gap-2"
                   >
-                    <li>
+                    <span class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
+                      Topics
+                    </span>
+                    <span
+                      :for={topic <- @article_topics}
+                      class="badge badge-sm rounded-full border border-primary/30 bg-primary/10 text-primary"
+                    >
+                      {topic.topic}
+                    </span>
+                  </div>
+                </div>
+                <span class="article-meta__full badge badge-lg badge-outline self-start uppercase tracking-wide text-base-content/80">
+                  {@article.language}
+                </span>
+              </div>
+
+              <div class="article-meta__controls flex flex-wrap items-center justify-between gap-2 lg:col-span-2 lg:flex-nowrap">
+                <.link
+                  navigate={~p"/articles"}
+                  class="btn btn-ghost btn-sm gap-2 text-base-content/80 article-meta__back"
+                >
+                  <.icon name="hero-arrow-left" class="h-4 w-4" />
+                  <span class="article-meta__button-label">Back to library</span>
+                </.link>
+
+                <p class="article-meta__sticky-title text-base font-semibold text-base-content">
+                  {@article_short_title}
+                </p>
+
+                <div class="flex flex-wrap items-center gap-2 article-meta__actions lg:flex-nowrap">
+                  <div class="tooltip tooltip-right" data-tip="Start a practice chat for this article">
+                    <button
+                      :if={@article_status in ["imported", "finished"]}
+                      type="button"
+                      class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
+                      aria-label="Practice with chat"
+                      phx-click="start_article_chat"
+                    >
+                      <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Practice with chat</span>
+                    </button>
+                  </div>
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="Launch the comprehension quiz for this article"
+                  >
+                    <button
+                      :if={@article_status in ["imported", "finished"]}
+                      type="button"
+                      class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
+                      aria-label="Take quiz"
+                      phx-click="start_article_quiz"
+                    >
+                      <.icon name="hero-academic-cap" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Take quiz</span>
+                    </button>
+                  </div>
+                  <div
+                    :if={@article_status in ["imported", "finished"]}
+                    class="tooltip tooltip-right"
+                    data-tip={
+                      if @tts_enabled,
+                        do: "Listen to this article",
+                        else: "Configure TTS to listen to articles"
+                    }
+                  >
+                    <%= if @tts_enabled do %>
+                      <.link
+                        navigate={~p"/articles/#{@article.id}/listen"}
+                        class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
+                        aria-label="Listen to article"
+                      >
+                        <.icon name="hero-speaker-wave" class="h-4 w-4" />
+                        <span class="article-meta__button-label">Listen</span>
+                      </.link>
+                    <% else %>
                       <button
                         type="button"
-                        phx-click="finish_without_quiz"
-                        phx-confirm="Mark this article as finished without taking a quiz?"
+                        class="article-meta__btn btn btn-ghost btn-sm gap-2 opacity-60"
+                        aria-label="Listen to article"
+                        phx-click="navigate_tts_settings"
                       >
-                        <.icon name="hero-check" class="h-4 w-4" /> Finish without quiz
+                        <.icon name="hero-speaker-wave" class="h-4 w-4" />
+                        <span class="article-meta__button-label">Listen</span>
                       </button>
-                    </li>
-                  </ul>
-                </div>
-                <div
-                  class="tooltip tooltip-right"
-                  data-tip="Archived articles can be deleted from settings."
-                >
-                  <button
-                    type="button"
-                    class="article-meta__btn btn btn-ghost btn-sm gap-2 text-error"
-                    aria-label="Archive article"
-                    phx-click="archive_article"
-                    phx-disable-with="Archiving..."
-                    phx-confirm="Archive this article? Tracked words stay in your study deck."
+                    <% end %>
+                  </div>
+                  <div
+                    :if={@article_status == "imported"}
+                    class="dropdown dropdown-bottom dropdown-start tooltip tooltip-right"
+                    data-tip="Mark this article as finished"
                   >
-                    <.icon name="hero-archive-box" class="h-4 w-4" />
-                    <span class="article-meta__button-label">Archive</span>
-                  </button>
-                </div>
-                <div
-                  class="tooltip tooltip-right"
-                  data-tip="Re-import the article content and vocabulary"
-                >
-                  <button
-                    type="button"
-                    class="article-meta__btn btn btn-ghost btn-sm gap-2"
-                    aria-label="Refresh article"
-                    phx-click="refresh_article"
-                    phx-disable-with="Refreshing..."
+                    <button
+                      type="button"
+                      tabindex="0"
+                      class="article-meta__btn btn btn-ghost btn-sm gap-2"
+                      aria-label="Finish article"
+                    >
+                      <span class="flex items-center gap-2">
+                        <.icon name="hero-flag" class="h-4 w-4" />
+                        <span class="article-meta__button-label hidden sm:inline">Finish</span>
+                      </span>
+                    </button>
+                    <ul
+                      tabindex="0"
+                      class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg right-0 left-auto mt-2"
+                    >
+                      <li>
+                        <button
+                          type="button"
+                          phx-click="finish_without_quiz"
+                          phx-confirm="Mark this article as finished without taking a quiz?"
+                        >
+                          <.icon name="hero-check" class="h-4 w-4" /> Finish without quiz
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="Archived articles can be deleted from settings."
                   >
-                    <.icon name="hero-arrow-path" class="h-4 w-4" />
-                    <span class="article-meta__button-label">Refresh article</span>
-                  </button>
-                </div>
-                <div class="tooltip tooltip-right" data-tip="Open the original article in a new tab">
-                  <.link
-                    href={@article.url}
-                    target="_blank"
-                    class="article-meta__btn btn btn-outline btn-sm gap-2"
-                    aria-label="View original article"
+                    <button
+                      type="button"
+                      class="article-meta__btn btn btn-ghost btn-sm gap-2 text-error"
+                      aria-label="Archive article"
+                      phx-click="archive_article"
+                      phx-disable-with="Archiving..."
+                      phx-confirm="Archive this article? Tracked words stay in your study deck."
+                    >
+                      <.icon name="hero-archive-box" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Archive</span>
+                    </button>
+                  </div>
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="Re-import the article content and vocabulary"
                   >
-                    <span class="article-meta__button-label">View original</span>
-                    <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
-                  </.link>
+                    <button
+                      type="button"
+                      class="article-meta__btn btn btn-ghost btn-sm gap-2"
+                      aria-label="Refresh article"
+                      phx-click="refresh_article"
+                      phx-disable-with="Refreshing..."
+                    >
+                      <.icon name="hero-arrow-path" class="h-4 w-4" />
+                      <span class="article-meta__button-label">Refresh article</span>
+                    </button>
+                  </div>
+                  <div class="tooltip tooltip-right" data-tip="Open the original article in a new tab">
+                    <.link
+                      href={@article.url}
+                      target="_blank"
+                      class="article-meta__btn btn btn-outline btn-sm gap-2"
+                      aria-label="View original article"
+                    >
+                      <span class="article-meta__button-label">View original</span>
+                      <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
+                    </.link>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div class="article-meta__progress" aria-hidden="true">
-            <div class="article-meta__progress-track">
-              <div class="article-meta__progress-fill" data-progress-fill></div>
+            <div class="article-meta__progress" aria-hidden="true">
+              <div class="article-meta__progress-track">
+                <div class="article-meta__progress-fill" data-progress-fill></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <article
-          id="article-reader"
-          class="card border border-base-200 bg-base-100/90 p-5 text-base leading-relaxed text-base-content shadow-xl backdrop-blur sm:p-8 sm:text-lg"
-        >
-          <p
-            :for={sentence <- @sentences}
-            class="mb-4 break-words text-justify last:mb-0"
-            style="font-size: 0;"
+          <article
+            id="article-reader"
+            class="w-full px-8 py-8 rounded-b-3xl"
           >
-            <span
-              :for={token <- tokenize_sentence(sentence.content, sentence.word_occurrences || [])}
-              data-word={token.lexical? && token.text}
-              data-sentence-id={sentence.id}
-              data-language={@article.language}
-              data-word-id={token.word && token.word.id}
-              phx-hook={token.lexical? && "WordTooltip"}
-              id={"token-#{sentence.id}-#{token.id}"}
-              class={
-                [
-                  "inline align-baseline text-base sm:text-lg leading-relaxed text-base-content",
-                  # Restore font size (parent has font-size: 0 to collapse whitespace between spans)
-                  token.lexical? &&
-                    [
-                      "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40",
-                      studied_token?(token, @studied_word_ids, @studied_forms) &&
-                        "bg-primary/5 text-primary"
-                    ]
-                ]
-              }
-            >
-              {token.text}
-            </span>
-          </p>
-        </article>
+            <div class="reader-container mx-auto">
+              <div class="reader-content">
+                <p
+                  :for={sentence <- @sentences}
+                  class="mb-4 break-words text-justify last:mb-0"
+                  style="font-size: 0;"
+                >
+                  <span
+                    :for={
+                      token <- tokenize_sentence(sentence.content, sentence.word_occurrences || [])
+                    }
+                    data-word={token.lexical? && token.text}
+                    data-sentence-id={sentence.id}
+                    data-language={@article.language}
+                    data-word-id={token.word && token.word.id}
+                    phx-hook={token.lexical? && "WordTooltip"}
+                    id={"token-#{sentence.id}-#{token.id}"}
+                    class={
+                      [
+                        "inline align-baseline text-reading",
+                        # Restore font size (parent has font-size: 0 to collapse whitespace between spans)
+                        token.lexical? &&
+                          [
+                            "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200 hover:underline hover:underline-offset-2 hover:decoration-primary/60 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
+                            studied_token?(token, @studied_word_ids, @studied_forms) &&
+                              "underline decoration-primary/40 underline-offset-2 text-primary/90"
+                          ]
+                      ]
+                    }
+                  >
+                    {token.text}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     </Layouts.app>
     """

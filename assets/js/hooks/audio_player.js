@@ -6,11 +6,31 @@ export default {
     this.subtitlesVisible = true
     this.playbackRate = parseFloat(this.el.dataset.playbackRate || "1.0")
     this.isPlaying = false
+    this.initialListeningPosition = parseFloat(this.el.dataset.initialPosition || "0")
+    if (!Number.isFinite(this.initialListeningPosition) || this.initialListeningPosition < 0) {
+      this.initialListeningPosition = 0
+    }
+    this.hasSeekedToInitialPosition = false
+    this.lastSavedPosition = null
+    this.beforeUnloadHandler = () => {
+      this.saveListeningPosition(true)
+    }
+    window.addEventListener("beforeunload", this.beforeUnloadHandler)
 
     console.log("[AudioPlayer] mounted - audioUrl:", this.audioUrl)
 
     // Dynamic import - only loads when hook is used
-    const { Howl } = await import("howler")
+    const howlerModule = await import("howler")
+    const Howl =
+      howlerModule?.Howl ??
+      howlerModule?.default?.Howl ??
+      howlerModule?.module?.exports?.Howl
+
+    if (!Howl) {
+      console.error("[AudioPlayer] Unable to resolve Howl constructor from howler module", howlerModule)
+      return
+    }
+
     this.Howl = Howl
 
     if (this.audioUrl) {
@@ -29,12 +49,14 @@ export default {
           console.log("[AudioPlayer] onpause")
           this.isPlaying = false
           this.updatePlayButton()
+          this.saveListeningPosition(true)
           this.pushEvent("audio_paused", {})
         },
         onend: () => {
           console.log("[AudioPlayer] onend")
           this.isPlaying = false
           this.currentSentenceIdx = 0
+          this.saveListeningPosition(true)
           this.pushEvent("audio_ended", {})
         },
         onseek: () => {
@@ -42,6 +64,20 @@ export default {
         },
         onload: () => {
           console.log("[AudioPlayer] onload - audio loaded successfully")
+          const duration = this.getDuration()
+          let targetPosition = this.initialListeningPosition
+          if (duration > 0 && Number.isFinite(duration)) {
+            targetPosition = Math.min(targetPosition, duration)
+          }
+
+          if (targetPosition > 0 && !this.hasSeekedToInitialPosition) {
+            console.log("[AudioPlayer] Seeking to saved position:", targetPosition)
+            this.seek(targetPosition)
+            this.updateTimeDisplay()
+            this.updateSeekSlider()
+            this.hasSeekedToInitialPosition = true
+          }
+
           this.pushEvent("audio_loaded", {})
         },
         onloaderror: (id, error) => {
@@ -65,6 +101,13 @@ export default {
           this.lastScrolledSentenceIdx = this.currentSentenceIdx
         }
       }, 500)
+
+      // Periodically save listening position while playing (every 5 seconds)
+      this.savePositionInterval = setInterval(() => {
+        if (this.isPlaying) {
+          this.saveListeningPosition()
+        }
+      }, 5000)
 
       // Set up click handler for play button
       const playButton = this.el.querySelector(".audio-play-button")
@@ -111,14 +154,35 @@ export default {
         }
         seekSlider.addEventListener("input", this.seekSliderInputHandler)
       }
+
+      // Set up volume slider interaction
+      const volumeSlider = this.el.querySelector("#audio-volume")
+      if (volumeSlider) {
+        this.volumeSliderInputHandler = (e) => {
+          const volumeValue = parseFloat(e.target.value) / 100
+          console.log("[AudioPlayer] Setting volume to:", volumeValue)
+          this.setVolume(volumeValue)
+        }
+        volumeSlider.addEventListener("input", this.volumeSliderInputHandler)
+      }
     } else {
       console.warn("[AudioPlayer] No audioUrl provided")
     }
   },
 
   destroyed() {
+    this.saveListeningPosition(true)
+
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener("beforeunload", this.beforeUnloadHandler)
+      this.beforeUnloadHandler = null
+    }
+
     if (this.subtitleInterval) {
       clearInterval(this.subtitleInterval)
+    }
+    if (this.savePositionInterval) {
+      clearInterval(this.savePositionInterval)
     }
     if (this.sound) {
       this.sound.unload()
@@ -141,6 +205,11 @@ export default {
     const seekSlider = this.el.querySelector("#audio-seek")
     if (seekSlider && this.seekSliderInputHandler) {
       seekSlider.removeEventListener("input", this.seekSliderInputHandler)
+    }
+    // Remove volume slider handler
+    const volumeSlider = this.el.querySelector("#audio-volume")
+    if (volumeSlider && this.volumeSliderInputHandler) {
+      volumeSlider.removeEventListener("input", this.volumeSliderInputHandler)
     }
   },
 
@@ -435,5 +504,23 @@ export default {
       top: Math.max(0, targetScrollTop),
       behavior: "smooth"
     })
+  },
+
+  saveListeningPosition(force = false) {
+    if (!this.sound) return
+
+    const currentTime = this.getCurrentTime()
+    if (!Number.isFinite(currentTime) || currentTime < 0) return
+
+    const shouldSkip =
+      !force &&
+      typeof this.lastSavedPosition === "number" &&
+      Math.abs(currentTime - this.lastSavedPosition) < 0.5
+
+    if (shouldSkip) return
+
+    this.lastSavedPosition = currentTime
+    console.log("[AudioPlayer] Saving listening position:", currentTime)
+    this.pushEvent("save_listening_position", {position_seconds: currentTime})
   }
 }

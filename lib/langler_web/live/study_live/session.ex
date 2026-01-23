@@ -92,6 +92,19 @@ defmodule LanglerWeb.StudyLive.Session do
 
         <%!-- Progress indicator --%>
         <div class="text-center mb-6">
+          <div class="flex items-center justify-center gap-2 mb-2">
+            <div class="flex gap-1.5">
+              <span
+                :for={i <- 0..(assigns.total_cards - 1)}
+                class={[
+                  "h-2 w-2 rounded-full transition-all duration-300",
+                  if(i < assigns.current_index, do: "bg-primary", else: "bg-base-300"),
+                  if(i == assigns.current_index, do: "h-2.5 w-2.5 bg-primary ring-2 ring-primary/30")
+                ]}
+                aria-label={"Card #{i + 1}"}
+              />
+            </div>
+          </div>
           <p class="text-sm font-semibold text-base-content/70">
             Card {assigns.current_index + 1} of {assigns.total_cards}
           </p>
@@ -130,97 +143,99 @@ defmodule LanglerWeb.StudyLive.Session do
     <div
       id="study-card"
       class={[
-        "swap swap-flip w-full h-full cursor-pointer",
-        assigns.flipped && "swap-active"
+        "study-card w-full h-full cursor-pointer",
+        assigns.flipped && "flipped"
       ]}
       phx-click="flip_card"
     >
-      <%!-- Front side (swap-off) - Word, Stats, Rating --%>
-      <div class="swap-off w-full h-full">
-        <.card
-          variant={:default}
-          class="h-full w-full flex flex-col"
-          body_class="flex flex-col h-full"
-        >
-          <%!-- Word --%>
-          <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
-            <p class="text-4xl font-semibold text-base-content text-center">
-              {@word.lemma || @word.normalized_form}
-            </p>
-            <p class="text-sm text-base-content/70">
-              Click or press spacebar to see definition
-            </p>
-          </div>
+      <div class="study-card-inner">
+        <%!-- Front side - Word, Stats, Rating --%>
+        <div class="study-card-face study-card-front">
+          <.card
+            variant={:default}
+            class="h-full w-full flex flex-col bg-gradient-to-br from-base-100 to-base-200/50"
+            body_class="flex flex-col h-full"
+          >
+            <%!-- Word --%>
+            <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
+              <p class="text-study-word font-semibold text-base-content text-center">
+                {@word.lemma || @word.normalized_form}
+              </p>
+              <p class="text-sm text-base-content/70">
+                Click or press spacebar to see definition
+              </p>
+            </div>
 
-          <div class="divider my-2"></div>
+            <div class="divider my-2"></div>
 
-          <%!-- Stats --%>
-          <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
-            <div>
-              <p class="font-semibold text-base-content">Ease factor</p>
-              <p>{format_decimal(@item.ease_factor || 2.5)}</p>
-            </div>
-            <div>
-              <p class="font-semibold text-base-content">Interval</p>
-              <p>{interval_label(@item.interval)}</p>
-            </div>
-            <div>
-              <p class="font-semibold text-base-content">Repetitions</p>
-              <p>{@item.repetitions || 0}</p>
-            </div>
-            <div>
-              <p class="font-semibold text-base-content">Recent history</p>
-              <div class="flex gap-1">
-                <span
-                  :for={score <- recent_history(@item.quality_history)}
-                  class={[
-                    "h-2.5 w-6 rounded-full bg-base-300",
-                    history_pill_class(score)
-                  ]}
-                  aria-label={"Score #{score}"}
-                />
+            <%!-- Stats --%>
+            <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
+              <div>
+                <p class="font-semibold text-base-content">Ease factor</p>
+                <p>{format_decimal(@item.ease_factor || 2.5)}</p>
+              </div>
+              <div>
+                <p class="font-semibold text-base-content">Interval</p>
+                <p>{interval_label(@item.interval)}</p>
+              </div>
+              <div>
+                <p class="font-semibold text-base-content">Repetitions</p>
+                <p>{@item.repetitions || 0}</p>
+              </div>
+              <div>
+                <p class="font-semibold text-base-content">Recent history</p>
+                <div class="flex gap-1">
+                  <span
+                    :for={score <- recent_history(@item.quality_history)}
+                    class={[
+                      "h-2.5 w-6 rounded-full bg-base-300",
+                      history_pill_class(score)
+                    ]}
+                    aria-label={"Score #{score}"}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="divider my-2"></div>
+            <div class="divider my-2"></div>
 
-          <:actions>
-            <.card_rating
-              item_id={@item.id}
-              buttons={@quality_buttons}
-              event="rate_card"
-            />
-          </:actions>
-        </.card>
-      </div>
+            <:actions>
+              <.card_rating
+                item_id={@item.id}
+                buttons={@quality_buttons}
+                event="rate_card"
+              />
+            </:actions>
+          </.card>
+        </div>
 
-      <%!-- Back side (swap-on) - Definition only --%>
-      <div class="swap-on w-full h-full">
-        <.card
-          variant={:default}
-          class="h-full w-full flex flex-col"
-          body_class="flex flex-col h-full justify-center items-center"
-        >
-          <div class="flex flex-col gap-4 items-center w-full">
-            <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
-              Definition
-            </p>
-            <%= if @definitions != [] do %>
-              <ol class="space-y-3 text-sm leading-relaxed text-base-content/90 text-left max-h-full overflow-auto w-full max-w-lg">
-                <li
-                  :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
-                  class="flex gap-2 items-start break-words"
-                >
-                  <span class="font-semibold text-primary/80">{idx}.</span>
-                  <span class="break-words">{definition}</span>
-                </li>
-              </ol>
-            <% else %>
-              <p class="text-sm text-base-content/70">No definition available</p>
-            <% end %>
-          </div>
-        </.card>
+        <%!-- Back side - Definition only --%>
+        <div class="study-card-face study-card-back">
+          <.card
+            variant={:default}
+            class="h-full w-full flex flex-col bg-gradient-to-br from-primary/5 to-primary/10"
+            body_class="flex flex-col h-full justify-center items-center"
+          >
+            <div class="flex flex-col gap-4 items-center w-full">
+              <p class="text-xs font-semibold uppercase tracking-widest text-primary/70">
+                Definition
+              </p>
+              <%= if @definitions != [] do %>
+                <ol class="space-y-3 text-reading text-base-content/90 text-left max-h-full overflow-auto w-full max-w-lg">
+                  <li
+                    :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
+                    class="flex gap-2 items-start break-words"
+                  >
+                    <span class="font-semibold text-primary/80">{idx}.</span>
+                    <span class="break-words">{definition}</span>
+                  </li>
+                </ol>
+              <% else %>
+                <p class="text-sm text-base-content/70">No definition available</p>
+              <% end %>
+            </div>
+          </.card>
+        </div>
       </div>
     </div>
     """
@@ -233,10 +248,16 @@ defmodule LanglerWeb.StudyLive.Session do
     assigns = assign(assigns, :minutes, minutes) |> assign(:seconds, seconds)
 
     ~H"""
-    <div id="study-session-complete" class="flex-1 flex items-center justify-center p-4">
+    <div
+      id="study-session-complete"
+      class="flex-1 flex items-center justify-center p-4 animate-fade-in"
+    >
       <div class="card bg-base-100 shadow-xl max-w-2xl w-full">
         <div class="card-body gap-6">
           <div class="text-center">
+            <div class="mb-4">
+              <.icon name="hero-check-circle" class="h-16 w-16 text-success mx-auto animate-fade-in" />
+            </div>
             <h2 class="text-3xl font-bold text-base-content mb-2">Session Complete!</h2>
             <p class="text-base-content/70">Great work reviewing your cards</p>
           </div>

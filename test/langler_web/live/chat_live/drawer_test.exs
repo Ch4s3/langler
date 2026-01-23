@@ -52,10 +52,10 @@ defmodule LanglerWeb.ChatLive.DrawerTest do
       |> render_click()
 
       view
-      |> element("input[name='message']")
+      |> element("textarea[name='message']")
       |> render_change(%{"message" => "Hola"})
 
-      assert has_element?(view, "input[name='message'][value='Hola']")
+      assert has_element?(view, "textarea[name='message'][value='Hola']")
 
       view
       |> element("button[aria-label='Show keyboard']")

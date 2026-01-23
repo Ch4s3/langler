@@ -59,7 +59,7 @@ defmodule LanglerWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="toast toast-top toast-end z-50 mt-16"
       {@rest}
     >
       <div class={[
@@ -93,15 +93,23 @@ defmodule LanglerWeb.CoreComponents do
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
   attr :class, :string
-  attr :variant, :string, values: ~w(primary)
+  attr :variant, :string, values: ~w(primary soft outline)
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    variants = %{
+      "primary" => "btn-primary",
+      "soft" => "btn-primary btn-soft",
+      "outline" => "btn-outline",
+      nil => "btn-primary"
+    }
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        [
+          "btn transition-all duration-200 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary/40",
+          Map.fetch!(variants, assigns[:variant])
+        ]
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -271,7 +279,8 @@ defmodule LanglerWeb.CoreComponents do
 
   defp input_class(custom, errors, error_class, type) do
     [
-      custom || "w-full input",
+      custom ||
+        "w-full input transition-all duration-200 focus:ring-2 focus:ring-primary/40 focus:ring-offset-2",
       errors != [] && (error_class || "input-error"),
       type in ["url", "email", "text"] && "break-all"
     ]
@@ -539,10 +548,10 @@ defmodule LanglerWeb.CoreComponents do
 
   def card(assigns) do
     variant_classes = %{
-      default: "bg-base-100 shadow-xl",
-      border: "card-border bg-base-100",
-      dash: "card-dash bg-base-100",
-      panel: "bg-base-100/95 shadow-xl backdrop-blur"
+      default: "bg-base-100 shadow-lg border border-base-200/50",
+      border: "card-border bg-base-100 border border-base-300",
+      dash: "card-dash bg-base-100 border border-dashed border-base-300",
+      panel: "bg-base-100/95 shadow-xl backdrop-blur border border-base-200/50"
     }
 
     size_classes = %{
@@ -564,7 +573,7 @@ defmodule LanglerWeb.CoreComponents do
 
     hover_classes =
       if assigns.hover do
-        "transition duration-300 hover:-translate-y-1 hover:shadow-2xl"
+        "transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-primary/20"
       else
         nil
       end
@@ -641,16 +650,19 @@ defmodule LanglerWeb.CoreComponents do
 
   def card_rating(assigns) do
     ~H"""
-    <div class="flex flex-col gap-2">
-      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60">
+    <div class="flex flex-col gap-3">
+      <p class="text-xs font-semibold uppercase tracking-widest text-base-content/60 text-center">
         Rate this card
       </p>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-3 justify-center">
         <button
           :for={button <- @buttons}
           type="button"
           class={[
-            "btn btn-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-offset-2 focus-visible:ring-primary/40 phx-click-loading:opacity-70 phx-click-loading:cursor-wait",
+            "btn font-semibold text-white transition-all duration-200 min-h-[56px] px-6 rounded-full",
+            "hover:-translate-y-1 hover:shadow-xl active:translate-y-0 active:scale-[0.98]",
+            "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary/40",
+            "phx-click-loading:opacity-70 phx-click-loading:cursor-wait",
             button.class
           ]}
           phx-click={@event}

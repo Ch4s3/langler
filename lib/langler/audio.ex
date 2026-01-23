@@ -82,4 +82,22 @@ defmodule Langler.Audio do
         |> Repo.update()
     end
   end
+
+  @doc """
+  Updates the saved listening position for a user's audio file.
+  """
+  @spec update_listening_position(integer(), integer(), number()) ::
+          {:ok, AudioFile.t()} | {:error, Ecto.Changeset.t()} | {:error, :not_found}
+  def update_listening_position(user_id, article_id, position_seconds)
+      when is_integer(user_id) and is_integer(article_id) and is_number(position_seconds) do
+    case get_audio_file(user_id, article_id) do
+      nil ->
+        {:error, :not_found}
+
+      audio_file ->
+        audio_file
+        |> AudioFile.changeset(%{last_position_seconds: position_seconds})
+        |> Repo.update()
+    end
+  end
 end
