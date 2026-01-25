@@ -399,10 +399,10 @@ defmodule LanglerWeb.StudyComponents do
         phx-hook="WordCardToggle"
         id={"study-card-#{@item.id}"}
         data-item-id={@item.id}
-        class="group relative w-full rounded-2xl border border-dashed border-base-200 bg-base-100/80 p-4 text-left transition duration-300 hover:border-primary/40 active:scale-[0.995] focus-visible:ring focus-visible:ring-primary/40 phx-click-loading:opacity-70"
+        class="group relative w-full rounded-2xl border border-dashed border-base-200 bg-base-100/80 p-4 text-left shadow-sm transition duration-300 hover:border-primary/40 hover:shadow-lg active:scale-[0.995] focus-visible:ring focus-visible:ring-primary/40 phx-click-loading:opacity-70"
       >
         <% definitions = @item.word && (@item.word.definitions || []) %>
-        <div class="relative min-h-[16rem]">
+        <div class="relative min-h-[12rem] sm:min-h-[16rem]">
           <div class={[
             "space-y-4 transition-opacity duration-300",
             @flipped && "hidden"
@@ -410,7 +410,7 @@ defmodule LanglerWeb.StudyComponents do
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div class="flex flex-col gap-1">
                 <p
-                  class="inline-flex items-center gap-2 text-3xl font-semibold text-base-content cursor-pointer transition hover:text-primary"
+                  class="inline-flex items-center gap-2 text-2xl font-semibold text-base-content cursor-pointer transition hover:text-primary sm:text-3xl"
                   phx-hook="CopyToClipboard"
                   data-copy-text={@item.word && (@item.word.lemma || @item.word.normalized_form)}
                   title="Click to copy"
@@ -436,7 +436,7 @@ defmodule LanglerWeb.StudyComponents do
               </span>
             </div>
 
-            <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
+            <div class="flex flex-col gap-4 text-sm text-base-content/70 sm:flex-row sm:flex-wrap sm:gap-6">
               <div>
                 <p class="font-semibold text-base-content">Ease factor</p>
                 <p>{format_decimal(@item.ease_factor || 2.5)}</p>
@@ -469,7 +469,7 @@ defmodule LanglerWeb.StudyComponents do
           </div>
 
           <div class={[
-            "flex flex-col gap-4 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300",
+            "flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4 text-base-content transition-opacity duration-300 sm:gap-4",
             @flipped && "block",
             !@flipped && "hidden"
           ]}>

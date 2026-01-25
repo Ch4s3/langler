@@ -12,7 +12,7 @@ defmodule LanglerWeb.StudyLive.IndexTest do
     # start_async tasks don't work with render_async, so we poll for completion
     defp wait_for_async_loading(view) do
       # Wait up to 500ms for async to complete
-      Enum.reduce_while(0..9, nil, fn _i, _acc ->
+      Enum.reduce_while(0..19, nil, fn _i, _acc ->
         Process.sleep(50)
         html = render(view)
 
@@ -357,6 +357,9 @@ defmodule LanglerWeb.StudyLive.IndexTest do
 
       conn = log_in_user(conn, user)
       {:ok, view, _html} = live(conn, ~p"/study")
+
+      # Wait for the cards to finish loading before interacting
+      wait_for_async_loading(view)
 
       # Flip the card
       view

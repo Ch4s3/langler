@@ -471,17 +471,15 @@ defmodule LanglerWeb.ChatLive.Drawer do
       {:ok, entry} ->
         {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
 
-        handle_successful_lookup_chat(
-          entry,
-          resolved_word,
-          studied?,
-          trimmed_word,
-          normalized,
-          language,
-          dom_id,
-          word_id,
-          socket
-        )
+        handle_successful_lookup_chat(socket, %{
+          entry: entry,
+          resolved_word: resolved_word,
+          studied?: studied?,
+          trimmed_word: trimmed_word,
+          normalized: normalized,
+          language: language,
+          dom_id: dom_id
+        })
 
       {:error, _reason} ->
         {:noreply,
@@ -829,17 +827,15 @@ defmodule LanglerWeb.ChatLive.Drawer do
     end
   end
 
-  defp handle_successful_lookup_chat(
-         entry,
-         resolved_word,
-         studied?,
-         trimmed_word,
-         normalized,
-         language,
-         dom_id,
-         _word_id,
-         socket
-       ) do
+  defp handle_successful_lookup_chat(socket, %{
+         entry: entry,
+         resolved_word: resolved_word,
+         studied?: studied?,
+         trimmed_word: trimmed_word,
+         normalized: normalized,
+         language: language,
+         dom_id: dom_id
+       }) do
     payload =
       entry
       |> Map.take([

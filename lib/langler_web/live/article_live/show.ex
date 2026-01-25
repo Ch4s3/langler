@@ -309,9 +309,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                           ]
                       ]
                     }
-                  >
-                    {token.text}
-                  </span>
+                  >{token.text}</span>
                 </p>
               </div>
             </div>
@@ -526,18 +524,16 @@ defmodule LanglerWeb.ArticleLive.Show do
       {:ok, entry} ->
         {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
 
-        handle_successful_lookup(
-          entry,
-          resolved_word,
-          studied?,
-          trimmed_word,
-          normalized,
-          language,
-          context,
-          dom_id,
-          word_id,
-          socket
-        )
+        handle_successful_lookup(socket, %{
+          entry: entry,
+          resolved_word: resolved_word,
+          studied?: studied?,
+          trimmed_word: trimmed_word,
+          normalized: normalized,
+          language: language,
+          context: context,
+          dom_id: dom_id
+        })
 
       {:error, _reason} ->
         {:noreply,
@@ -682,18 +678,16 @@ defmodule LanglerWeb.ArticleLive.Show do
     end
   end
 
-  defp handle_successful_lookup(
-         entry,
-         resolved_word,
-         studied?,
-         trimmed_word,
-         normalized,
-         language,
-         context,
-         dom_id,
-         _word_id,
-         socket
-       ) do
+  defp handle_successful_lookup(socket, %{
+         entry: entry,
+         resolved_word: resolved_word,
+         studied?: studied?,
+         trimmed_word: trimmed_word,
+         normalized: normalized,
+         language: language,
+         context: context,
+         dom_id: dom_id
+       }) do
     payload =
       entry
       |> Map.take([
@@ -785,43 +779,36 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   defp split_punctuation_token(text) do
     cond do
-      # Pattern: space + punctuation + space (e.g., " , ", " ; ", " . ")
-      String.match?(text, ~r/^\s+[^\p{L}\s]+\s+$/u) ->
-        # Split and remove leading/trailing spaces from punctuation
-        split_with_spaces(text)
-        |> Enum.map(fn token ->
-          # Remove spaces before/after punctuation
-          if String.match?(token, ~r/^[^\p{L}\s]+$/u) do
-            # It's punctuation - remove any spaces
-            String.trim(token)
-          else
-            token
-          end
-        end)
-        |> Enum.filter(&(&1 != ""))
+      space_surrounded_punctuation?(text) ->
+        split_and_trim(text)
 
-      # Pattern: punctuation with leading/trailing spaces (e.g., " ,", ", ", "( ", " )")
-      # But NOT pure punctuation without spaces (e.g., ",")
-      String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) ->
-        # Only split if it has spaces
-        if String.contains?(text, " ") do
-          split_with_spaces(text)
-          |> Enum.map(fn token ->
-            # If it's punctuation, remove spaces; if it's a space, keep it separate
-            if String.match?(token, ~r/^[^\p{L}\s]+$/u) do
-              String.trim(token)
-            else
-              token
-            end
-          end)
-          |> Enum.filter(&(&1 != ""))
-        else
-          # Pure punctuation without spaces - keep as is
-          [text]
-        end
+      punctuation_with_spaces?(text) ->
+        split_and_trim(text)
 
       true ->
         [text]
+    end
+  end
+
+  defp space_surrounded_punctuation?(text),
+    do: String.match?(text, ~r/^\s+[^\p{L}\s]+\s+$/u)
+
+  defp punctuation_with_spaces?(text),
+    do:
+      String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) and
+        String.contains?(text, " ")
+
+  defp split_and_trim(text) do
+    split_with_spaces(text)
+    |> Enum.map(&normalize_punctuation_chunk/1)
+    |> Enum.filter(&(&1 != ""))
+  end
+
+  defp normalize_punctuation_chunk(token) do
+    if String.match?(token, ~r/^[^\p{L}\s]+$/u) do
+      String.trim(token)
+    else
+      token
     end
   end
 

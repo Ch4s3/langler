@@ -28,6 +28,83 @@ defmodule LanglerWeb.ArticleLive.ShowTest do
       assert rendered =~ "Buenos"
     end
 
+    test "renders punctuation without extra spaces before commas and periods", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+      article = article_fixture(%{user: user})
+      # Content with correct punctuation spacing
+      _sentence = sentence_fixture(article, %{position: 0, content: "Hola, mundo. Buenos días."})
+
+      conn = log_in_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/articles/#{article}")
+      rendered = render(view)
+
+      document = LazyHTML.from_fragment(rendered)
+      token_spans = LazyHTML.query(document, "span[id^='token-']")
+      token_texts = Enum.map(token_spans, &LazyHTML.text/1)
+      article_text = Enum.join(token_texts, "")
+      normalized_text = article_text |> String.replace(~r/\s+/, " ") |> String.trim()
+
+      # Should NOT have space before punctuation
+      refute normalized_text =~ "Hola ,"
+      refute normalized_text =~ "mundo ."
+      refute normalized_text =~ "días ."
+
+      # Should have correct spacing
+      assert normalized_text =~ "Hola,"
+      assert normalized_text =~ "mundo."
+      assert normalized_text =~ "días."
+    end
+
+    test "renders quotes without extra spaces inside", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+      article = article_fixture(%{user: user})
+      _sentence = sentence_fixture(article, %{position: 0, content: "Dijo \"hola\" y se fue."})
+
+      conn = log_in_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/articles/#{article}")
+      rendered = render(view)
+
+      document = LazyHTML.from_fragment(rendered)
+      token_spans = LazyHTML.query(document, "span[id^='token-']")
+      token_texts = Enum.map(token_spans, &LazyHTML.text/1)
+      article_text = Enum.join(token_texts, "")
+      normalized_text = article_text |> String.replace(~r/\s+/, " ") |> String.trim()
+
+      # Should NOT have space after opening quote or before closing quote
+      refute normalized_text =~ "\" hola"
+      refute normalized_text =~ "hola \""
+
+      # Should have correct spacing
+      assert normalized_text =~ "\"hola\""
+    end
+
+    test "renders Spanish inverted punctuation correctly", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+      article = article_fixture(%{user: user})
+      _sentence = sentence_fixture(article, %{position: 0, content: "¿Cómo estás? ¡Muy bien!"})
+
+      conn = log_in_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/articles/#{article}")
+      rendered = render(view)
+
+      document = LazyHTML.from_fragment(rendered)
+      token_spans = LazyHTML.query(document, "span[id^='token-']")
+      token_texts = Enum.map(token_spans, &LazyHTML.text/1)
+      article_text = Enum.join(token_texts, "")
+      normalized_text = article_text |> String.replace(~r/\s+/, " ") |> String.trim()
+
+      # Should NOT have space after opening punctuation
+      refute normalized_text =~ "¿ Cómo"
+      refute normalized_text =~ "¡ Muy"
+
+      # Should have correct spacing
+      assert normalized_text =~ "¿Cómo"
+      assert normalized_text =~ "¡Muy"
+    end
+
     @tag :external
     test "normalizes punctuation spacing in rendered article content", %{conn: conn} do
       user = Langler.AccountsFixtures.user_fixture()
