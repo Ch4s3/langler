@@ -18,8 +18,8 @@ jobs:
       - name: Set up Erlang/Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: 1.15.7
-          otp-release: 26.2
+          elixir-version: 1.20.0-rc.1
+          otp-version: 28.3
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
