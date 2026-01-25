@@ -309,7 +309,9 @@ defmodule LanglerWeb.ArticleLive.Show do
                           ]
                       ]
                     }
-                  >{token.text}</span>
+                  >
+                    {token.text}
+                  </span>
                 </p>
               </div>
             </div>
