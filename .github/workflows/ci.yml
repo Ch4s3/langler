@@ -100,7 +100,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: CI
     env:
-      FLYCTL_INSTALL: ${{ runner.temp }}/fly
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +110,8 @@ jobs:
         run: curl -L https://fly.io/install.sh | sh
 
       - name: Add Fly CLI to PATH
+        env:
+          FLYCTL_INSTALL: ${{ runner.temp }}/fly
         run: echo "${{ env.FLYCTL_INSTALL }}/bin" >> $GITHUB_PATH
 
       - name: Authenticate with Fly
