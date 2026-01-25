@@ -86,13 +86,13 @@ jobs:
           fi
           echo "coverage=$coverage" >> $GITHUB_OUTPUT
           python - <<'PY'
-import os, sys
-coverage = os.getenv("coverage")
-if coverage is None:
-    sys.exit("Coverage value missing")
-if float(coverage) < 60:
-    sys.exit(f"Coverage {coverage}% is below the 60% minimum")
-PY
+          import os, sys
+          coverage = os.getenv("coverage")
+          if coverage is None:
+              sys.exit("Coverage value missing")
+          if float(coverage) < 60:
+              sys.exit(f"Coverage {coverage}% is below the 60% minimum")
+          PY
 
   deploy-to-fly:
     needs: ci-suite

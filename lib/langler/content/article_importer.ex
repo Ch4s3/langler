@@ -697,7 +697,8 @@ defmodule Langler.Content.ArticleImporter do
 
   defp handle_space_token(token, [prev | _rest] = acc, next_token, _next_next_token) do
     cond do
-      opening_punctuation?(prev) or opening_quote?(prev) or dash_token?(prev) ->
+      # Note: dashes (em-dash, en-dash) should preserve spaces around them for readability
+      opening_punctuation?(prev) or opening_quote?(prev) ->
         acc
 
       straight_quote?(prev) and next_token != nil and word_token?(next_token) ->
@@ -725,7 +726,8 @@ defmodule Langler.Content.ArticleImporter do
 
   defp handle_space_before_punctuation(token, acc, rest, next_token, next_next_token) do
     cond do
-      closing_punctuation?(token) or closing_quote?(token) or dash_token?(token) ->
+      # Note: dashes (em-dash, en-dash) should preserve spaces around them for readability
+      closing_punctuation?(token) or closing_quote?(token) ->
         [token | rest]
 
       straight_quote?(token) ->
@@ -871,14 +873,5 @@ defmodule Langler.Content.ArticleImporter do
   # because if there's a space, it's likely an opening quote
   defp straight_quote?(token) do
     token == "\"" or token == "'"
-  end
-
-  # Em dashes, en dashes, and minus signs should have no spaces around them
-  defp dash_token?(token) do
-    # U+2014 EM DASH, U+2013 EN DASH, U+2212 MINUS SIGN, U+002D HYPHEN-MINUS
-    String.contains?(token, "—") or
-      String.contains?(token, "–") or
-      String.contains?(token, "−") or
-      (String.contains?(token, "-") and String.length(token) == 1)
   end
 end

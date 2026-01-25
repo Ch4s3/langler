@@ -105,6 +105,42 @@ defmodule LanglerWeb.ArticleLive.ShowTest do
       assert normalized_text =~ "¡Muy"
     end
 
+    test "renders em-dashes with proper spacing around quotes", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+      article = article_fixture(%{user: user})
+      # Em-dash used as parenthetical separator with quotes
+      _sentence =
+        sentence_fixture(article, %{
+          position: 0,
+          content: "Fern −\"potencialmente catastrófica\", según Nacional− lucieron"
+        })
+
+      conn = log_in_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/articles/#{article}")
+      rendered = render(view)
+
+      document = LazyHTML.from_fragment(rendered)
+      token_spans = LazyHTML.query(document, "span[id^='token-']")
+      token_texts = Enum.map(token_spans, &LazyHTML.text/1)
+
+      article_text = Enum.join(token_texts, "")
+      # Normalize both regular and non-breaking spaces to regular spaces for comparison
+      normalized_text =
+        article_text
+        |> String.replace("\u00A0", " ")
+        |> String.replace(~r/\s+/, " ")
+        |> String.trim()
+
+      # Should have space between dash and opening quote
+      refute normalized_text =~ "−\""
+      assert normalized_text =~ "− \""
+
+      # Should have space before closing dash
+      refute normalized_text =~ "Nacional−"
+      assert normalized_text =~ "Nacional −"
+    end
+
     @tag :external
     test "normalizes punctuation spacing in rendered article content", %{conn: conn} do
       user = Langler.AccountsFixtures.user_fixture()

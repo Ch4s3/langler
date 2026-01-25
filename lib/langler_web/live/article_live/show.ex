@@ -284,7 +284,7 @@ defmodule LanglerWeb.ArticleLive.Show do
               <div class="reader-content">
                 <p
                   :for={sentence <- @sentences}
-                  class="mb-4 break-words text-justify last:mb-0"
+                  class="mb-4 break-words last:mb-0"
                   style="font-size: 0;"
                 >
                   <span
@@ -751,7 +751,9 @@ defmodule LanglerWeb.ArticleLive.Show do
     |> Enum.map(fn {text, idx} ->
       # Map word occurrences - try to find matching word from original position
       word = Map.get(occurrence_map, idx)
-      %{id: idx, text: text, lexical?: lexical_token?(text), word: word}
+      # Replace regular spaces with non-breaking spaces to prevent HEEx from collapsing them
+      display_text = if String.match?(text, ~r/^\s+$/), do: "\u00A0", else: text
+      %{id: idx, text: display_text, lexical?: lexical_token?(text), word: word}
     end)
   end
 
@@ -779,6 +781,10 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   defp split_punctuation_token(text) do
     cond do
+      # Check for dashes first - they need special handling
+      dash_with_adjacent_punct?(text) ->
+        split_dash_from_punct(text)
+
       space_surrounded_punctuation?(text) ->
         split_and_trim(text)
 
@@ -798,6 +804,63 @@ defmodule LanglerWeb.ArticleLive.Show do
       String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) and
         String.contains?(text, " ")
 
+  # Check if token contains a dash adjacent to quotes or other punctuation
+  # Matches patterns like: −" or "− or space+dash+quote or dash+space
+  defp dash_with_adjacent_punct?(text) do
+    # Only applies to non-letter tokens that contain a dash
+    # Split if: dash + other punct, or space + dash, or dash + space
+    String.match?(text, ~r/^[^\p{L}]+$/u) and
+      contains_dash?(text) and
+      String.length(text) > 1
+  end
+
+  defp contains_dash?(text) do
+    String.contains?(text, "—") or
+      String.contains?(text, "–") or
+      String.contains?(text, "−") or
+      String.contains?(text, "-")
+  end
+
+  # Split a token containing dash from adjacent punctuation
+  # e.g., " −\"" -> [" ", "−", "\""] or "−\"" -> ["−", "\""]
+  defp split_dash_from_punct(text) do
+    {tokens, current} =
+      text
+      |> String.graphemes()
+      |> Enum.reduce({[], ""}, &split_grapheme_by_dash/2)
+
+    # Don't forget the trailing content
+    tokens = if current != "", do: [current | tokens], else: tokens
+
+    tokens
+    |> Enum.reverse()
+    |> Enum.flat_map(&split_with_spaces/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp split_grapheme_by_dash(grapheme, {tokens, current}) do
+    if dash_grapheme?(grapheme) do
+      emit_dash_token(grapheme, tokens, current)
+    else
+      {tokens, current <> grapheme}
+    end
+  end
+
+  defp emit_dash_token(grapheme, tokens, current) do
+    tokens =
+      if current != "" do
+        [grapheme, current | tokens]
+      else
+        [grapheme | tokens]
+      end
+
+    {tokens, ""}
+  end
+
+  defp dash_grapheme?(grapheme) do
+    grapheme in ["—", "–", "−", "-"]
+  end
+
   defp split_and_trim(text) do
     split_with_spaces(text)
     |> Enum.map(&normalize_punctuation_chunk/1)
@@ -813,33 +876,97 @@ defmodule LanglerWeb.ArticleLive.Show do
   end
 
   defp split_with_spaces(text) do
-    trimmed = String.trim(text)
-    trimmed_leading = String.trim_leading(text)
-    trimmed_trailing = String.trim_trailing(text)
+    # Special case: if text is only whitespace, return it as-is
+    if String.match?(text, ~r/^\s+$/) do
+      [text]
+    else
+      trimmed = String.trim(text)
+      trimmed_leading = String.trim_leading(text)
+      trimmed_trailing = String.trim_trailing(text)
 
-    leading_len = String.length(text) - String.length(trimmed_leading)
-    trailing_start = String.length(trimmed_trailing)
-    text_len = String.length(text)
+      leading_len = String.length(text) - String.length(trimmed_leading)
+      trailing_start = String.length(trimmed_trailing)
+      text_len = String.length(text)
 
-    leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
+      leading_space = if leading_len > 0, do: String.slice(text, 0, leading_len), else: ""
 
-    trailing_space =
-      if trailing_start < text_len,
-        do: String.slice(text, trailing_start, text_len - trailing_start),
-        else: ""
+      trailing_space =
+        if trailing_start < text_len,
+          do: String.slice(text, trailing_start, text_len - trailing_start),
+          else: ""
 
-    result = []
-    result = if leading_space != "", do: [leading_space | result], else: result
-    result = if trimmed != "", do: [trimmed | result], else: result
-    result = if trailing_space != "", do: [trailing_space | result], else: result
-    Enum.reverse(result) |> Enum.filter(&(&1 != ""))
+      result = []
+      result = if leading_space != "", do: [leading_space | result], else: result
+      result = if trimmed != "", do: [trimmed | result], else: result
+      result = if trailing_space != "", do: [trailing_space | result], else: result
+      Enum.reverse(result) |> Enum.filter(&(&1 != ""))
+    end
   end
 
   defp attach_spaces_to_tokens(tokens) do
     # Keep spaces as separate tokens instead of attaching them to words
     # This prevents word underlines from extending to trailing spaces
-    # No need to reverse - tokens are already in correct order
-    collapse_space_before_punct(tokens)
+    tokens
+    |> ensure_spaces_around_dashes()
+    |> collapse_space_before_punct()
+  end
+
+  # Ensure there are spaces around em-dashes, en-dashes when used as separators
+  defp ensure_spaces_around_dashes([]), do: []
+  defp ensure_spaces_around_dashes([single]), do: [single]
+
+  defp ensure_spaces_around_dashes(tokens) do
+    tokens
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {token, idx} ->
+      prev = if idx > 0, do: Enum.at(tokens, idx - 1), else: nil
+      next = Enum.at(tokens, idx + 1)
+
+      if dash_token?(token) do
+        build_dash_with_spaces(token, prev, next)
+      else
+        [token]
+      end
+    end)
+  end
+
+  defp build_dash_with_spaces(token, prev, next) do
+    [token]
+    |> maybe_prepend_space(prev)
+    |> maybe_append_space(next)
+  end
+
+  defp maybe_prepend_space(result, prev) do
+    if prev != nil and word_token?(prev) do
+      [" " | result]
+    else
+      result
+    end
+  end
+
+  defp maybe_append_space(result, next) do
+    if next != nil and (word_token?(next) or opening_quote_token?(next)) do
+      result ++ [" "]
+    else
+      result
+    end
+  end
+
+  defp dash_token?(token) do
+    token in ["—", "–", "−", "-"]
+  end
+
+  defp word_token?(token) do
+    String.match?(token, ~r/^\p{L}+$/u)
+  end
+
+  defp opening_quote_token?(token) do
+    # Check for straight quotes and smart/typographic opening quotes
+    # U+201C is left double quotation mark
+    left_double_quote = <<226, 128, 156>>
+
+    token == "\"" or token == "'" or token == left_double_quote or
+      token == "«" or token == "‹"
   end
 
   # Remove space tokens that appear before punctuation that attaches to the previous word
@@ -871,7 +998,16 @@ defmodule LanglerWeb.ArticleLive.Show do
   defp attaching_punct?(token) do
     # Punctuation that attaches to the previous word (no space before)
     # Match tokens that START with attaching punctuation
-    String.match?(token, ~r/^[,\.;:!?\)\]\}»›"'"]/u)
+    # Note: Straight quotes ("') are excluded because they're ambiguous (could be opening or closing)
+    # Only include unambiguous closing quotes: » › and smart right quotes
+    # U+201D
+    right_double_quote = <<226, 128, 157>>
+    # U+2019
+    right_single_quote = <<226, 128, 153>>
+
+    String.match?(token, ~r/^[,\.;:!?\)\]\}»›]/u) or
+      String.starts_with?(token, right_double_quote) or
+      String.starts_with?(token, right_single_quote)
   end
 
   defp lexical_token?(text) do
