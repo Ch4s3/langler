@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MIX_ENV: test
+      OTP_VERSION: 28.3
     steps:
       - uses: actions/checkout@v4
 
@@ -75,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: _build/assay
-          key: ${{ runner.os }}-assay-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
+          key: ${{ runner.os }}-assay-plt-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock', '.tool-versions') }}
           restore-keys: |
             ${{ runner.os }}-assay-plt-
 
