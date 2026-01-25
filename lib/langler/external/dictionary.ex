@@ -2,13 +2,14 @@ defmodule Langler.External.Dictionary do
   @moduledoc """
   Dictionary lookup service combining multiple data sources.
 
-  Integrates Wiktionary definitions, Google Translate fallback, and LanguageTool
-  for lemma/part-of-speech analysis to provide comprehensive dictionary entries.
+  Integrates Wiktionary definitions, definition providers (Google Translate or LLM),
+  and LanguageTool for lemma/part-of-speech analysis to provide comprehensive
+  dictionary entries.
   """
 
-  alias Langler.External.Dictionary.{Cache, Google, LanguageTool, Wiktionary}
+  alias Langler.External.Dictionary.{Cache, DefinitionResolver, LanguageTool, Wiktionary}
 
-  @entry_cache_version 2
+  @entry_cache_version 3
 
   @type entry :: %{
           word: String.t(),
@@ -22,14 +23,23 @@ defmodule Langler.External.Dictionary do
         }
 
   @doc """
-  Fetches dictionary information for a given term using Google Translate.
+  Fetches dictionary information for a given term.
 
-  Always returns an entry with translation from Google Translate.
+  Uses the configured definition provider (Google Translate or LLM) based on
+  user configuration, with automatic fallback from Google Translate to LLM
+  when Google Translate is not configured.
+
+  ## Options
+    - `:language` - Source language (default: "spanish")
+    - `:target` - Target language for translation (default: "en")
+    - `:api_key` - API key for Google Translate (optional, overrides user config)
+    - `:user_id` - User ID for provider resolution (optional but recommended)
   """
-  @spec lookup(String.t(), keyword()) :: {:ok, entry()}
+  @spec lookup(String.t(), keyword()) :: {:ok, entry()} | {:error, term()}
   def lookup(term, opts \\ []) when is_binary(term) do
     language = opts[:language] || "spanish"
     target = opts[:target] || "en"
+    user_id = opts[:user_id]
 
     entry_cache = cache_table(:entry)
     entry_key = {@entry_cache_version, String.downcase(language), String.downcase(term)}
@@ -37,13 +47,13 @@ defmodule Langler.External.Dictionary do
     case Cache.get(entry_cache, entry_key) do
       {:ok, cached} ->
         if stale_entry?(cached) do
-          {:ok, fetch_and_cache_entry(term, language, target, entry_cache, entry_key)}
+          fetch_and_cache_entry(term, language, target, opts, entry_cache, entry_key, user_id)
         else
           {:ok, cached}
         end
 
       :miss ->
-        {:ok, fetch_and_cache_entry(term, language, target, entry_cache, entry_key)}
+        fetch_and_cache_entry(term, language, target, opts, entry_cache, entry_key, user_id)
     end
   end
 
@@ -63,11 +73,16 @@ defmodule Langler.External.Dictionary do
 
   defp ttl(:entry), do: :timer.hours(12)
 
-  defp fetch_and_cache_entry(term, language, target, cache, key) do
-    sources = fetch_all_sources(term, language, target)
-    entry = build_entry(term, language, sources)
-    Cache.put(cache, key, entry, ttl: ttl(:entry))
-    entry
+  defp fetch_and_cache_entry(term, language, target, opts, cache, key, user_id) do
+    case fetch_all_sources(term, language, target, opts, user_id) do
+      {:ok, sources} ->
+        entry = build_entry(term, language, sources)
+        Cache.put(cache, key, entry, ttl: ttl(:entry))
+        {:ok, entry}
+
+      {:error, _reason} = error ->
+        error
+    end
   end
 
   defp stale_entry?(entry) do
@@ -76,18 +91,50 @@ defmodule Langler.External.Dictionary do
     definitions_missing && translation_missing
   end
 
-  defp fetch_google_data(nil, _language, _target), do: %{translation: nil, definitions: []}
+  defp fetch_definition_data(nil, _language, _target, _opts, _user_id),
+    do: %{translation: nil, definitions: []}
 
-  defp fetch_google_data(term, language, target) do
-    case Google.translate(term, from: language, to: target) do
+  defp fetch_definition_data(term, language, target, opts, user_id) do
+    resolver_opts = [
+      language: language,
+      target: target,
+      api_key: opts[:api_key],
+      user_id: user_id
+    ]
+
+    case DefinitionResolver.get_definition(term, resolver_opts) do
       {:ok, data} -> data
+      {:error, :no_provider_available} -> {:error, :no_provider_available}
       {:error, _} -> %{translation: nil, definitions: []}
     end
   end
 
-  defp fetch_all_sources(term, language, target) do
-    google_data = fetch_google_data(term, language, target)
+  defp fetch_all_sources(term, language, target, opts, user_id) do
+    case fetch_definition_data(term, language, target, opts, user_id) do
+      {:error, _reason} = error ->
+        error
 
+      definition_data ->
+        {:ok,
+         fetch_all_sources_with_definition_data(
+           term,
+           language,
+           target,
+           opts,
+           user_id,
+           definition_data
+         )}
+    end
+  end
+
+  defp fetch_all_sources_with_definition_data(
+         term,
+         language,
+         target,
+         opts,
+         user_id,
+         definition_data
+       ) do
     wiktionary_entry =
       case Wiktionary.lookup(term, language) do
         {:ok, entry} -> entry
@@ -98,16 +145,19 @@ defmodule Langler.External.Dictionary do
     lemma = normalize_lemma(lemma_candidate, term)
     lemma_query = lemma_candidate && String.trim(lemma_candidate)
 
-    lemma_google_data =
-      if needs_lemma_lookup?(google_data, lemma_query, term) do
-        fetch_google_data(lemma_query, language, target)
+    lemma_definition_data =
+      if needs_lemma_lookup?(definition_data, lemma_query, term) do
+        case fetch_definition_data(lemma_query, language, target, opts, user_id) do
+          {:error, _} -> nil
+          data -> data
+        end
       else
         nil
       end
 
     %{
-      google_data: google_data,
-      lemma_google_data: lemma_google_data,
+      definition_data: definition_data,
+      lemma_definition_data: lemma_definition_data,
       wiktionary_entry: wiktionary_entry,
       part_of_speech: part_of_speech,
       lemma: lemma
@@ -146,11 +196,11 @@ defmodule Langler.External.Dictionary do
 
   defp build_definitions_from_sources(sources) do
     cond do
-      sources.google_data.definitions != [] ->
-        sources.google_data.definitions
+      sources.definition_data.definitions != [] ->
+        sources.definition_data.definitions
 
       has_lemma_definitions?(sources) ->
-        sources.lemma_google_data.definitions
+        sources.lemma_definition_data.definitions
 
       has_wiktionary_definitions?(sources) ->
         sources.wiktionary_entry.definitions
@@ -162,11 +212,11 @@ defmodule Langler.External.Dictionary do
 
   defp build_definitions_from_translations(sources) do
     cond do
-      sources.google_data.translation ->
-        [sources.google_data.translation]
+      sources.definition_data.translation ->
+        [sources.definition_data.translation]
 
       has_lemma_translation?(sources) ->
-        [sources.lemma_google_data.translation]
+        [sources.lemma_definition_data.translation]
 
       true ->
         nil
@@ -174,7 +224,7 @@ defmodule Langler.External.Dictionary do
   end
 
   defp has_lemma_definitions?(sources) do
-    sources.lemma_google_data && sources.lemma_google_data.definitions != []
+    sources.lemma_definition_data && sources.lemma_definition_data.definitions != []
   end
 
   defp has_wiktionary_definitions?(sources) do
@@ -182,12 +232,12 @@ defmodule Langler.External.Dictionary do
   end
 
   defp has_lemma_translation?(sources) do
-    sources.lemma_google_data && sources.lemma_google_data.translation
+    sources.lemma_definition_data && sources.lemma_definition_data.translation
   end
 
   defp get_translation(sources) do
-    sources.google_data.translation ||
-      (sources.lemma_google_data && sources.lemma_google_data.translation)
+    sources.definition_data.translation ||
+      (sources.lemma_definition_data && sources.lemma_definition_data.translation)
   end
 
   defp get_part_of_speech(sources) do
@@ -204,8 +254,8 @@ defmodule Langler.External.Dictionary do
   end
 
   @dialyzer {:nowarn_function, needs_lemma_lookup?: 3}
-  defp needs_lemma_lookup?(google_data, lemma_query, term) do
-    google_data.definitions == [] and
+  defp needs_lemma_lookup?(definition_data, lemma_query, term) do
+    definition_data.definitions == [] and
       is_binary(lemma_query) and lemma_query != "" and
       String.downcase(lemma_query) != String.downcase(term || "")
   end

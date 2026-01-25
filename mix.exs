@@ -90,6 +90,7 @@ defmodule Langler.MixProject do
       {:oban, "~> 2.17"},
       {:rustler, ">= 0.32.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.12", only: [:dev, :test], runtime: false},
       {:assay, "~> 0.3", only: [:dev, :test], runtime: false},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},

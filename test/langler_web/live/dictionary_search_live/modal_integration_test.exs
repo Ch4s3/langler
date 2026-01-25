@@ -72,6 +72,16 @@ defmodule LanglerWeb.DictionarySearchLive.ModalIntegrationTest do
     end
   end
 
+  # Helper to create Google Translate config for a user so the resolver uses Google provider
+  defp setup_google_translate_config(user) do
+    {:ok, _config} =
+      Langler.Accounts.GoogleTranslateConfig.create_config(user, %{
+        "api_key" => "test-google-api-key",
+        "enabled" => true,
+        "is_default" => true
+      })
+  end
+
   describe "dictionary search modal" do
     test "modal is present but closed initially", %{conn: conn} do
       user = AccountsFixtures.user_fixture()
@@ -132,6 +142,7 @@ defmodule LanglerWeb.DictionarySearchLive.ModalIntegrationTest do
       languagetool: languagetool
     } do
       user = AccountsFixtures.user_fixture()
+      setup_google_translate_config(user)
 
       Accounts.upsert_user_preference(user, %{
         target_language: "spanish",
@@ -196,6 +207,7 @@ defmodule LanglerWeb.DictionarySearchLive.ModalIntegrationTest do
       languagetool: languagetool
     } do
       user = AccountsFixtures.user_fixture()
+      setup_google_translate_config(user)
 
       Accounts.upsert_user_preference(user, %{
         target_language: "spanish",
@@ -267,6 +279,7 @@ defmodule LanglerWeb.DictionarySearchLive.ModalIntegrationTest do
       languagetool: languagetool
     } do
       user = AccountsFixtures.user_fixture()
+      setup_google_translate_config(user)
 
       Accounts.upsert_user_preference(user, %{
         target_language: "spanish",

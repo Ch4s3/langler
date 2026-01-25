@@ -7,6 +7,7 @@ defmodule Langler.Vocabulary do
   """
 
   import Ecto.Query, warn: false
+  alias Langler.Accounts.GoogleTranslateConfig
   alias Langler.External.Dictionary
   alias Langler.Repo
   alias Langler.Study
@@ -391,7 +392,7 @@ defmodule Langler.Vocabulary do
   end
 
   defp import_single_word(word_text, language, deck_id, user_id) do
-    with {:ok, word} <- get_or_create_word_from_text(word_text, language),
+    with {:ok, word} <- get_or_create_word_from_text(word_text, language, user_id),
          {:ok, _deck_word} <- add_word_to_deck(deck_id, word.id, user_id),
          {:ok, _item} <- Study.schedule_new_item(user_id, word.id) do
       {:ok, word}
@@ -400,24 +401,40 @@ defmodule Langler.Vocabulary do
     end
   end
 
-  defp get_or_create_word_from_text(word_text, language) do
+  defp get_or_create_word_from_text(word_text, language, user_id) do
     normalized = normalize_form(word_text)
 
     case get_word_by_normalized_form(normalized, language) do
       nil ->
         # Lookup dictionary entry to get definitions
-        {:ok, entry} = Dictionary.lookup(word_text, language: language)
+        api_key = GoogleTranslateConfig.get_api_key(user_id)
 
-        # entry.definitions is always a list per Dictionary.entry type, but handle nil defensively
-        definitions = if entry.definitions, do: entry.definitions, else: []
+        case Dictionary.lookup(word_text, language: language, api_key: api_key, user_id: user_id) do
+          {:ok, entry} ->
+            # entry.definitions is always a list per Dictionary.entry type, but handle nil defensively
+            definitions = if entry.definitions, do: entry.definitions, else: []
 
-        create_word(%{
-          normalized_form: normalized,
-          lemma: entry.lemma,
-          language: language,
-          part_of_speech: entry.part_of_speech,
-          definitions: definitions
-        })
+            create_word(%{
+              normalized_form: normalized,
+              lemma: entry.lemma,
+              language: language,
+              part_of_speech: entry.part_of_speech,
+              definitions: definitions
+            })
+
+          {:error, reason} ->
+            # Log warning but still create word without definitions
+            require Logger
+            Logger.warning("Dictionary lookup failed for word import: #{inspect(reason)}")
+
+            create_word(%{
+              normalized_form: normalized,
+              lemma: nil,
+              language: language,
+              part_of_speech: nil,
+              definitions: []
+            })
+        end
 
       word ->
         {:ok, word}

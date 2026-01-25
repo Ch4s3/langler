@@ -7,6 +7,7 @@ defmodule LanglerWeb.ArticleLive.Show do
   require Logger
 
   alias Langler.Accounts
+  alias Langler.Accounts.GoogleTranslateConfig
   alias Langler.Accounts.LlmConfig
   alias Langler.Accounts.TtsConfig
   alias Langler.Content
@@ -22,14 +23,24 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   def mount(%{"id" => article_id} = params, _session, socket) do
     scope = socket.assigns.current_scope
-    article = Content.get_article_for_user!(scope.user.id, article_id)
 
-    socket =
-      socket
-      |> assign_article(article)
-      |> maybe_start_quiz_from_params(params, scope.user.id, article)
+    case Content.get_article_for_user(scope.user.id, article_id) do
+      nil ->
+        socket =
+          socket
+          |> put_flash(:error, "Article not found")
+          |> push_navigate(to: ~p"/articles")
 
-    {:ok, socket}
+        {:ok, socket}
+
+      article ->
+        socket =
+          socket
+          |> assign_article(article)
+          |> maybe_start_quiz_from_params(params, scope.user.id, article)
+
+        {:ok, socket}
+    end
   end
 
   defp maybe_start_quiz_from_params(socket, params, user_id, article) do
@@ -314,6 +325,19 @@ defmodule LanglerWeb.ArticleLive.Show do
   defp assign_article(socket, article) do
     user_id = socket.assigns.current_scope.user.id
     sentences = Content.list_sentences(article)
+    # Normalize punctuation spacing in sentences (fallback for articles imported before fix)
+    sentences =
+      Enum.map(sentences, fn sentence ->
+        original_content = sentence.content || ""
+        normalized_content = ArticleImporter.normalize_punctuation_spacing(original_content)
+        # Log if normalization actually changed something (for debugging)
+        if normalized_content != original_content do
+          Logger.debug("Normalized sentence #{sentence.id}: removed bad spacing")
+        end
+
+        # Update the sentence struct with normalized content
+        %{sentence | content: normalized_content}
+      end)
 
     {studied_word_ids, studied_forms, study_items_by_word} =
       seed_studied_words(user_id, sentences)
@@ -370,11 +394,13 @@ defmodule LanglerWeb.ArticleLive.Show do
       ) do
     case ArticleImporter.import_from_url(scope.user, article.url) do
       {:ok, updated, _status} ->
+        # Reload article with fresh sentences
         refreshed = Content.get_article_for_user!(scope.user.id, updated.id)
         {:noreply, socket |> assign_article(refreshed) |> put_flash(:info, "Article refreshed")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to refresh: #{inspect(reason)}")}
+        Logger.error("Article refresh failed: #{inspect(reason)}")
+        {:noreply, put_flash(socket, :error, "Unable to refresh article: #{inspect(reason)}")}
     end
   end
 
@@ -488,45 +514,39 @@ defmodule LanglerWeb.ArticleLive.Show do
         true -> nil
       end
 
-    {:ok, entry} = Dictionary.lookup(trimmed_word, language: language, target: "en")
-    {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
+    user_id = socket.assigns.current_scope.user.id
+    api_key = GoogleTranslateConfig.get_api_key(user_id)
 
-    payload =
-      entry
-      |> Map.take([
-        :lemma,
-        :part_of_speech,
-        :pronunciation,
-        :definitions,
-        :translation,
-        :source_url
-      ])
-      |> Map.put_new(:definitions, [])
-      |> Map.merge(%{
-        dom_id: dom_id,
-        word: trimmed_word,
-        language: language,
-        normalized_form: normalized,
-        context: context,
-        word_id: resolved_word && resolved_word.id,
-        studied: studied?,
-        rating_required: studied?,
-        study_item_id:
-          resolved_word &&
-            socket.assigns[:study_items_by_word]
-            |> Map.get(resolved_word.id)
-            |> then(fn
-              %{id: id} -> id
-              _ -> nil
-            end),
-        fsrs_sleep_until:
-          resolved_word &&
-            fsrs_sleep_until(socket.assigns[:study_items_by_word], resolved_word.id)
-      })
+    case Dictionary.lookup(trimmed_word,
+           language: language,
+           target: "en",
+           api_key: api_key,
+           user_id: user_id
+         ) do
+      {:ok, entry} ->
+        {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
 
-    Logger.debug("word-data payload: #{inspect(payload)}")
+        handle_successful_lookup(
+          entry,
+          resolved_word,
+          studied?,
+          trimmed_word,
+          normalized,
+          language,
+          context,
+          dom_id,
+          word_id,
+          socket
+        )
 
-    {:noreply, push_event(socket, "word-data", payload)}
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+         )}
+    end
   end
 
   def handle_event(
@@ -662,6 +682,56 @@ defmodule LanglerWeb.ArticleLive.Show do
     end
   end
 
+  defp handle_successful_lookup(
+         entry,
+         resolved_word,
+         studied?,
+         trimmed_word,
+         normalized,
+         language,
+         context,
+         dom_id,
+         _word_id,
+         socket
+       ) do
+    payload =
+      entry
+      |> Map.take([
+        :lemma,
+        :part_of_speech,
+        :pronunciation,
+        :definitions,
+        :translation,
+        :source_url
+      ])
+      |> Map.put_new(:definitions, [])
+      |> Map.merge(%{
+        dom_id: dom_id,
+        word: trimmed_word,
+        language: language,
+        normalized_form: normalized,
+        context: context,
+        word_id: resolved_word && resolved_word.id,
+        studied: studied?,
+        rating_required: studied?,
+        study_item_id:
+          resolved_word &&
+            socket.assigns[:study_items_by_word]
+            |> Map.get(resolved_word.id)
+            |> then(fn
+              %{id: id} -> id
+              _ -> nil
+            end),
+        fsrs_sleep_until:
+          resolved_word &&
+            fsrs_sleep_until(socket.assigns[:study_items_by_word], resolved_word.id)
+      })
+
+    Logger.debug("word-data payload: #{inspect(payload)}")
+
+    {:noreply, push_event(socket, "word-data", payload)}
+  end
+
   defp add_word_to_current_deck(user_id, word_id) do
     case Accounts.get_current_deck(user_id) do
       nil ->
@@ -676,7 +746,10 @@ defmodule LanglerWeb.ArticleLive.Show do
        when is_binary(content) and is_list(occurrences) do
     occurrence_map = build_occurrence_map(occurrences)
 
-    content
+    # Ensure content is normalized before tokenization (safety check)
+    normalized_content = ArticleImporter.normalize_punctuation_spacing(content)
+
+    normalized_content
     |> extract_tokens()
     |> normalize_tokens()
     |> attach_spaces_to_tokens()
@@ -712,11 +785,40 @@ defmodule LanglerWeb.ArticleLive.Show do
 
   defp split_punctuation_token(text) do
     cond do
+      # Pattern: space + punctuation + space (e.g., " , ", " ; ", " . ")
       String.match?(text, ~r/^\s+[^\p{L}\s]+\s+$/u) ->
+        # Split and remove leading/trailing spaces from punctuation
         split_with_spaces(text)
+        |> Enum.map(fn token ->
+          # Remove spaces before/after punctuation
+          if String.match?(token, ~r/^[^\p{L}\s]+$/u) do
+            # It's punctuation - remove any spaces
+            String.trim(token)
+          else
+            token
+          end
+        end)
+        |> Enum.filter(&(&1 != ""))
 
+      # Pattern: punctuation with leading/trailing spaces (e.g., " ,", ", ", "( ", " )")
+      # But NOT pure punctuation without spaces (e.g., ",")
       String.match?(text, ~r/^[^\p{L}]+$/u) and not String.match?(text, ~r/^\s+$/u) ->
-        split_with_spaces(text)
+        # Only split if it has spaces
+        if String.contains?(text, " ") do
+          split_with_spaces(text)
+          |> Enum.map(fn token ->
+            # If it's punctuation, remove spaces; if it's a space, keep it separate
+            if String.match?(token, ~r/^[^\p{L}\s]+$/u) do
+              String.trim(token)
+            else
+              token
+            end
+          end)
+          |> Enum.filter(&(&1 != ""))
+        else
+          # Pure punctuation without spaces - keep as is
+          [text]
+        end
 
       true ->
         [text]
@@ -747,64 +849,48 @@ defmodule LanglerWeb.ArticleLive.Show do
   end
 
   defp attach_spaces_to_tokens(tokens) do
-    tokens
-    |> Enum.reduce([], &attach_space_token/2)
-    |> Enum.reverse()
-    |> collapse_space_before_punct()
+    # Keep spaces as separate tokens instead of attaching them to words
+    # This prevents word underlines from extending to trailing spaces
+    # No need to reverse - tokens are already in correct order
+    collapse_space_before_punct(tokens)
   end
 
-  # Remove trailing whitespace from tokens when followed by punctuation that attaches
-  # to the previous word (like commas, periods, semicolons, etc.)
-  # This handles cases where the source text has incorrect spacing like "word , next"
+  # Remove space tokens that appear before punctuation that attaches to the previous word
+  # This handles cases where normalization didn't catch all spaces, or tokenization created space tokens
   defp collapse_space_before_punct([]), do: []
   defp collapse_space_before_punct([single]), do: [single]
 
   defp collapse_space_before_punct(tokens) do
-    tokens
-    |> Enum.zip(tl(tokens) ++ [nil])
-    |> Enum.map(fn
-      {current, next} when is_binary(next) ->
-        if attaching_punct?(next), do: String.trim_trailing(current), else: current
+    # Simple approach: zip tokens with next tokens and filter
+    tokens_with_next = Enum.zip(tokens, tl(tokens) ++ [nil])
 
-      {current, nil} ->
-        current
+    tokens_with_next
+    |> Enum.reject(fn {current, next} ->
+      # Remove space tokens that are followed by punctuation
+      is_space = String.match?(current, ~r/^\s+$/)
+      is_space and next != nil and attaching_punct?(next)
     end)
+    |> Enum.map(fn {current, next} ->
+      # Also trim trailing spaces from tokens followed by punctuation
+      if next != nil and attaching_punct?(next) do
+        String.trim_trailing(current)
+      else
+        current
+      end
+    end)
+    |> Enum.filter(&(&1 != ""))
   end
 
   defp attaching_punct?(token) do
-    String.match?(token, ~r/^[,\.;:!?\)\]\}»›"']/u)
-  end
-
-  defp attach_space_token(token, acc) do
-    case token_kind(token) do
-      :word -> [token | acc]
-      :punct -> [token | acc]
-      :space -> attach_space_to_prev(token, acc)
-      :other -> [token | acc]
-    end
-  end
-
-  defp attach_space_to_prev(space, []), do: [space]
-
-  defp attach_space_to_prev(space, [prev | rest]) do
-    case token_kind(prev) do
-      :word -> [prev <> space | rest]
-      :punct -> [prev <> space | rest]
-      _ -> [space, prev | rest]
-    end
-  end
-
-  defp token_kind(token) do
-    cond do
-      String.match?(token, ~r/^\p{L}/u) -> :word
-      String.match?(token, ~r/^[^\p{L}\s]+$/u) -> :punct
-      String.match?(token, ~r/^\s+$/u) -> :space
-      true -> :other
-    end
+    # Punctuation that attaches to the previous word (no space before)
+    # Match tokens that START with attaching punctuation
+    String.match?(token, ~r/^[,\.;:!?\)\]\}»›"'"]/u)
   end
 
   defp lexical_token?(text) do
-    String.match?(text, ~r/\p{L}/u)
+    # Only return true for tokens that contain letters and are not just spaces
+    # This ensures space tokens don't get word highlighting
+    String.match?(text, ~r/\p{L}/u) and not String.match?(text, ~r/^\s+$/u)
   end
 
   defp studied_token?(token, studied_ids, studied_forms) do

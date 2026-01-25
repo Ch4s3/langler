@@ -20,17 +20,6 @@ if System.get_env("PHX_SERVER") do
   config :langler, LanglerWeb.Endpoint, server: true
 end
 
-google_translate_key = System.get_env("GOOGLE_TRANSLATE_API_KEY")
-
-config :langler, Langler.External.Dictionary.Google, api_key: google_translate_key
-
-if config_env() == :prod and is_nil(google_translate_key) do
-  raise """
-  environment variable GOOGLE_TRANSLATE_API_KEY is missing.
-  Set it to enable Google Translate fallback requests.
-  """
-end
-
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -6,8 +6,6 @@ defmodule Langler.Content.ArticleImporter do
   extraction, and enqueues background jobs for word occurrence tracking.
   """
 
-  @dialyzer {:nowarn_function, remove_spaces_before_punctuation: 1}
-
   alias Langler.Accounts
   alias Langler.Content
   alias Langler.Content.Classifier
@@ -123,7 +121,8 @@ defmodule Langler.Content.ArticleImporter do
            {:ok, _} <- Content.ensure_article_user(article, user.id),
            :ok <- seed_sentences(article, sanitized_content),
            :ok <- classify_and_tag_article(article, sanitized_content) do
-        article
+        # Preload article_topics before returning
+        Repo.preload(article, :article_topics)
       else
         {:error, reason} -> Repo.rollback(reason)
       end
@@ -158,7 +157,8 @@ defmodule Langler.Content.ArticleImporter do
            :ok <- seed_sentences(article, sanitized_content),
            {:ok, _} <- Content.ensure_article_user(article, user.id, %{status: "imported"}),
            :ok <- classify_and_tag_article(article, sanitized_content) do
-        article
+        # Preload article_topics before returning
+        Repo.preload(article, :article_topics)
       else
         {:error, reason} -> Repo.rollback(reason)
       end
@@ -214,8 +214,21 @@ defmodule Langler.Content.ArticleImporter do
   end
 
   defp seed_sentences(article, content) when is_binary(content) do
-    content
-    |> sanitize_content()
+    # Content is already sanitized when passed from refresh_article or persist_article
+    # Only sanitize if content contains HTML tags (fallback case)
+    processed_content =
+      if String.contains?(content, "<") do
+        sanitize_content(content)
+      else
+        content
+      end
+
+    # Always normalize punctuation spacing after sanitization/processing
+    processed_content =
+      processed_content
+      |> normalize_punctuation_spacing()
+
+    processed_content
     |> split_sentences()
     |> Enum.map(&remove_noise_prefix/1)
     |> filter_noise_sentences()
@@ -414,7 +427,7 @@ defmodule Langler.Content.ArticleImporter do
       |> fix_punctuation_spacing()
       |> String.trim()
     else
-      # Plain text from NIF - just decode entities and normalize whitespace
+      # Plain text from NIF - decode entities, normalize whitespace, and fix punctuation spacing
       require Logger
 
       Logger.info(
@@ -472,12 +485,8 @@ defmodule Langler.Content.ArticleImporter do
   end
 
   defp fix_punctuation_spacing(content) do
-    # Remove spaces before punctuation and ensure proper spacing after
-    content
-    |> remove_spaces_before_punctuation()
-    |> ensure_space_after_punctuation()
-    |> ensure_space_after_inverted_marks()
-    |> squeeze_whitespace()
+    # Use character-by-character parser for comprehensive punctuation normalization
+    normalize_punctuation_spacing(content)
   end
 
   defp decode_numeric_entities(content) do
@@ -564,7 +573,8 @@ defmodule Langler.Content.ArticleImporter do
 
   defp ensure_association(article, user) do
     {:ok, _} = Content.ensure_article_user(article, user.id)
-    article
+    # Preload article_topics before returning
+    Repo.preload(article, :article_topics)
   end
 
   defp enqueue_word_extraction(article) do
@@ -573,24 +583,282 @@ defmodule Langler.Content.ArticleImporter do
     |> Oban.insert()
   end
 
-  @spec remove_spaces_before_punctuation(String.t()) :: String.t()
-  defp remove_spaces_before_punctuation(content) when is_binary(content) do
-    step1 = String.replace(content, ~r/\s+([,\.;:!?\)\]\}])/u, "\\1")
-    step2 = String.replace(step1, ~r/\s+([¡¿])/u, "\\1")
-    String.replace(step2, ~r/([\(\[\{])\s+/u, "\\1")
+  @doc """
+  Normalizes punctuation spacing in text according to Spanish typography rules.
+
+  Tokenizes text into words and punctuation, fixes spacing between tokens, then joins back.
+  """
+  def normalize_punctuation_spacing(content) when is_binary(content) do
+    content
+    |> String.replace("...", "…")
+    |> tokenize_text()
+    |> normalize_tokens()
+    |> join_tokens()
   end
 
-  defp remove_spaces_before_punctuation(content), do: to_string(content)
+  def normalize_punctuation_spacing(content), do: to_string(content)
 
-  defp ensure_space_after_punctuation(content) do
-    Regex.replace(~r/([,\.;:!?])([^\s,\.;:!?\)\]\}]|$)/u, content, "\\1 \\2")
+  # Tokenize text into: words (lemmas), punctuation, and spaces
+  defp tokenize_text(text) do
+    # Use graphemes to handle UTF-8 properly, then group into tokens
+    text
+    |> String.graphemes()
+    |> Enum.chunk_while("", &chunk_into_token/2, &after_chunk/1)
+    |> Enum.reject(&(&1 == ""))
   end
 
-  defp ensure_space_after_inverted_marks(content) do
-    Regex.replace(~r/([¡¿])([^\s])/u, content, "\\1 \\2")
+  defp chunk_into_token(grapheme, acc) do
+    # Ensure grapheme is valid UTF-8
+    grapheme = if String.valid?(grapheme), do: grapheme, else: ""
+    acc = if String.valid?(acc), do: acc, else: ""
+
+    cond do
+      # Letter - continue word token (only if acc is a word, not space/punct)
+      String.match?(grapheme, ~r/^\p{L}$/u) ->
+        if (acc != "" and String.match?(acc, ~r/^\p{L}+$/u)) or acc == "" do
+          {:cont, acc <> grapheme}
+        else
+          # Acc is space or punct, emit it and start new word
+          {:cont, acc, grapheme}
+        end
+
+      # Space - emit current token and start space token
+      String.match?(grapheme, ~r/^\s$/u) ->
+        if acc == "" do
+          {:cont, grapheme}
+        else
+          {:cont, acc, grapheme}
+        end
+
+      # Punctuation - emit current token and start punctuation token
+      true ->
+        if acc == "" do
+          {:cont, grapheme}
+        else
+          {:cont, acc, grapheme}
+        end
+    end
   end
 
-  defp squeeze_whitespace(content) do
-    String.replace(content, ~r/\s+/u, " ")
+  defp after_chunk(acc), do: {:cont, ensure_valid_string(acc), ""}
+
+  # Ensure string is valid UTF-8, replace invalid bytes if needed
+  defp ensure_valid_string(str) when is_binary(str) do
+    if String.valid?(str) do
+      str
+    else
+      # Replace invalid bytes with empty string or try to fix
+      str
+      |> String.codepoints()
+      |> Enum.filter(&String.valid?/1)
+      |> Enum.join("")
+    end
+  end
+
+  defp ensure_valid_string(str), do: to_string(str)
+
+  # Normalize spacing between tokens
+  defp normalize_tokens(tokens) do
+    # Process tokens with lookahead for straight quote handling
+    tokens
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {token, idx}, acc ->
+      normalize_token_with_lookahead(token, acc, tokens, idx)
+    end)
+    |> Enum.reverse()
+  end
+
+  defp normalize_token_with_lookahead(token, acc, tokens, idx) do
+    # Ensure token is valid UTF-8 before processing
+    token = ensure_valid_string(token)
+    # Get the next token for lookahead
+    next_token = Enum.at(tokens, idx + 1)
+    # Get second next token for better lookahead
+    next_next_token = Enum.at(tokens, idx + 2)
+
+    cond do
+      # Space token - check if it should be removed
+      String.match?(token, ~r/^\s+$/) ->
+        case acc do
+          [prev | _rest] ->
+            # Remove space after opening punctuation/quotes/dashes
+            if is_opening_punctuation_token?(prev) or is_opening_quote_token?(prev) or
+                 is_dash_token?(prev) do
+              acc
+            else
+              # For straight quotes, check if next token is a word (opening context)
+              if is_straight_quote_token?(prev) and next_token != nil and
+                   is_word_token?(next_token) do
+                # Quote followed by word = opening quote, remove space after
+                acc
+              else
+                # Keep space - it will be checked when next token is processed
+                [token | acc]
+              end
+            end
+
+          # Empty acc - keep space
+          _ ->
+            [token | acc]
+        end
+
+      # Punctuation token - check spacing rules
+      is_punctuation_token?(token) ->
+        case acc do
+          [space | rest] when is_binary(space) ->
+            if String.match?(space, ~r/^\s+$/) do
+              # Previous token is a space
+              # Remove space before closing punctuation, closing quotes, or dashes
+              if is_closing_punctuation_token?(token) or is_closing_quote_token?(token) or
+                   is_dash_token?(token) do
+                [token | rest]
+              else
+                # For straight quotes, use lookahead to determine if opening or closing
+                if is_straight_quote_token?(token) do
+                  # If next token is space and then word, it's opening (keep space before)
+                  # If next token is space and then punctuation, it's closing (remove space before)
+                  cond do
+                    # " word -> opening quote, keep space before
+                    next_token != nil and is_word_token?(next_token) ->
+                      [token | acc]
+
+                    # " . or " , -> closing quote, remove space before  
+                    next_token != nil and String.match?(next_token, ~r/^\s+$/) and
+                      next_next_token != nil and is_punctuation_token?(next_next_token) ->
+                      [token | rest]
+
+                    # " followed by space and word -> opening, keep space before
+                    next_token != nil and String.match?(next_token, ~r/^\s+$/) and
+                      next_next_token != nil and is_word_token?(next_next_token) ->
+                      [token | acc]
+
+                    # Default: keep space (safer for opening quotes)
+                    true ->
+                      [token | acc]
+                  end
+                else
+                  # Keep space before opening punctuation/quotes (e.g., 'said "hello"')
+                  [token | acc]
+                end
+              end
+            else
+              # Previous token is not a space
+              # Add space after closing punctuation if followed by word (if no space exists)
+              if is_closing_punctuation_token?(space) and is_word_token?(token) do
+                [token, " " | rest]
+              else
+                [token | acc]
+              end
+            end
+
+          # Normal case
+          _ ->
+            [token | acc]
+        end
+
+      # Word token - handle spacing rules
+      is_word_token?(token) ->
+        case acc do
+          # Add space after closing punctuation if no space exists
+          [prev | rest] ->
+            if is_closing_punctuation_token?(prev) do
+              # Keep the punctuation token, add space, then word
+              [token, " ", prev | rest]
+              # Check if word follows opening quote - no space needed
+            else
+              if is_opening_quote_token?(prev) or is_opening_punctuation_token?(prev) do
+                # Word follows opening quote/punct, no space
+                [token | acc]
+                # Check if there's a space before an opening quote that should be preserved
+              else
+                if String.match?(prev, ~r/^\s+$/) do
+                  case rest do
+                    [punct | rest2] ->
+                      if is_opening_punctuation_token?(punct) or is_opening_quote_token?(punct) do
+                        # Space is before opening quote, preserve it
+                        [token, prev, punct | rest2]
+                      else
+                        [token | acc]
+                      end
+
+                    _ ->
+                      [token | acc]
+                  end
+                else
+                  [token | acc]
+                end
+              end
+            end
+
+          _ ->
+            [token | acc]
+        end
+
+      # Other tokens - keep as is
+      true ->
+        [token | acc]
+    end
+  end
+
+  # Join tokens back together - just concatenate, spacing is already normalized
+  defp join_tokens(tokens) do
+    Enum.join(tokens, "")
+  end
+
+  defp is_word_token?(token), do: String.match?(token, ~r/^\p{L}+/u)
+
+  defp is_punctuation_token?(token) do
+    # Check if token is not a word (letters) and not a space
+    # This includes punctuation, dashes, quotes, etc.
+    not String.match?(token, ~r/^\p{L}+/u) and not String.match?(token, ~r/^\s+$/u)
+  end
+
+  defp is_closing_punctuation_token?(token) do
+    closing_punct = ~r/^[,\.;:!\?\)\]\}\»\›…]+$/
+    String.match?(token, closing_punct)
+  end
+
+  defp is_opening_punctuation_token?(token) do
+    opening_punct = ~r/^[\(\[\{\«\‹¡¿]+$/
+    String.match?(token, opening_punct)
+  end
+
+  defp is_closing_quote_token?(token) do
+    # Match ONLY unambiguous closing quotes: ", », ›
+    # U+201D (right double quotation mark)
+    smart_quote_close = <<226, 128, 157>>
+
+    # Note: straight quotes " and ' are ambiguous - handled separately
+    is_punctuation_token?(token) and
+      (token == smart_quote_close or
+         String.contains?(token, "»") or
+         String.contains?(token, "›"))
+  end
+
+  defp is_opening_quote_token?(token) do
+    # Match ONLY unambiguous opening quotes: ", «, ‹
+    # U+201C (left double quotation mark)
+    smart_quote_open = <<226, 128, 156>>
+
+    # Note: straight quotes " and ' are ambiguous - handled separately
+    is_punctuation_token?(token) and
+      (token == smart_quote_open or
+         String.contains?(token, "«") or
+         String.contains?(token, "‹"))
+  end
+
+  # Straight quotes are ambiguous - we keep space before them
+  # because if there's a space, it's likely an opening quote
+  defp is_straight_quote_token?(token) do
+    token == "\"" or token == "'"
+  end
+
+  # Em dashes, en dashes, and minus signs should have no spaces around them
+  defp is_dash_token?(token) do
+    # U+2014 EM DASH, U+2013 EN DASH, U+2212 MINUS SIGN, U+002D HYPHEN-MINUS
+    String.contains?(token, "—") or
+      String.contains?(token, "–") or
+      String.contains?(token, "−") or
+      (String.contains?(token, "-") and String.length(token) == 1)
   end
 end

@@ -60,6 +60,7 @@ defmodule LanglerWeb.Router do
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
       live "/users/settings/llm", UserLive.LlmSettings, :index
       live "/users/settings/tts", UserLive.TtsSettings, :index
+      live "/users/settings/google-translate", UserLive.GoogleTranslateSettings, :index
       live "/articles", ArticleLive.Index, :index
       live "/articles/recommendations", ArticleLive.Recommendations, :index
       live "/articles/:id", ArticleLive.Show, :show

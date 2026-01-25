@@ -6,6 +6,7 @@ defmodule LanglerWeb.ArticleLive.ShowTest do
 
   alias Langler.Accounts.UserLlmConfig
   alias Langler.Content
+  alias Langler.Content.ArticleImporter
   alias Langler.Repo
   alias LanglerWeb.ArticleLive.Show
   alias Langler.AccountsFixtures
@@ -25,6 +26,69 @@ defmodule LanglerWeb.ArticleLive.ShowTest do
       assert rendered =~ article.title
       assert rendered =~ "Hola"
       assert rendered =~ "Buenos"
+    end
+
+    @tag :external
+    test "normalizes punctuation spacing in rendered article content", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+
+      # Import the real article from El País
+      # This test requires network access and is tagged with :external
+      url =
+        "https://elpais.com/ciencia/2026-01-24/un-beso-esquimal-la-ciencia-explica-el-contacto-nariz-con-nariz-en-los-mamiferos.html"
+
+      assert {:ok, article, _} = ArticleImporter.import_from_url(user, url)
+
+      conn = log_in_user(conn, user)
+
+      {:ok, view, _html} = live(conn, ~p"/articles/#{article}")
+      rendered = render(view)
+
+      # Extract all token text content from spans with id="token-*"
+      document = LazyHTML.from_fragment(rendered)
+      token_spans = LazyHTML.query(document, "span[id^='token-']")
+
+      # Get text content from each token span and join them
+      token_texts = Enum.map(token_spans, &LazyHTML.text/1)
+      article_text = Enum.join(token_texts, "")
+
+      # Normalize whitespace (collapse multiple spaces/newlines to single space for comparison)
+      normalized_text =
+        article_text
+        |> String.replace(~r/\s+/, " ")
+        |> String.trim()
+
+      # Assert that punctuation spacing is correct - no spaces before commas, periods, etc.
+      # Check for patterns like "word ," or "word ." (space before punctuation)
+      refute normalized_text =~ ~r/\w\s+[,\.;:!\?\)\]\}]/
+      # Assert no spaces before closing quotes after words
+      refute normalized_text =~ ~r/\w\s+[""»›]/
+      # Assert no spaces after opening quotes when followed by letters
+      refute normalized_text =~ ~r/[""«‹]\s+\w/
+      # Assert no spaces inside parentheses
+      refute normalized_text =~ ~r/\(\s+/
+      refute normalized_text =~ ~r/\s+\)/
+
+      # Check specific problematic patterns from the article
+      # The text should have proper spacing like "besos ," -> "besos,"
+      # and "catastrófica ", según" -> "catastrófica", según"
+      refute normalized_text =~ "besos ,"
+      refute normalized_text =~ "catastrófica \","
+      refute normalized_text =~ "ciencia \","
+      refute normalized_text =~ "Song ,"
+      refute normalized_text =~ "que ,"
+    end
+
+    test "redirects to /articles with error when article does not exist", %{conn: conn} do
+      user = Langler.AccountsFixtures.user_fixture()
+      conn = log_in_user(conn, user)
+
+      # Try to access a nonexistent article
+      {:error, {:live_redirect, %{to: redirect_path, flash: flash}}} =
+        live(conn, ~p"/articles/999999")
+
+      assert redirect_path == ~p"/articles"
+      assert flash["error"] == "Article not found"
     end
   end
 

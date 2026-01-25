@@ -59,16 +59,66 @@ defmodule LanglerWeb.UserLive.Settings do
             </div>
           </.link>
 
-          <div class="card border border-base-200 bg-base-100 shadow-md opacity-60">
+          <.link
+            navigate={~p"/users/settings/google-translate"}
+            class="card border border-base-200 bg-base-100 shadow-md transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+          >
             <div class="card-body flex flex-row items-center gap-4 p-4">
               <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-secondary/10">
                 <.icon name="hero-language" class="h-6 w-6 text-secondary" />
               </div>
               <div class="flex-1 min-w-0">
-                <h2 class="font-semibold text-base-content">Language Preferences</h2>
-                <p class="text-sm text-base-content/60 truncate">Target and native languages</p>
+                <h2 class="font-semibold text-base-content">Google Translate Settings</h2>
+                <p class="text-sm text-base-content/60 truncate">
+                  Configure Google Translate API key for dictionary lookups
+                </p>
               </div>
+              <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
             </div>
+          </.link>
+        </div>
+
+        <%!-- Dictionary Preferences --%>
+        <div class="rounded-3xl border border-base-200 bg-base-100/90 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-info/10">
+              <.icon name="hero-book-open" class="h-5 w-5 text-info" />
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-base-content">Dictionary Preferences</h2>
+              <p class="text-sm text-base-content/60">Configure how word definitions are looked up</p>
+            </div>
+          </div>
+
+          <div class="divider my-2"></div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-4">
+              <input
+                type="checkbox"
+                id="use-llm-for-definitions"
+                class="toggle toggle-primary"
+                checked={@use_llm_for_definitions}
+                phx-click="toggle_llm_definitions"
+              />
+              <div>
+                <span class="label-text font-medium">Use AI for definitions</span>
+                <p class="text-xs text-base-content/60 mt-0.5">
+                  Use your configured LLM (instead of Google Translate) for word definitions.
+                  Useful for testing or if Google Translate is not configured.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div :if={@use_llm_for_definitions && !@has_llm_config} class="alert alert-warning">
+            <.icon name="hero-exclamation-triangle" class="h-5 w-5" />
+            <span>No LLM configuration found. Please configure your AI Chat settings first.</span>
+          </div>
+
+          <div :if={@use_llm_for_definitions && @has_llm_config} class="alert alert-info">
+            <.icon name="hero-information-circle" class="h-5 w-5" />
+            <span>Word definitions will use your configured LLM provider.</span>
           </div>
         </div>
 
@@ -286,6 +336,11 @@ defmodule LanglerWeb.UserLive.Settings do
     archived = Content.list_archived_articles_for_user(user.id)
     finished = load_finished_articles_with_scores(user.id)
 
+    # Load dictionary preferences
+    user_pref = Accounts.get_user_preference(user.id)
+    use_llm_for_definitions = user_pref && user_pref.use_llm_for_definitions
+    has_llm_config = Accounts.LlmConfig.get_default_config(user.id) != nil
+
     socket =
       socket
       |> assign(:current_email, user.email)
@@ -294,6 +349,8 @@ defmodule LanglerWeb.UserLive.Settings do
       |> assign(:trigger_submit, false)
       |> assign(:archived_articles, archived)
       |> assign(:finished_articles, finished)
+      |> assign(:use_llm_for_definitions, use_llm_for_definitions || false)
+      |> assign(:has_llm_config, has_llm_config)
 
     {:ok, socket}
   end
@@ -396,6 +453,22 @@ defmodule LanglerWeb.UserLive.Settings do
 
       changeset ->
         {:noreply, assign(socket, password_form: to_form(changeset, action: :insert))}
+    end
+  end
+
+  def handle_event("toggle_llm_definitions", _params, socket) do
+    user = socket.assigns.current_scope.user
+    new_value = !socket.assigns.use_llm_for_definitions
+
+    case Accounts.upsert_user_preference(user, %{use_llm_for_definitions: new_value}) do
+      {:ok, _pref} ->
+        {:noreply,
+         socket
+         |> assign(:use_llm_for_definitions, new_value)
+         |> put_flash(:info, "Dictionary preference updated")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update preference")}
     end
   end
 

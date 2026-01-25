@@ -647,10 +647,18 @@ defmodule LanglerWeb.ArticleLive.Index do
   end
 
   defp top_topics(article) do
-    article
-    |> Map.get(:article_topics, [])
-    |> Enum.sort_by(fn topic -> topic_confidence(topic) end, :desc)
-    |> Enum.take(3)
+    case Map.get(article, :article_topics) do
+      %Ecto.Association.NotLoaded{} ->
+        []
+
+      topics when is_list(topics) ->
+        topics
+        |> Enum.sort_by(fn topic -> topic_confidence(topic) end, :desc)
+        |> Enum.take(3)
+
+      _ ->
+        []
+    end
   end
 
   defp topic_confidence(%{confidence: %Decimal{} = confidence}), do: Decimal.to_float(confidence)

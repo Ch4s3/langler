@@ -15,6 +15,10 @@ defmodule Langler.External.Dictionary.Google do
   def translate(term, opts \\ []) when is_binary(term) do
     source_language = opts[:from] || "spanish"
     target_language = opts[:to] || @default_target
+    api_key = opts[:api_key]
+
+    # Note: api_key is optional for backward compatibility in tests
+    # In production, users should configure their own API keys
 
     cache_key =
       {String.downcase(source_language), String.downcase(target_language), String.downcase(term)}
@@ -23,11 +27,11 @@ defmodule Langler.External.Dictionary.Google do
 
     Cache.get_or_store(table, cache_key, [ttl: ttl()], fn ->
       endpoint = dictionary_endpoint()
-      request_dictionary(endpoint, term, source_language, target_language)
+      request_dictionary(endpoint, term, source_language, target_language, api_key)
     end)
   end
 
-  defp request_dictionary(endpoint, term, source, target) do
+  defp request_dictionary(endpoint, term, source, target, api_key) do
     params = [
       {"client", "gtx"},
       {"sl", language_code(source)},
@@ -39,6 +43,9 @@ defmodule Langler.External.Dictionary.Google do
       {"source", "input"},
       {"q", term}
     ]
+
+    # If API key is provided, add it to params (for Google Cloud Translation API)
+    params = if api_key, do: [{"key", api_key} | params], else: params
 
     case Req.get([url: endpoint, params: params, retry: false] ++ req_options()) do
       {:ok, %{status: 200, body: body}} ->

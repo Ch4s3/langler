@@ -6,6 +6,7 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
   use LanglerWeb, :live_component
 
   alias Langler.Accounts
+  alias Langler.Accounts.GoogleTranslateConfig
   alias Langler.External.Dictionary
   alias Langler.External.Dictionary.Wiktionary.Conjugations
   alias Langler.Study
@@ -425,9 +426,30 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
     language = pref.target_language
     target = pref.native_language
 
-    # Dictionary.lookup always returns {:ok, result} but result may have empty definitions
-    {:ok, result} = Dictionary.lookup(query, language: language, target: target)
+    # Pass user_id to Dictionary.lookup for provider resolution
+    # api_key is still passed for backward compatibility but resolver will use user config
+    api_key = GoogleTranslateConfig.get_api_key(user_id)
 
+    # Dictionary.lookup may return {:ok, result} or {:error, reason}
+    case Dictionary.lookup(query,
+           language: language,
+           target: target,
+           api_key: api_key,
+           user_id: user_id
+         ) do
+      {:ok, result} ->
+        handle_search_result(socket, result, language, query)
+
+      {:error, :no_provider_available} ->
+        put_flash(
+          socket,
+          :error,
+          "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+        )
+    end
+  end
+
+  defp handle_search_result(socket, result, language, query) do
     # Check if we got meaningful results
     has_content? =
       result.definitions != [] ||
@@ -440,6 +462,8 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
       word_id = if word, do: word.id, else: nil
 
       # Check if already studying
+      user_id = socket.assigns.current_scope.user.id
+
       already_studying =
         if word_id do
           Study.get_item_by_user_and_word(user_id, word_id) != nil

@@ -21,9 +21,14 @@ ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 FROM ${BUILDER_IMAGE} AS builder
 
 # install build dependencies (Rust needed for NIF compilation)
+# Install rustup for a modern Rust version that supports Cargo lock file version 4
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git rustc cargo \
+  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates \
+  && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && rm -rf /var/lib/apt/lists/*
+
+# Add Rust to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # prepare build dir
 WORKDIR /app

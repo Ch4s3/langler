@@ -6,6 +6,7 @@ defmodule LanglerWeb.StudyLive.Index do
   use LanglerWeb, :live_view
 
   alias Langler.Accounts
+  alias Langler.Accounts.GoogleTranslateConfig
   alias Langler.Content
   alias Langler.External.Dictionary
   alias Langler.External.Dictionary.Wiktionary.Conjugations
@@ -1073,7 +1074,8 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   @impl true
-  def handle_async({:fetch_definitions, item_id}, {:ok, {_item_id, entry, word, flags}}, socket) do
+  def handle_async({:fetch_definitions, item_id}, {:ok, {_item_id, entry, word, flags}}, socket)
+      when is_map(entry) do
     definitions = List.wrap(entry.definitions)
     updates = build_definition_updates(flags, entry, definitions)
 
@@ -1095,6 +1097,36 @@ defmodule LanglerWeb.StudyLive.Index do
       {:error, _} ->
         {:noreply, remove_loading(socket, :definitions_loading, item_id)}
     end
+  end
+
+  def handle_async(
+        {:fetch_definitions, item_id},
+        {:ok, {_item_id, :error, _word, _flags, :no_provider_available}},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(
+       :definitions_loading,
+       MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+     )
+     |> put_flash(
+       :error,
+       "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+     )}
+  end
+
+  def handle_async(
+        {:fetch_definitions, item_id},
+        {:ok, {_item_id, :error, _word, _flags, _reason}},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(
+       :definitions_loading,
+       MapSet.delete(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
+     )}
   end
 
   def handle_async({:fetch_definitions, item_id}, {:exit, reason}, socket) do
@@ -1347,11 +1379,23 @@ defmodule LanglerWeb.StudyLive.Index do
 
   defp blank_term?(term), do: is_nil(term) or term == ""
 
-  defp lookup_dictionary_entry(term, language) do
+  defp lookup_dictionary_entry(term, language, user_id) do
     started_at = System.monotonic_time(:millisecond)
-    {:ok, entry} = Dictionary.lookup(term, language: language, target: "en")
-    duration = System.monotonic_time(:millisecond) - started_at
-    {entry, duration}
+    api_key = GoogleTranslateConfig.get_api_key(user_id)
+
+    case Dictionary.lookup(term,
+           language: language,
+           target: "en",
+           api_key: api_key,
+           user_id: user_id
+         ) do
+      {:ok, entry} ->
+        duration = System.monotonic_time(:millisecond) - started_at
+        {:ok, entry, duration}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   defp build_definition_updates(flags, entry, definitions) do
@@ -1533,14 +1577,21 @@ defmodule LanglerWeb.StudyLive.Index do
     flags = definition_fetch_flags(item.word)
     term = definition_lookup_term(item.word)
 
+    user_id = socket.assigns.current_scope.user.id
+
     socket
     |> assign(
       :definitions_loading,
       MapSet.put(socket.assigns[:definitions_loading] || MapSet.new(), item_id)
     )
     |> start_async({:fetch_definitions, item_id}, fn ->
-      {entry, _duration} = lookup_dictionary_entry(term, item.word.language)
-      {item_id, entry, item.word, flags}
+      case lookup_dictionary_entry(term, item.word.language, user_id) do
+        {:ok, entry, _duration} ->
+          {item_id, entry, item.word, flags}
+
+        {:error, reason} ->
+          {item_id, :error, item.word, flags, reason}
+      end
     end)
   end
 

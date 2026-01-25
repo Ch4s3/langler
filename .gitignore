@@ -48,3 +48,5 @@ _build/assay
 priv/static/audio/
 
 /node_modules/
+
+fly.secrets.local

@@ -103,7 +103,8 @@ defmodule Langler.External.DictionaryTest do
       Req.Test.json(conn, response)
     end)
 
-    {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
+    {:ok, entry} =
+      Dictionary.lookup("hola", language: "spanish", target: "en", api_key: "test_key")
 
     assert entry.word == "hola"
     assert entry.language == "spanish"
@@ -144,7 +145,8 @@ defmodule Langler.External.DictionaryTest do
       Req.Test.json(conn, response)
     end)
 
-    {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
+    {:ok, entry} =
+      Dictionary.lookup("hola", language: "spanish", target: "en", api_key: "test_key")
 
     assert entry.word == "hola"
     assert entry.language == "spanish"
@@ -214,7 +216,9 @@ defmodule Langler.External.DictionaryTest do
       Req.Test.json(conn, response)
     end)
 
-    {:ok, entry} = Dictionary.lookup("hablando", language: "spanish", target: "en")
+    {:ok, entry} =
+      Dictionary.lookup("hablando", language: "spanish", target: "en", api_key: "test_key")
+
     assert entry.translation == "to speak"
     assert entry.definitions == ["Speak (verb) — hablar, decir, charlar"]
   end
@@ -260,7 +264,9 @@ defmodule Langler.External.DictionaryTest do
       Req.Test.json(conn, response)
     end)
 
-    {:ok, entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
+    {:ok, entry} =
+      Dictionary.lookup("hola", language: "spanish", target: "en", api_key: "test_key")
+
     assert entry.translation == "hello"
 
     :ets.delete(:dictionary_entry_cache)
@@ -269,7 +275,9 @@ defmodule Langler.External.DictionaryTest do
       flunk("dictionary API should not be hit when loading from persistent cache")
     end)
 
-    {:ok, cached_entry} = Dictionary.lookup("hola", language: "spanish", target: "en")
+    {:ok, cached_entry} =
+      Dictionary.lookup("hola", language: "spanish", target: "en", api_key: "test_key")
+
     assert cached_entry.translation == "hello"
   end
 

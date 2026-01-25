@@ -6,6 +6,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   use LanglerWeb, :live_component
 
   alias Ecto.NoResultsError
+  alias Langler.Accounts.GoogleTranslateConfig
   alias Langler.Accounts.LlmConfig
   alias Langler.Chat.Session
   alias Langler.Content
@@ -457,32 +458,39 @@ defmodule LanglerWeb.ChatLive.Drawer do
     word_id = Map.get(params, "word_id")
     trimmed_word = word |> to_string() |> String.trim()
     normalized = Vocabulary.normalize_form(trimmed_word)
-    {:ok, entry} = Dictionary.lookup(trimmed_word, language: language, target: "en")
-    {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
 
-    payload =
-      entry
-      |> Map.take([
-        :lemma,
-        :part_of_speech,
-        :pronunciation,
-        :definitions,
-        :translation,
-        :source_url
-      ])
-      |> Map.put_new(:definitions, [])
-      |> Map.merge(%{
-        dom_id: dom_id,
-        word: trimmed_word,
-        language: language,
-        normalized_form: normalized,
-        context: nil,
-        word_id: resolved_word && resolved_word.id,
-        studied: studied?,
-        rating_required: false
-      })
+    user_id = socket.assigns.current_scope.user.id
+    api_key = GoogleTranslateConfig.get_api_key(user_id)
 
-    {:noreply, push_event(socket, "word-data", payload)}
+    case Dictionary.lookup(trimmed_word,
+           language: language,
+           target: "en",
+           api_key: api_key,
+           user_id: user_id
+         ) do
+      {:ok, entry} ->
+        {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
+
+        handle_successful_lookup_chat(
+          entry,
+          resolved_word,
+          studied?,
+          trimmed_word,
+          normalized,
+          language,
+          dom_id,
+          word_id,
+          socket
+        )
+
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+         )}
+    end
   end
 
   @impl true
@@ -819,6 +827,42 @@ defmodule LanglerWeb.ChatLive.Drawer do
             {:noreply, socket}
         end
     end
+  end
+
+  defp handle_successful_lookup_chat(
+         entry,
+         resolved_word,
+         studied?,
+         trimmed_word,
+         normalized,
+         language,
+         dom_id,
+         _word_id,
+         socket
+       ) do
+    payload =
+      entry
+      |> Map.take([
+        :lemma,
+        :part_of_speech,
+        :pronunciation,
+        :definitions,
+        :translation,
+        :source_url
+      ])
+      |> Map.put_new(:definitions, [])
+      |> Map.merge(%{
+        dom_id: dom_id,
+        word: trimmed_word,
+        language: language,
+        normalized_form: normalized,
+        context: nil,
+        word_id: resolved_word && resolved_word.id,
+        studied: studied?,
+        rating_required: false
+      })
+
+    {:noreply, push_event(socket, "word-data", payload)}
   end
 
   defp ensure_session_ready(socket, user, message) do

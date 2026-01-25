@@ -85,6 +85,179 @@ defmodule Langler.Content.ArticleImporterTest do
     end
   end
 
+  describe "punctuation spacing normalization" do
+    test "removes spaces before commas and periods", %{importer: importer, user: user} do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>El anfitrión , al ostentar la presidencia , subrayó que el diálogo es " el único camino " .</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/punctuation-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      # Note: Space before opening quote is preserved when preceded by a letter
+      assert sentence_content ==
+               "El anfitrión, al ostentar la presidencia, subrayó que el diálogo es \"el único camino\"."
+    end
+
+    test "handles Spanish inverted marks correctly", %{importer: importer, user: user} do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>¿ pregunta ? ¡ exclamación !</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/inverted-marks-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+
+      # Note: Sentence splitting may separate "¿pregunta?" and "¡exclamación!" into different sentences
+      # Check that punctuation spacing is correct in each sentence
+      first_sentence = Enum.at(sentences, 0).content
+      assert first_sentence == "¿pregunta?"
+
+      # If there's a second sentence, check it too
+      if length(sentences) > 1 do
+        second_sentence = Enum.at(sentences, 1).content
+        assert second_sentence == "¡exclamación!"
+      end
+    end
+
+    test "removes spaces inside guillemets", %{importer: importer, user: user} do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>Dijo « texto » correctamente.</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/guillemets-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      assert sentence_content == "Dijo «texto» correctamente."
+    end
+
+    test "normalizes ellipses", %{importer: importer, user: user} do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>Palabra ... siguiente.</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/ellipsis-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      assert sentence_content == "Palabra… siguiente."
+    end
+
+    test "removes spaces after opening punctuation", %{importer: importer, user: user} do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>( texto ) [ otro ] { más }</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/opening-punct-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      assert sentence_content == "(texto) [otro] {más}"
+    end
+
+    test "ensures space after punctuation when followed by letter", %{
+      importer: importer,
+      user: user
+    } do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>Palabra,otra palabra;siguiente</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/space-after-punct-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      assert sentence_content == "Palabra, otra palabra; siguiente"
+    end
+
+    test "handles complex sentence with multiple punctuation issues", %{
+      importer: importer,
+      user: user
+    } do
+      Req.Test.expect(importer, fn conn ->
+        body = """
+        <html>
+          <body>
+            <p>El anfitrión de la ceremonia , al ostentar la presidencia temporal de Mercosur , el paraguayo Santiago Peña , subrayó que el diálogo es " el único camino " .</p>
+          </body>
+        </html>
+        """
+
+        Req.Test.html(conn, body)
+      end)
+
+      url = article_url("/complex-punctuation-test")
+      assert {:ok, article, :new} = ArticleImporter.import_from_url(user, url)
+
+      sentences = Content.list_sentences(article)
+      sentence_content = Enum.at(sentences, 0).content
+
+      assert sentence_content ==
+               "El anfitrión de la ceremonia, al ostentar la presidencia temporal de Mercosur, el paraguayo Santiago Peña, subrayó que el diálogo es \"el único camino\"."
+    end
+  end
+
   defp article_url(path) do
     "https://article-importer.test#{path}"
   end
