@@ -78,8 +78,10 @@ defmodule Langler.External.Dictionary.PersistentCache do
     end)
   end
 
+  # sobelow_skip ["Misc.BinToTerm"]
+  # The :safe option is used to prevent arbitrary atom creation and code execution
   defp decode(binary) do
-    :erlang.binary_to_term(binary)
+    :erlang.binary_to_term(binary, [:safe])
   end
 
   defp key_hash(key_bin), do: :erlang.phash2(key_bin)
