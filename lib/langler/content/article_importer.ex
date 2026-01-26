@@ -448,15 +448,19 @@ defmodule Langler.Content.ArticleImporter do
         content
 
       false ->
-        # Normalize invalid sequences to spaces to avoid raising
-        String.replace_invalid(content, " ")
+        # Scrub invalid UTF-8 sequences using String.chunk
+        # Keep only chunks that are valid UTF-8
+        content
+        |> String.chunk(:valid)
+        |> Enum.filter(&(is_binary(&1) and String.valid?(&1)))
+        |> Enum.join(" ")
     end
   rescue
     ArgumentError ->
       # If content is not a binary, convert to string first
       content
       |> to_string()
-      |> String.replace_invalid(" ")
+      |> ensure_utf8()
   end
 
   defp ensure_utf8(content) when is_list(content) do

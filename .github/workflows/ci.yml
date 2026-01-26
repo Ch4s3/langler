@@ -71,8 +71,8 @@ jobs:
       - name: Install Elixir dependencies
         run: mix deps.get
 
-      - name: Compile dependencies
-        run: mix deps.compile
+      - name: Compile app
+        run: mix compile --warnings-as-errors
 
       - name: Prepare assets
         run: mix assets.setup
@@ -99,6 +99,7 @@ jobs:
 
       - name: Run tests with coverage gate
         shell: bash
+
         run: mix test --cover
 
   deploy-to-fly:
