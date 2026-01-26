@@ -13,7 +13,6 @@ jobs:
     env:
       MIX_ENV: test
       OTP_VERSION: 28.3
-      PGHOST: postgres
     services:
       postgres:
         image: postgres:15
@@ -21,6 +20,8 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: langler_test
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
