@@ -309,7 +309,9 @@ defmodule LanglerWeb.ArticleLive.Show do
                           ]
                       ]
                     }
-                  >{token.text}</span> <%!-- token.text must be inline to prevent HEEx whitespace --%>
+                  >
+                    {token.text}
+                  </span> <%!-- token.text must be inline to prevent HEEx whitespace --%>
                 </p>
               </div>
             </div>
