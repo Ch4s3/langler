@@ -287,31 +287,16 @@ defmodule LanglerWeb.ArticleLive.Show do
                   class="mb-4 break-words last:mb-0"
                   style="font-size: 0;"
                 >
-                  <span
+                  <.token_span
                     :for={
                       token <- tokenize_sentence(sentence.content, sentence.word_occurrences || [])
                     }
-                    data-word={token.lexical? && token.text}
-                    data-sentence-id={sentence.id}
-                    data-language={@article.language}
-                    data-word-id={token.word && token.word.id}
-                    phx-hook={token.lexical? && "WordTooltip"}
-                    id={"token-#{sentence.id}-#{token.id}"}
-                    class={
-                      [
-                        "inline align-baseline text-reading",
-                        # Restore font size (parent has font-size: 0 to collapse whitespace between spans)
-                        token.lexical? &&
-                          [
-                            "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200 hover:underline hover:underline-offset-2 hover:decoration-primary/60 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
-                            studied_token?(token, @studied_word_ids, @studied_forms) &&
-                              "underline decoration-primary/40 underline-offset-2 text-primary/90"
-                          ]
-                      ]
-                    }
-                  >
-                    {token.text}
-                  </span> <%!-- token.text must be inline to prevent HEEx whitespace --%>
+                    token={token}
+                    sentence_id={sentence.id}
+                    language={@article.language}
+                    studied_word_ids={@studied_word_ids}
+                    studied_forms={@studied_forms}
+                  />
                 </p>
               </div>
             </div>
@@ -1016,6 +1001,84 @@ defmodule LanglerWeb.ArticleLive.Show do
     # Only return true for tokens that contain letters and are not just spaces
     # This ensures space tokens don't get word highlighting
     String.match?(text, ~r/\p{L}/u) and not String.match?(text, ~r/^\s+$/u)
+  end
+
+  # Build token span programmatically to avoid HEEx whitespace issues.
+  # HEEx inserts whitespace when content is on a separate line from the tag,
+  # but building the HTML as iodata avoids this regardless of code formatting.
+  defp token_span(assigns) do
+    assigns = assign(assigns, :html, build_token_html(assigns))
+
+    ~H"{@html}"
+  end
+
+  defp build_token_html(assigns) do
+    token = assigns.token
+    attrs = build_token_attrs(assigns)
+    text = escape_html(token.text)
+
+    Phoenix.HTML.raw([
+      "<span",
+      attrs,
+      ">",
+      text,
+      "</span>"
+    ])
+  end
+
+  defp build_token_attrs(assigns) do
+    token = assigns.token
+
+    class =
+      token_class(token, assigns.studied_word_ids, assigns.studied_forms) |> flatten_classes()
+
+    [
+      ~s( id="token-#{assigns.sentence_id}-#{token.id}"),
+      ~s( class="#{class}"),
+      ~s( data-sentence-id="#{assigns.sentence_id}"),
+      ~s( data-language="#{assigns.language}"),
+      if(token.lexical?, do: ~s( data-word="#{escape_attr(token.text)}"), else: ""),
+      if(token.word, do: ~s( data-word-id="#{token.word.id}"), else: ""),
+      if(token.lexical?, do: ~s( phx-hook="WordTooltip"), else: "")
+    ]
+  end
+
+  defp flatten_classes(classes) when is_list(classes) do
+    classes
+    |> List.flatten()
+    |> Enum.filter(& &1)
+    |> Enum.join(" ")
+  end
+
+  defp flatten_classes(class), do: class
+
+  defp escape_html(text) do
+    text
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+  end
+
+  defp escape_attr(text) do
+    text
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+  end
+
+  defp token_class(token, studied_word_ids, studied_forms) do
+    [
+      "inline align-baseline text-reading",
+      token.lexical? && lexical_token_class(token, studied_word_ids, studied_forms)
+    ]
+  end
+
+  defp lexical_token_class(token, studied_word_ids, studied_forms) do
+    [
+      "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200",
+      "hover:underline hover:underline-offset-2 hover:decoration-primary/60 hover:text-primary",
+      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
+      studied_token?(token, studied_word_ids, studied_forms) &&
+        "underline decoration-primary/40 underline-offset-2 text-primary/90"
+    ]
   end
 
   defp studied_token?(token, studied_ids, studied_forms) do
