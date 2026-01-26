@@ -20,11 +20,13 @@ ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 
 FROM ${BUILDER_IMAGE} AS builder
 
-# install build dependencies (Rust needed for NIF compilation)
+# install build dependencies (Rust needed for NIF compilation, Node.js for assets)
 # Install rustup for a modern Rust version that supports Cargo lock file version 4
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates \
+  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
   && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+  && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 
 # Add Rust to PATH
@@ -50,6 +52,12 @@ RUN mkdir config
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
+
+# install JavaScript dependencies
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
+
+# install tailwind and esbuild
 RUN mix assets.setup
 
 COPY priv priv
@@ -58,9 +66,9 @@ COPY native native
 
 # Compile the release
 RUN mix compile
-COPY assets assets
 
-# compile assets
+# copy assets and compile them
+COPY assets assets
 RUN mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
