@@ -13,6 +13,18 @@ jobs:
     env:
       MIX_ENV: test
       OTP_VERSION: 28.3
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: langler_test
+        options: >-
+          --health-cmd pg_isready -U postgres
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +38,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Wait for Postgres service
+        run: |
+          until pg_isready -h localhost -U postgres; do
+            sleep 1
+          done
 
       - name: Cache Mix deps
         uses: actions/cache@v4
