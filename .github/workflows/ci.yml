@@ -13,6 +13,7 @@ jobs:
     env:
       MIX_ENV: test
       OTP_VERSION: 28.3
+      PGHOST: postgres
     services:
       postgres:
         image: postgres:15
