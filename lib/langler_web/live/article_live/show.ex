@@ -1043,14 +1043,12 @@ defmodule LanglerWeb.ArticleLive.Show do
     ]
   end
 
-  defp flatten_classes(classes) when is_list(classes) do
+  defp flatten_classes(classes) do
     classes
     |> List.flatten()
     |> Enum.filter(& &1)
     |> Enum.join(" ")
   end
-
-  defp flatten_classes(class), do: class
 
   defp escape_html(text) do
     text
