@@ -30,8 +30,10 @@ WORKDIR /app
 ENV MIX_ENV="prod"
 
 # Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
-# Set kernel parameters to disable user process requirement
-ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false -kernel logger_level warning"
+# Create sys.config to disable user process requirement
+RUN mkdir -p /tmp/erl_config && \
+    echo '[{kernel, [{start_user, false}]}].' > /tmp/erl_config/sys.config
+ENV ERL_FLAGS="-config /tmp/erl_config/sys -kernel prevent_overlapping_partitions false"
 ENV ERL_CRASH_DUMP=/dev/null
 
 # Check if hex and rebar are already installed, install if not
