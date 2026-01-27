@@ -24,8 +24,9 @@ RUN apt-get update \
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Build and install Elixir from source
-RUN git clone --depth 1 --branch ${ELIXIR_VERSION} https://github.com/elixir-lang/elixir.git /tmp/elixir \
+RUN git clone --depth 1 https://github.com/elixir-lang/elixir.git /tmp/elixir \
   && cd /tmp/elixir \
+  && git checkout v${ELIXIR_VERSION} \
   && make clean test \
   && make install PREFIX=/usr/local \
   && rm -rf /tmp/elixir
