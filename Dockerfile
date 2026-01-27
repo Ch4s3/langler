@@ -22,6 +22,8 @@ RUN apt-get update \
 
 # Add Rust and asdf to PATH
 ENV PATH="/root/.cargo/bin:/root/.asdf/shims:/root/.asdf/bin:${PATH}"
+ENV ASDF_DIR=/root/.asdf
+ENV ASDF_DATA_DIR=/root/.asdf
 
 # Install Elixir using asdf (handles version management better)
 RUN git clone https://github.com/asdf-vm/asdf.git /root/.asdf --branch v0.14.0 \
@@ -35,9 +37,9 @@ ENV ASDF_DIR=/root/.asdf
 # prepare build dir
 WORKDIR /app
 
-# install hex + rebar
-RUN mix local.hex --force \
-  && mix local.rebar --force
+# install hex + rebar (ensure asdf is in PATH)
+RUN . /root/.asdf/asdf.sh && mix local.hex --force \
+  && . /root/.asdf/asdf.sh && mix local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
