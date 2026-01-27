@@ -44,7 +44,7 @@ RUN mkdir config
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN mix deps.clean --all && mix deps.compile
 
 # install JavaScript dependencies
 COPY package.json package-lock.json ./
