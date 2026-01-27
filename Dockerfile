@@ -1,29 +1,20 @@
 # Find eligible builder and runner images on Docker Hub. We use Ubuntu/Debian
 # instead of Alpine to avoid DNS resolution issues in production.
 #
-# https://hub.docker.com/r/hexpm/elixir/tags?name=debian
-# https://hub.docker.com/_/debian/tags
+# Building Elixir from source since 1.20.0-rc.1 with OTP 28.3 isn't available as pre-built image
 #
-# This file is based on these images:
-#
-#   - https://hub.docker.com/r/hexpm/elixir/tags - for the build image
-#   - https://hub.docker.com/_/debian/tags?name=bookworm - for the release image
-#   - https://pkgs.org/ - resource for finding needed packages
-#   - Ex: docker.io/hexpm/elixir:<elixir>-erlang-<otp>-debian-<debian>-slim
-#
-ARG ELIXIR_VERSION=1.15.7
-ARG OTP_VERSION=26.2
+ARG ELIXIR_VERSION=1.20.0-rc.1
+ARG OTP_VERSION=28.3
 ARG DEBIAN_VERSION=bookworm-20260112-slim
 
-ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 
-FROM ${BUILDER_IMAGE} AS builder
+FROM docker.io/hexpm/erlang:${OTP_VERSION}-debian-${DEBIAN_VERSION} AS builder
 
-# install build dependencies (Rust needed for NIF compilation, Node.js for assets)
+# install build dependencies (Rust needed for NIF compilation, Node.js for assets, Elixir build deps)
 # Install rustup for a modern Rust version that supports Cargo lock file version 4
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
+  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg unzip \
   && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y nodejs \
@@ -31,6 +22,13 @@ RUN apt-get update \
 
 # Add Rust to PATH
 ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Build and install Elixir from source
+RUN git clone --depth 1 --branch ${ELIXIR_VERSION} https://github.com/elixir-lang/elixir.git /tmp/elixir \
+  && cd /tmp/elixir \
+  && make clean test \
+  && make install PREFIX=/usr/local \
+  && rm -rf /tmp/elixir
 
 # prepare build dir
 WORKDIR /app

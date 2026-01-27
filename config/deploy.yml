@@ -1,0 +1,46 @@
+service: langler
+image: ghcr.io/${GITHUB_REPOSITORY}
+
+servers:
+  web:
+    - 142.93.178.180
+    labels:
+      traefik.http.routers.langler.rule: PathPrefix(`/`)
+
+proxy:
+  ssl: false
+  host: 142.93.178.180
+  healthcheck:
+    path: /
+    interval: 3
+
+registry:
+  server: ghcr.io
+  username:
+    - KAMAL_REGISTRY_USERNAME
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  clear:
+    PHX_SERVER: "true"
+    PHX_HOST: 142.93.178.180
+    PORT: "4000"
+    POOL_SIZE: "5"
+  secret:
+    - SECRET_KEY_BASE
+    - DATABASE_URL
+
+accessories:
+  db:
+    image: postgres:15
+    host: 142.93.178.180
+    port: 5432
+    env:
+      clear:
+        POSTGRES_USER: langler
+        POSTGRES_DB: langler_prod
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgresql/data
