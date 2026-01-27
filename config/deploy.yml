@@ -3,7 +3,8 @@ image: ghcr.io/ch4s3/langler
 
 builder:
   arch: amd64
-  remote: 142.93.178.180
+  local: false
+  remote: ssh://root@142.93.178.180
 
 servers:
   web:
