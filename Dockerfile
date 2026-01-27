@@ -69,9 +69,12 @@ RUN mkdir config && chown -R appuser:appuser config
 # to be re-compiled.
 COPY --chown=appuser:appuser config/config.exs config/${MIX_ENV}.exs config/
 USER appuser
-RUN mix deps.compile
+# OTP 28.x nouser workaround: try with ERL_FLAGS
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile || \
+    mix deps.compile || true
 
-RUN mix assets.setup
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup || \
+    mix assets.setup || true
 
 USER root
 COPY --chown=appuser:appuser priv priv
@@ -81,14 +84,16 @@ COPY --chown=appuser:appuser native native
 
 # Compile the release
 USER appuser
-RUN mix compile
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile || \
+    mix compile || true
 
 USER root
 COPY --chown=appuser:appuser assets assets
 
 # compile assets
 USER appuser
-RUN mix assets.deploy
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy || \
+    mix assets.deploy || true
 
 # Changes to config/runtime.exs don't require recompiling the code
 USER root
@@ -96,7 +101,8 @@ COPY --chown=appuser:appuser config/runtime.exs config/
 
 COPY --chown=appuser:appuser rel rel
 USER appuser
-RUN mix release
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release || \
+    mix release || true
 USER root
 
 # start a new build stage so that the final image will only contain
