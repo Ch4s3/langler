@@ -45,16 +45,16 @@ ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN /usr/local/bin/mix-safe deps.get --only $MIX_ENV
+RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN /usr/local/bin/mix-safe deps.compile
+RUN mix deps.compile
 
-RUN /usr/local/bin/mix-safe assets.setup
+RUN mix assets.setup
 
 COPY priv priv
 
@@ -62,18 +62,18 @@ COPY lib lib
 COPY native native
 
 # Compile the release
-RUN /usr/local/bin/mix-safe compile
+RUN mix compile
 
 COPY assets assets
 
 # compile assets
-RUN /usr/local/bin/mix-safe assets.deploy
+RUN mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
 COPY rel rel
-RUN /usr/local/bin/mix-safe release
+RUN mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
