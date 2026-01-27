@@ -35,13 +35,18 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# Skip hex/rebar installation - they may already be installed or mix will fetch hex automatically
-# OTP 28.3.1 has a known nouser issue with mix commands in Docker
-# This is a known issue: https://github.com/erlang/otp/issues/10355
-# The workaround is to skip mix local.hex and let mix fetch hex when needed
+# Create a user for OTP 28.x (fixes nouser error)
+# OTP 28.x requires a user process to be available
+RUN useradd -m -s /bin/bash appuser
 
 # set build ENV
 ENV MIX_ENV="prod"
+
+# install hex + rebar as the appuser
+USER appuser
+RUN mix local.hex --force \
+  && mix local.rebar --force
+USER root
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
