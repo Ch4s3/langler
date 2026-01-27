@@ -20,15 +20,16 @@ RUN apt-get update \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 
-# Add Rust to PATH
-ENV PATH="/root/.cargo/bin:${PATH}"
+# Add Rust and asdf to PATH
+ENV PATH="/root/.cargo/bin:/root/.asdf/shims:/root/.asdf/bin:${PATH}"
 
-# Build and install Elixir from source
-RUN git clone --depth 1 --branch v1.20.0-rc.1 https://github.com/elixir-lang/elixir.git /tmp/elixir \
-  && cd /tmp/elixir \
-  && make clean compile \
-  && make install PREFIX=/usr/local \
-  && rm -rf /tmp/elixir
+# Install Elixir using asdf (handles version management better)
+RUN git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0 \
+  && . ~/.asdf/asdf.sh \
+  && asdf plugin add elixir \
+  && asdf install elixir 1.20.0-rc.1-otp-28 \
+  && asdf global elixir 1.20.0-rc.1-otp-28 \
+  && echo '. ~/.asdf/asdf.sh' >> ~/.bashrc
 
 # prepare build dir
 WORKDIR /app
