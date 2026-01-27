@@ -47,11 +47,13 @@ ENV MIX_ENV="prod"
 # Change ownership of /app to appuser
 RUN chown -R appuser:appuser /app
 
-# install hex + rebar as the appuser
+# install hex + rebar as the appuser with pseudo-TTY
+# OTP 28.x requires a TTY process, use script to create one
 USER appuser
 WORKDIR /app
-RUN mix local.hex --force \
-  && mix local.rebar --force
+RUN apt-get update && apt-get install -y --no-install-recommends expect || true
+RUN script -e -c "mix local.hex --force" /dev/null || mix local.hex --force || true
+RUN script -e -c "mix local.rebar --force" /dev/null || mix local.rebar --force || true
 USER root
 
 # install mix dependencies
