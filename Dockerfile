@@ -35,32 +35,34 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# Patch mix script to use -noshell -noinput flags to avoid nouser error
-# OTP 28.3.1 has a known nouser issue in Docker
-RUN sed -i 's|exec elixir|exec elixir -noshell -noinput|g' /usr/local/bin/mix || \
-    (cp /usr/local/bin/mix /usr/local/bin/mix.orig && \
-     sed 's|exec elixir|exec elixir -noshell -noinput|g' /usr/local/bin/mix.orig > /usr/local/bin/mix && \
-     chmod +x /usr/local/bin/mix)
+# Create wrapper script to run mix with proper Erlang flags
+# OTP 28.3.1 has a known nouser issue in Docker - workaround by wrapping elixir
+RUN echo '#!/bin/sh' > /usr/local/bin/elixir-safe && \
+    echo 'exec /usr/local/bin/elixir -noshell -noinput "$@"' >> /usr/local/bin/elixir-safe && \
+    chmod +x /usr/local/bin/elixir-safe && \
+    echo '#!/usr/bin/env elixir-safe' > /usr/local/bin/mix-safe && \
+    cat /usr/local/bin/mix >> /usr/local/bin/mix-safe && \
+    chmod +x /usr/local/bin/mix-safe
 
-# install hex + rebar
-RUN mix local.hex --force \
-  && mix local.rebar --force
+# install hex + rebar using the safe wrapper
+RUN /usr/local/bin/mix-safe local.hex --force \
+  && /usr/local/bin/mix-safe local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+RUN /usr/local/bin/mix-safe deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN /usr/local/bin/mix-safe deps.compile
 
-RUN mix assets.setup
+RUN /usr/local/bin/mix-safe assets.setup
 
 COPY priv priv
 
@@ -68,18 +70,18 @@ COPY lib lib
 COPY native native
 
 # Compile the release
-RUN mix compile
+RUN /usr/local/bin/mix-safe compile
 
 COPY assets assets
 
 # compile assets
-RUN mix assets.deploy
+RUN /usr/local/bin/mix-safe assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
 COPY rel rel
-RUN mix release
+RUN /usr/local/bin/mix-safe release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
