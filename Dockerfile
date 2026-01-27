@@ -36,28 +36,25 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app
 
 # install hex + rebar
-# OTP 28.3.1 has a known nouser issue with mix local.hex in Docker
-# Try installing hex archive directly to bypass the issue
-RUN curl -L https://github.com/hexpm/hex/releases/latest/download/hex.ez -o /tmp/hex.ez && \
-    mix archive.install /tmp/hex.ez --force && \
-    rm /tmp/hex.ez && \
-    mix local.rebar --force
+# OTP 28.3.1 has a known nouser issue - set ERL_FLAGS in the command
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix local.hex --force \
+  && ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile
 
-RUN mix assets.setup
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup
 
 COPY priv priv
 
@@ -65,18 +62,18 @@ COPY lib lib
 COPY native native
 
 # Compile the release
-RUN mix compile
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile
 
 COPY assets assets
 
 # compile assets
-RUN mix assets.deploy
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
 COPY rel rel
-RUN mix release
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
