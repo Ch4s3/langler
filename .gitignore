@@ -50,3 +50,5 @@ priv/static/audio/
 /node_modules/
 
 fly.secrets.local
+
+.kamal/secrets

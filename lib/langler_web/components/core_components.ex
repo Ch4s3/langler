@@ -678,16 +678,16 @@ defmodule LanglerWeb.CoreComponents do
 
   def card_rating_mobile(assigns) do
     ~H"""
-    <div class="flex flex-col gap-4 -mx-3 -mb-3 w-[calc(100%+24px)] flex-[5] sm:flex-none">
+    <div class="flex flex-col gap-4 w-full md:flex-none">
       <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60 text-center pt-2">
         Rate this card
       </p>
-      <div class="grid grid-cols-2 gap-4 px-4 pb-4">
+      <div class="grid grid-cols-2 gap-4 px-4 pb-4 md:grid-cols-4 md:px-0 md:pb-0">
         <button
           :for={button <- @buttons}
           type="button"
           class={[
-            "btn font-semibold text-white transition-all duration-200 h-20 rounded-2xl text-base",
+            "btn font-semibold text-white transition-all duration-200 h-20 w-full rounded-2xl text-base",
             "hover:brightness-110 active:scale-[0.96]",
             "focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary/40",
             "phx-click-loading:opacity-70 phx-click-loading:cursor-wait",

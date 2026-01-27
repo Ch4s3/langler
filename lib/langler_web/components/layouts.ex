@@ -112,20 +112,18 @@ defmodule LanglerWeb.Layouts do
                     Theme
                   </li>
                   <li class="px-4 pb-3">
-                    <div class="space-y-2">
+                    <div class="flex flex-wrap items-center justify-center gap-2 lg:flex-col">
                       <%= for option <- theme_options() do %>
                         <button
                           type="button"
                           phx-click={JS.dispatch("phx:set-theme")}
                           data-theme={option.name}
-                          class="flex items-center justify-between gap-3 rounded-lg border border-base-200 bg-base-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/80 transition hover:border-primary/60 hover:bg-base-200 focus-visible:ring focus-visible:ring-primary/30"
+                          class="flex h-10 w-10 items-center justify-center gap-3 rounded-lg border border-base-200 bg-base-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/80 transition hover:border-primary/60 hover:bg-base-200 focus-visible:ring focus-visible:ring-primary/30 lg:w-full lg:justify-between"
                           onclick="this.closest('.dropdown').removeAttribute('open')"
                         >
-                          <span class="flex items-center gap-2">
-                            <span class={"h-6 w-6 rounded-full bg-gradient-to-br #{option.gradient}"}></span>
-                            <span class="text-[0.65rem]">{option.label}</span>
-                          </span>
-                          <span class="text-[0.5rem] text-base-content/50">Apply</span>
+                          <span class={"h-6 w-6 aspect-square shrink-0 rounded-full bg-gradient-to-br #{option.gradient}"}></span>
+                          <span class="hidden lg:inline text-[0.65rem]">{option.label}</span>
+                          <span class="hidden lg:inline text-[0.5rem] text-base-content/50">Apply</span>
                         </button>
                       <% end %>
                     </div>

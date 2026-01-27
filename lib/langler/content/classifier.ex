@@ -58,10 +58,12 @@ defmodule Langler.Content.Classifier do
   end
 
   defp classify_with_model(model_json, content) do
-    case ClassifierNif.classify(content, model_json) do
-      result when is_map(result) -> format_ml_topics(result)
-      {:error, :nif_not_loaded} -> {:error, :nif_not_loaded}
-      other -> {:error, other}
+    result = ClassifierNif.classify(content, model_json)
+
+    cond do
+      is_map(result) -> format_ml_topics(result)
+      result == {:error, :nif_not_loaded} -> {:error, :nif_not_loaded}
+      true -> {:error, result}
     end
   end
 
@@ -116,17 +118,19 @@ defmodule Langler.Content.Classifier do
           }
         end)
 
-      case ClassifierNif.train(formatted_data) do
-        model_json when is_binary(model_json) ->
-          # Store model in ETS
-          store_model(language, model_json)
-          {:ok, model_json}
+      result = ClassifierNif.train(formatted_data)
 
-        {:error, :nif_not_loaded} ->
+      cond do
+        is_binary(result) ->
+          # Store model in ETS
+          store_model(language, result)
+          {:ok, result}
+
+        result == {:error, :nif_not_loaded} ->
           {:error, :nif_not_loaded}
 
-        other ->
-          {:error, other}
+        true ->
+          {:error, result}
       end
     end
   end

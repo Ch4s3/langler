@@ -21,7 +21,6 @@ ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 FROM ${BUILDER_IMAGE} AS builder
 
 # install build dependencies (Rust needed for NIF compilation, Node.js for assets)
-# Install rustup for a modern Rust version that supports Cargo lock file version 4
 RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
   && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
@@ -35,74 +34,48 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# Create a user for OTP 28.x (fixes nouser error)
-# OTP 28.x requires a user process to be available
-# Also create a PTY device for the user process
-RUN useradd -m -s /bin/bash appuser && \
-    mkdir -p /home/appuser/.mix && \
-    chown -R appuser:appuser /home/appuser && \
-    mknod -m 666 /dev/ptmx c 5 2 || true && \
-    mkdir -p /dev/pts && \
-    mount -t devpts -o gid=5,mode=620 devpts /dev/pts || true
-
 # set build ENV
 ENV MIX_ENV="prod"
 
-# Change ownership of /app to appuser
-RUN chown -R appuser:appuser /app
-
-# Skip hex/rebar installation - OTP 28.x has nouser issue
-# Mix will attempt to fetch hex automatically when needed
-# If that fails, we'll need to work around it
-USER appuser
-WORKDIR /app
-# Just ensure the mix directory exists
-RUN mkdir -p ~/.mix/archives || true
-USER root
+# install hex + rebar
+RUN mix local.hex --force && \
+    mix local.rebar --force
 
 # install mix dependencies
-COPY --chown=appuser:appuser mix.exs mix.lock ./
-USER appuser
-# OTP 28.x nouser workaround: try with ERL_FLAGS
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV
-USER root
-RUN mkdir config && chown -R appuser:appuser config
+COPY mix.exs mix.lock ./
+RUN mix deps.get --only $MIX_ENV
+RUN mkdir -p config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
-COPY --chown=appuser:appuser config/config.exs config/${MIX_ENV}.exs config/
-USER appuser
-# OTP 28.x nouser workaround: use ERL_FLAGS
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile
+COPY config/config.exs config/${MIX_ENV}.exs config/
+RUN mix deps.compile
 
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup
+RUN mix assets.setup
 
-USER root
-COPY --chown=appuser:appuser priv priv
+COPY priv priv
 
-COPY --chown=appuser:appuser lib lib
-COPY --chown=appuser:appuser native native
+COPY lib lib
+COPY native native
 
 # Compile the release
-USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile
+RUN mix compile
 
-USER root
-COPY --chown=appuser:appuser assets assets
+COPY assets assets
+COPY package.json package-lock.json ./
+
+# Install npm dependencies for JS hooks
+RUN npm ci
 
 # compile assets
-USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy
+RUN mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
-USER root
-COPY --chown=appuser:appuser config/runtime.exs config/
+COPY config/runtime.exs config/
 
-COPY --chown=appuser:appuser rel rel
-USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release
-USER root
+COPY rel rel
+RUN mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities

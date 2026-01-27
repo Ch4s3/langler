@@ -74,7 +74,7 @@ defmodule LanglerWeb.StudyLive.Session do
     assigns = assign(assigns, :current_card, Enum.at(assigns.cards, assigns.current_index))
 
     ~H"""
-    <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+    <div id="study-session-container" class="flex-1 flex flex-col overflow-hidden min-h-0">
       <%!-- Compact header: Exit + Progress --%>
       <div class="flex items-center justify-between px-4 py-2 border-b border-base-200 bg-base-100/90 backdrop-blur flex-shrink-0">
         <.link
@@ -98,6 +98,9 @@ defmodule LanglerWeb.StudyLive.Session do
               aria-label={"Card #{i + 1}"}
             />
           </div>
+          <p class="text-[0.55rem] font-semibold uppercase tracking-[0.3em] text-base-content/50">
+            Card {assigns.current_index + 1} of {assigns.total_cards}
+          </p>
           <p class="text-xs font-semibold text-base-content/70">
             {assigns.current_index + 1}/{assigns.total_cards}
           </p>
@@ -166,7 +169,7 @@ defmodule LanglerWeb.StudyLive.Session do
             <%!-- Compact Stats --%>
             <.card_stats
               item={@item}
-              class="flex-[0.8]"
+              class="flex-none"
             />
 
             <:actions>
@@ -216,18 +219,23 @@ defmodule LanglerWeb.StudyLive.Session do
 
   defp card_stats(assigns) do
     ~H"""
-    <div class={"grid grid-cols-4 text-2xs border-t border-base-200 py-1.5 #{@class}"}>
+    <div
+      class={[
+        "grid grid-cols-4 gap-1 text-[0.6rem] leading-tight border-t border-base-200 py-1 lg:gap-2 lg:text-[0.65rem]",
+        @class
+      ]}
+    >
       <div class="text-center">
         <span class="font-semibold text-base-content/70">Ease</span>
-        <p class="text-xs">{format_decimal(@item.ease_factor || 2.5)}</p>
+        <p class="text-[0.55rem] leading-none">{format_decimal(@item.ease_factor || 2.5)}</p>
       </div>
       <div class="text-center">
         <span class="font-semibold text-base-content/70">Int</span>
-        <p class="text-xs">{interval_label(@item.interval)}</p>
+        <p class="text-[0.55rem] leading-none">{interval_label(@item.interval)}</p>
       </div>
       <div class="text-center">
         <span class="font-semibold text-base-content/70">Reps</span>
-        <p class="text-xs">{@item.repetitions || 0}</p>
+        <p class="text-[0.55rem] leading-none">{@item.repetitions || 0}</p>
       </div>
       <div class="text-center">
         <span class="font-semibold text-base-content/70">Hist</span>

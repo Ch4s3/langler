@@ -17,7 +17,8 @@ defmodule Langler.External.Dictionary.CacheLoader do
     state = %{auto_warm?: Keyword.get(opts, :auto_warm, true)}
 
     if state.auto_warm? do
-      Process.send_after(self(), :warm, 0)
+      # Delay warming to give database connection time to establish
+      Process.send_after(self(), :warm, 5_000)
     end
 
     {:ok, state}
@@ -48,20 +49,32 @@ defmodule Langler.External.Dictionary.CacheLoader do
     Cache.put(table, :__cache_loader_probe__, :probe, ttl: 1, persist: false)
     :ets.delete(table, :__cache_loader_probe__)
 
-    PersistentCache.stream_active_entries(table, fn {key, value, expires_at_ms} ->
-      ttl = expires_at_ms - System.system_time(:millisecond)
+    result =
+      PersistentCache.stream_active_entries(table, fn {key, value, expires_at_ms} ->
+        ttl = expires_at_ms - System.system_time(:millisecond)
 
-      if ttl > 0 do
-        Cache.put(table, key, value, ttl: ttl, persist: false)
-      end
-    end)
+        if ttl > 0 do
+          Cache.put(table, key, value, ttl: ttl, persist: false)
+        end
+      end)
 
-    loaded =
-      case :ets.whereis(table) do
-        :undefined -> 0
-        tid -> :ets.info(tid, :size)
-      end
+    case result do
+      {:ok, _} ->
+        Logger.debug(
+          "Dictionary cache loader: #{table} warm complete (#{table_size(table)} entries)"
+        )
 
-    Logger.debug("Dictionary cache loader: #{table} warm complete (#{loaded} entries)")
+      {:error, reason} ->
+        Logger.warning(
+          "Dictionary cache loader: failed to warm #{table}: #{inspect(reason)}. Cache will populate on-demand."
+        )
+    end
+  end
+
+  defp table_size(table) do
+    case :ets.whereis(table) do
+      :undefined -> 0
+      tid -> :ets.info(tid, :size)
+    end
   end
 end

@@ -23,10 +23,9 @@ defmodule Langler.Content.ClassifierNif do
       nif_path = :code.priv_dir(:langler) |> Path.join("native/libclassifier_nif")
       # On macOS, NIFs are .dylib, on Linux it's .so
       lib_path =
-        if System.type() == {:system, :darwin} do
-          nif_path <> ".dylib"
-        else
-          nif_path <> ".so"
+        case :os.type() do
+          {:unix, :darwin} -> nif_path <> ".dylib"
+          _ -> nif_path <> ".so"
         end
 
       case :erlang.load_nif(String.to_charlist(lib_path), 0) do

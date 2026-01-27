@@ -1,11 +1,13 @@
 service: langler
-image: ghcr.io/${GITHUB_REPOSITORY}
+image: ghcr.io/ch4s3/langler
+
+builder:
+  arch: amd64
+  remote: 142.93.178.180
 
 servers:
   web:
     - 142.93.178.180
-    labels:
-      traefik.http.routers.langler.rule: PathPrefix(`/`)
 
 proxy:
   ssl: false
