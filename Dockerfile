@@ -1,11 +1,9 @@
 # Find eligible builder and runner images on Docker Hub. We use Ubuntu/Debian
 # instead of Alpine to avoid DNS resolution issues in production.
 #
-# Using pre-built Elixir image. Note: 1.20.0-rc.1 with OTP 28.3 isn't available,
-# so using 1.20.0-rc.1 with OTP 26.1 (closest available pre-built image)
-#
+# Using pre-built Elixir image matching .tool-versions
 ARG ELIXIR_VERSION=1.20.0-rc.1
-ARG OTP_VERSION=26.1
+ARG OTP_VERSION=28.3.1
 ARG DEBIAN_VERSION=bookworm-20260112-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
