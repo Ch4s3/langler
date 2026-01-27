@@ -24,12 +24,13 @@ RUN apt-get update \
 ENV PATH="/root/.cargo/bin:/root/.asdf/shims:/root/.asdf/bin:${PATH}"
 
 # Install Elixir using asdf (handles version management better)
-RUN git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.0 \
-  && . ~/.asdf/asdf.sh \
+RUN git clone https://github.com/asdf-vm/asdf.git /root/.asdf --branch v0.14.0 \
+  && export ASDF_DIR=/root/.asdf \
+  && . /root/.asdf/asdf.sh \
   && asdf plugin add elixir \
   && asdf install elixir 1.20.0-rc.1-otp-28 \
-  && asdf global elixir 1.20.0-rc.1-otp-28 \
-  && echo '. ~/.asdf/asdf.sh' >> ~/.bashrc
+  && asdf global elixir 1.20.0-rc.1-otp-28
+ENV ASDF_DIR=/root/.asdf
 
 # prepare build dir
 WORKDIR /app
