@@ -30,16 +30,11 @@ WORKDIR /app
 ENV MIX_ENV="prod"
 
 # Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
-# Create sys.config to disable user process requirement
-RUN mkdir -p /tmp/erl_config && \
-    echo '[{kernel, [{start_user, false}]}].' > /tmp/erl_config/sys.config
-ENV ERL_FLAGS="-config /tmp/erl_config/sys -kernel prevent_overlapping_partitions false"
+ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
 ENV ERL_CRASH_DUMP=/dev/null
 
-# Check if hex and rebar are already installed, install if not
-# OTP 28.x has nouser issues, so we skip if they already exist
-RUN (mix hex.version >/dev/null 2>&1 || mix local.hex --force) && \
-    (rebar3 --version >/dev/null 2>&1 || mix local.rebar --force) || true
+# Skip hex/rebar installation - mix will fetch hex automatically when needed
+# OTP 28.x has nouser issues with mix local.hex, but mix deps.get should work
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
