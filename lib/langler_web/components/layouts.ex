@@ -53,8 +53,8 @@ defmodule LanglerWeb.Layouts do
           <span class="hidden sm:inline">Langler</span>
         </.link>
 
-        <nav class="flex min-w-0 justify-center overflow-x-auto">
-          <ul class="menu menu-horizontal items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-1 text-xs font-semibold text-base-content/80 shadow-[0_4px_30px_rgba(15,23,42,0.1)] shadow-slate-900/10 sm:text-sm">
+        <nav class="flex min-w-0 justify-center">
+          <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-xs font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
             <li class="rounded-full border border-transparent transition hover:border-base-300">
               <.link
                 navigate={~p"/articles"}
@@ -77,6 +77,7 @@ defmodule LanglerWeb.Layouts do
               <div class="dropdown dropdown-end">
                 <button
                   type="button"
+                  tabindex="0"
                   class="btn btn-ghost btn-sm rounded-full border border-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
                   aria-label={"Account menu for #{@current_scope.user.email}"}
                 >
@@ -111,18 +112,20 @@ defmodule LanglerWeb.Layouts do
                     Theme
                   </li>
                   <li class="px-4 pb-3">
-                    <div class="grid grid-cols-3 gap-2">
+                    <div class="space-y-2">
                       <%= for option <- theme_options() do %>
                         <button
                           type="button"
                           phx-click={JS.dispatch("phx:set-theme")}
                           data-theme={option.name}
-                          class="flex flex-col items-center gap-1 rounded-lg border border-base-200 bg-base-100 px-2 py-2 text-[0.6rem] font-semibold uppercase tracking-wide text-base-content/80 transition hover:border-base-content/60 hover:bg-base-200"
+                          class="flex items-center justify-between gap-3 rounded-lg border border-base-200 bg-base-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-base-content/80 transition hover:border-primary/60 hover:bg-base-200 focus-visible:ring focus-visible:ring-primary/30"
                           onclick="this.closest('.dropdown').removeAttribute('open')"
                         >
-                          <span class={"h-6 w-6 rounded-full bg-gradient-to-br #{option.gradient}"}>
+                          <span class="flex items-center gap-2">
+                            <span class={"h-6 w-6 rounded-full bg-gradient-to-br #{option.gradient}"}></span>
+                            <span class="text-[0.65rem]">{option.label}</span>
                           </span>
-                          <span>{option.label}</span>
+                          <span class="text-[0.5rem] text-base-content/50">Apply</span>
                         </button>
                       <% end %>
                     </div>
