@@ -1,10 +1,11 @@
 service: langler
 image: ghcr.io/ch4s3/langler
 
-# Build happens on GitHub Actions, which pushes to ghcr.io
-# Kamal just deploys the pre-built image
+# Build on the droplet (has swap now) to avoid ARM Mac QEMU issues
 builder:
   arch: amd64
+  local: false
+  remote: ssh://root@142.93.178.180
 
 servers:
   web:
