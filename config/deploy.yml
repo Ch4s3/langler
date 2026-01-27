@@ -1,5 +1,5 @@
 service: langler
-image: ghcr.io/ch4s3/langler
+image: ch4s3/langler
 
 # Build on the droplet (has swap now) to avoid ARM Mac QEMU issues
 builder:
