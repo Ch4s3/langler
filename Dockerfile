@@ -37,9 +37,13 @@ WORKDIR /app
 
 # Create a user for OTP 28.x (fixes nouser error)
 # OTP 28.x requires a user process to be available
+# Also create a PTY device for the user process
 RUN useradd -m -s /bin/bash appuser && \
     mkdir -p /home/appuser/.mix && \
-    chown -R appuser:appuser /home/appuser
+    chown -R appuser:appuser /home/appuser && \
+    mknod -m 666 /dev/ptmx c 5 2 || true && \
+    mkdir -p /dev/pts && \
+    mount -t devpts -o gid=5,mode=620 devpts /dev/pts || true
 
 # set build ENV
 ENV MIX_ENV="prod"
@@ -51,16 +55,17 @@ RUN chown -R appuser:appuser /app
 # OTP 28.x requires a user process - skip if already installed
 USER appuser
 WORKDIR /app
-RUN (mix hex.version >/dev/null 2>&1 || (mix local.hex --force 2>&1 | grep -v "nouser" || true)) && \
-    (rebar3 --version >/dev/null 2>&1 || (mix local.rebar --force 2>&1 | grep -v "nouser" || true)) || true
+RUN (mix hex.version >/dev/null 2>&1 && echo "Hex already installed") || \
+    (mix local.hex --force 2>&1 | grep -v "nouser" || echo "Hex install skipped") && \
+    (rebar3 --version >/dev/null 2>&1 && echo "Rebar already installed") || \
+    (mix local.rebar --force 2>&1 | grep -v "nouser" || echo "Rebar install skipped")
 USER root
 
 # install mix dependencies
 COPY --chown=appuser:appuser mix.exs mix.lock ./
 USER appuser
-# OTP 28.x nouser workaround: try with ERL_FLAGS, fallback to letting mix handle it
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV || \
-    mix deps.get --only $MIX_ENV || true
+# OTP 28.x nouser workaround: try with ERL_FLAGS
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV
 USER root
 RUN mkdir config && chown -R appuser:appuser config
 
@@ -69,12 +74,10 @@ RUN mkdir config && chown -R appuser:appuser config
 # to be re-compiled.
 COPY --chown=appuser:appuser config/config.exs config/${MIX_ENV}.exs config/
 USER appuser
-# OTP 28.x nouser workaround: try with ERL_FLAGS
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile || \
-    mix deps.compile || true
+# OTP 28.x nouser workaround: use ERL_FLAGS
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile
 
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup || \
-    mix assets.setup || true
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup
 
 USER root
 COPY --chown=appuser:appuser priv priv
@@ -84,16 +87,14 @@ COPY --chown=appuser:appuser native native
 
 # Compile the release
 USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile || \
-    mix compile || true
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile
 
 USER root
 COPY --chown=appuser:appuser assets assets
 
 # compile assets
 USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy || \
-    mix assets.deploy || true
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 USER root
@@ -101,8 +102,7 @@ COPY --chown=appuser:appuser config/runtime.exs config/
 
 COPY --chown=appuser:appuser rel rel
 USER appuser
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release || \
-    mix release || true
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release
 USER root
 
 # start a new build stage so that the final image will only contain
