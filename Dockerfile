@@ -30,13 +30,8 @@ WORKDIR /app
 ENV MIX_ENV="prod"
 
 # Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
-# Create a wrapper script that runs mix with proper Erlang flags
-RUN echo '#!/bin/sh' > /usr/local/bin/mix-wrapper && \
-    echo 'exec erl -noshell -noinput -eval "application:ensure_all_started(elixir), application:ensure_all_started(mix), Mix.start(), Mix.CLI.main(System.argv()), init:stop()." -- "$@"' >> /usr/local/bin/mix-wrapper && \
-    chmod +x /usr/local/bin/mix-wrapper
-
-# Set Erlang flags for any direct erl/elixir usage
-ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
+# Use -boot no_dot_erlang to avoid user process requirement
+ENV ERL_FLAGS="-boot no_dot_erlang -kernel prevent_overlapping_partitions false"
 ENV ERL_CRASH_DUMP=/dev/null
 
 # Skip hex/rebar installation - mix will fetch hex automatically when needed
@@ -44,7 +39,7 @@ ENV ERL_CRASH_DUMP=/dev/null
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV || /usr/local/bin/mix-wrapper deps.get --only $MIX_ENV
+RUN mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
