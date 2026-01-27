@@ -29,6 +29,11 @@ WORKDIR /app
 # set build ENV
 ENV MIX_ENV="prod"
 
+# Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
+# Set kernel parameters to disable user process requirement
+ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false -kernel logger_level warning"
+ENV ERL_CRASH_DUMP=/dev/null
+
 # Check if hex and rebar are already installed, install if not
 # OTP 28.x has nouser issues, so we skip if they already exist
 RUN (mix hex.version >/dev/null 2>&1 || mix local.hex --force) && \
