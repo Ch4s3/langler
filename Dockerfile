@@ -35,26 +35,32 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# install hex + rebar
-# OTP 28.3.1 has a known nouser issue - set ERL_FLAGS in the command
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix local.hex --force \
-  && ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix local.rebar --force
+# Create a wrapper script to run mix with proper Erlang configuration
+# OTP 28.3.1 has a known nouser issue in Docker - this workaround helps
+RUN echo '#!/bin/sh' > /usr/local/bin/mix-safe && \
+    echo 'export ERL_FLAGS="-kernel prevent_overlapping_partitions false"' >> /usr/local/bin/mix-safe && \
+    echo 'exec /usr/local/bin/mix "$@"' >> /usr/local/bin/mix-safe && \
+    chmod +x /usr/local/bin/mix-safe
+
+# install hex + rebar using the wrapper
+RUN /usr/local/bin/mix-safe local.hex --force \
+  && /usr/local/bin/mix-safe local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV
+RUN /usr/local/bin/mix-safe deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.compile
+RUN /usr/local/bin/mix-safe deps.compile
 
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.setup
+RUN /usr/local/bin/mix-safe assets.setup
 
 COPY priv priv
 
@@ -62,18 +68,18 @@ COPY lib lib
 COPY native native
 
 # Compile the release
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix compile
+RUN /usr/local/bin/mix-safe compile
 
 COPY assets assets
 
 # compile assets
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix assets.deploy
+RUN /usr/local/bin/mix-safe assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
 COPY rel rel
-RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix release
+RUN /usr/local/bin/mix-safe release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
