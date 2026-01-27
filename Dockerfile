@@ -35,12 +35,13 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# install hex + rebar (skip if already installed to avoid OTP 28.x nouser error)
-# OTP 28.3.1 has a known issue with mix local.hex in Docker, but hex/rebar may already be installed
-RUN (mix hex.version >/dev/null 2>&1 && echo "Hex already installed") || \
-    (mix local.hex --force 2>&1 | grep -v "nouser" || true) && \
-    (rebar3 --version >/dev/null 2>&1 && echo "Rebar already installed") || \
-    (mix local.rebar --force 2>&1 | grep -v "nouser" || true)
+# install hex + rebar
+# OTP 28.3.1 has a known nouser issue with mix local.hex in Docker
+# Try installing hex archive directly to bypass the issue
+RUN curl -L https://github.com/hexpm/hex/releases/latest/download/hex.ez -o /tmp/hex.ez && \
+    mix archive.install /tmp/hex.ez --force && \
+    rm /tmp/hex.ez && \
+    mix local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
