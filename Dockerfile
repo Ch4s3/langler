@@ -26,12 +26,13 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
+# set build ENV early to avoid Erlang user process issues
+ENV MIX_ENV="prod"
+ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
+
 # install hex + rebar (skip if already installed, use -f to force if needed)
 # Note: Some base images may already have these installed
 RUN (mix local.hex --force || true) && (mix local.rebar --force || true)
-
-# set build ENV
-ENV MIX_ENV="prod"
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
