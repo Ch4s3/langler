@@ -1,45 +1,36 @@
 # Find eligible builder and runner images on Docker Hub. We use Ubuntu/Debian
 # instead of Alpine to avoid DNS resolution issues in production.
 #
-# Building Elixir from source since 1.20.0-rc.1 with OTP 28.3 isn't available as pre-built image
+# Using pre-built Elixir image. Note: 1.20.0-rc.1 with OTP 28.3 isn't available,
+# so using 1.20.0-rc.1 with OTP 26.1 (closest available pre-built image)
 #
 ARG ELIXIR_VERSION=1.20.0-rc.1
-ARG OTP_VERSION=28.3
+ARG OTP_VERSION=26.1
 ARG DEBIAN_VERSION=bookworm-20260112-slim
 
+ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}-slim"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 
-FROM docker.io/hexpm/erlang:${OTP_VERSION}-debian-${DEBIAN_VERSION} AS builder
+FROM ${BUILDER_IMAGE} AS builder
 
-# install build dependencies (Rust needed for NIF compilation, Node.js for assets, Elixir build deps)
+# install build dependencies (Rust needed for NIF compilation, Node.js for assets)
 # Install rustup for a modern Rust version that supports Cargo lock file version 4
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg unzip \
+  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
   && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y nodejs \
   && rm -rf /var/lib/apt/lists/*
 
-# Add Rust and asdf to PATH
-ENV PATH="/root/.cargo/bin:/root/.asdf/shims:/root/.asdf/bin:${PATH}"
-ENV ASDF_DIR=/root/.asdf
-ENV ASDF_DATA_DIR=/root/.asdf
-
-# Install Elixir using asdf (handles version management better)
-RUN git clone https://github.com/asdf-vm/asdf.git /root/.asdf --branch v0.14.0 \
-  && export ASDF_DIR=/root/.asdf \
-  && . /root/.asdf/asdf.sh \
-  && asdf plugin add elixir \
-  && asdf install elixir 1.20.0-rc.1-otp-28 \
-  && asdf global elixir 1.20.0-rc.1-otp-28
-ENV ASDF_DIR=/root/.asdf
+# Add Rust to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # prepare build dir
 WORKDIR /app
 
-# install hex + rebar (ensure asdf is in PATH)
-RUN . /root/.asdf/asdf.sh && mix local.hex --force \
-  && . /root/.asdf/asdf.sh && mix local.rebar --force
+# install hex + rebar
+RUN mix local.hex --force \
+  && mix local.rebar --force
 
 # set build ENV
 ENV MIX_ENV="prod"
