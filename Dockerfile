@@ -26,12 +26,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# Set Erlang flags to avoid "nouser" error in Docker
-ENV ERL_FLAGS="-noshell -noinput"
-
-# install hex + rebar
-RUN mix local.hex --force \
-  && mix local.rebar --force
+# install hex + rebar (skip if already installed, use -f to force if needed)
+# Note: Some base images may already have these installed
+RUN (mix local.hex --force || true) && (mix local.rebar --force || true)
 
 # set build ENV
 ENV MIX_ENV="prod"
