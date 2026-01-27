@@ -29,9 +29,10 @@ WORKDIR /app
 # set build ENV
 ENV MIX_ENV="prod"
 
-# install hex + rebar
-RUN mix local.hex --force \
-  && mix local.rebar --force
+# Check if hex and rebar are already installed, install if not
+# OTP 28.x has nouser issues, so we skip if they already exist
+RUN (mix hex.version >/dev/null 2>&1 || mix local.hex --force) && \
+    (rebar3 --version >/dev/null 2>&1 || mix local.rebar --force) || true
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
