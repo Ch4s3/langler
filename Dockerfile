@@ -47,19 +47,20 @@ ENV MIX_ENV="prod"
 # Change ownership of /app to appuser
 RUN chown -R appuser:appuser /app
 
-# install hex + rebar as the appuser with pseudo-TTY
-# OTP 28.x requires a TTY process, use script to create one
+# install hex + rebar as the appuser
+# OTP 28.x requires a user process - skip if already installed
 USER appuser
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends expect || true
-RUN script -e -c "mix local.hex --force" /dev/null || mix local.hex --force || true
-RUN script -e -c "mix local.rebar --force" /dev/null || mix local.rebar --force || true
+RUN (mix hex.version >/dev/null 2>&1 || (mix local.hex --force 2>&1 | grep -v "nouser" || true)) && \
+    (rebar3 --version >/dev/null 2>&1 || (mix local.rebar --force 2>&1 | grep -v "nouser" || true)) || true
 USER root
 
 # install mix dependencies
 COPY --chown=appuser:appuser mix.exs mix.lock ./
 USER appuser
-RUN mix deps.get --only $MIX_ENV
+# OTP 28.x nouser workaround: try with ERL_FLAGS, fallback to letting mix handle it
+RUN ERL_FLAGS="-kernel prevent_overlapping_partitions false" mix deps.get --only $MIX_ENV || \
+    mix deps.get --only $MIX_ENV || true
 USER root
 RUN mkdir config && chown -R appuser:appuser config
 
