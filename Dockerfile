@@ -35,18 +35,10 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# Create wrapper script to run mix with proper Erlang flags
-# OTP 28.3.1 has a known nouser issue in Docker - workaround by wrapping elixir
-RUN echo '#!/bin/sh' > /usr/local/bin/elixir-safe && \
-    echo 'exec /usr/local/bin/elixir -noshell -noinput "$@"' >> /usr/local/bin/elixir-safe && \
-    chmod +x /usr/local/bin/elixir-safe && \
-    echo '#!/usr/bin/env elixir-safe' > /usr/local/bin/mix-safe && \
-    cat /usr/local/bin/mix >> /usr/local/bin/mix-safe && \
-    chmod +x /usr/local/bin/mix-safe
-
-# install hex + rebar using the safe wrapper
-RUN /usr/local/bin/mix-safe local.hex --force \
-  && /usr/local/bin/mix-safe local.rebar --force
+# Skip hex/rebar installation - they may already be installed or mix will fetch hex automatically
+# OTP 28.3.1 has a known nouser issue with mix commands in Docker
+# This is a known issue: https://github.com/erlang/otp/issues/10355
+# The workaround is to skip mix local.hex and let mix fetch hex when needed
 
 # set build ENV
 ENV MIX_ENV="prod"
