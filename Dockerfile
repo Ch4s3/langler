@@ -1,7 +1,16 @@
 # Find eligible builder and runner images on Docker Hub. We use Ubuntu/Debian
 # instead of Alpine to avoid DNS resolution issues in production.
 #
-# Using pre-built Elixir image matching .tool-versions
+# https://hub.docker.com/r/hexpm/elixir/tags?name=debian
+# https://hub.docker.com/_/debian/tags
+#
+# This file is based on these images:
+#
+#   - https://hub.docker.com/r/hexpm/elixir/tags - for the build image
+#   - https://hub.docker.com/_/debian/tags?name=trixie - for the release image
+#   - https://pkgs.org/ - resource for finding needed packages
+#   - Ex: docker.io/hexpm/elixir:<elixir>-erlang-<otp>-debian-<debian>-slim
+#
 ARG ELIXIR_VERSION=1.20.0-rc.1
 ARG OTP_VERSION=28.3.1
 ARG DEBIAN_VERSION=trixie-20260112-slim
@@ -26,16 +35,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
+# install hex + rebar
+RUN mix local.hex --force \
+  && mix local.rebar --force
+
 # set build ENV
 ENV MIX_ENV="prod"
-
-# Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
-# Use -boot no_dot_erlang to avoid user process requirement
-ENV ERL_FLAGS="-boot no_dot_erlang -kernel prevent_overlapping_partitions false"
-ENV ERL_CRASH_DUMP=/dev/null
-
-# Skip hex/rebar installation - mix will fetch hex automatically when needed
-# OTP 28.x has nouser issues with mix local.hex
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
@@ -48,22 +53,19 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
-# install JavaScript dependencies
-COPY package.json package-lock.json ./
-RUN npm ci --include=dev
-
-# install tailwind and esbuild
 RUN mix assets.setup
 
 COPY priv priv
+
 COPY lib lib
 COPY native native
 
 # Compile the release
 RUN mix compile
 
-# copy assets and compile them
 COPY assets assets
+
+# compile assets
 RUN mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
