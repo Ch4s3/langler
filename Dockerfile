@@ -3,8 +3,8 @@
 #
 # Using pre-built Elixir image matching .tool-versions
 ARG ELIXIR_VERSION=1.20.0-rc.1
-ARG OTP_VERSION=28.3
-ARG DEBIAN_VERSION=bookworm-20260112-slim
+ARG OTP_VERSION=28.3.1
+ARG DEBIAN_VERSION=trixie-20260112-slim
 
 ARG BUILDER_IMAGE="docker.io/hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
@@ -26,19 +26,12 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 # prepare build dir
 WORKDIR /app
 
-# set build ENV early to avoid Erlang user process issues
+# set build ENV
 ENV MIX_ENV="prod"
 
-# Configure Erlang to work in Docker without user process (OTP 28.x requirement)
-# Use erl with -noshell and configure kernel to not require user
-ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
-ENV ERL_CRASH_DUMP=/dev/null
-
-# install hex + rebar using erl directly to avoid user process issues
-RUN erl -noshell -eval 'ok = application:load(hex), ok = application:start(hex), ok = application:stop(hex), init:stop().' || \
-    (mix local.hex --force 2>&1 | grep -v "nouser" || true)
-RUN erl -noshell -eval 'ok = application:load(rebar3), ok = application:start(rebar3), ok = application:stop(rebar3), init:stop().' || \
-    (mix local.rebar --force 2>&1 | grep -v "nouser" || true)
+# install hex + rebar
+RUN mix local.hex --force \
+  && mix local.rebar --force
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
