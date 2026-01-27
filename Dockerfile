@@ -30,46 +30,47 @@ WORKDIR /app
 ENV MIX_ENV="prod"
 
 # Configure Erlang/OTP 28.x to work in Docker (fixes nouser error)
+# Must be set before any mix/elixir commands
 ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
 ENV ERL_CRASH_DUMP=/dev/null
 
 # Skip hex/rebar installation - mix will fetch hex automatically when needed
-# OTP 28.x has nouser issues with mix local.hex, but mix deps.get should work
+# OTP 28.x has nouser issues with mix local.hex
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
-RUN mix deps.get --only $MIX_ENV
+RUN elixir -S mix deps.get --only $MIX_ENV
 RUN mkdir config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN mix deps.compile
+RUN elixir -S mix deps.compile
 
 # install JavaScript dependencies
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev
 
 # install tailwind and esbuild
-RUN mix assets.setup
+RUN elixir -S mix assets.setup
 
 COPY priv priv
 COPY lib lib
 COPY native native
 
 # Compile the release
-RUN mix compile
+RUN elixir -S mix compile
 
 # copy assets and compile them
 COPY assets assets
-RUN mix assets.deploy
+RUN elixir -S mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/
 
 COPY rel rel
-RUN mix release
+RUN elixir -S mix release
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
