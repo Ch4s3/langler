@@ -37,48 +37,64 @@ WORKDIR /app
 
 # Create a user for OTP 28.x (fixes nouser error)
 # OTP 28.x requires a user process to be available
-RUN useradd -m -s /bin/bash appuser
+RUN useradd -m -s /bin/bash appuser && \
+    mkdir -p /home/appuser/.mix && \
+    chown -R appuser:appuser /home/appuser
 
 # set build ENV
 ENV MIX_ENV="prod"
 
+# Change ownership of /app to appuser
+RUN chown -R appuser:appuser /app
+
 # install hex + rebar as the appuser
 USER appuser
+WORKDIR /app
 RUN mix local.hex --force \
   && mix local.rebar --force
 USER root
 
 # install mix dependencies
-COPY mix.exs mix.lock ./
+COPY --chown=appuser:appuser mix.exs mix.lock ./
+USER appuser
 RUN mix deps.get --only $MIX_ENV
-RUN mkdir config
+USER root
+RUN mkdir config && chown -R appuser:appuser config
 
 # copy compile-time config files before we compile dependencies
 # to ensure any relevant config change will trigger the dependencies
 # to be re-compiled.
-COPY config/config.exs config/${MIX_ENV}.exs config/
+COPY --chown=appuser:appuser config/config.exs config/${MIX_ENV}.exs config/
+USER appuser
 RUN mix deps.compile
 
 RUN mix assets.setup
 
-COPY priv priv
+USER root
+COPY --chown=appuser:appuser priv priv
 
-COPY lib lib
-COPY native native
+COPY --chown=appuser:appuser lib lib
+COPY --chown=appuser:appuser native native
 
 # Compile the release
+USER appuser
 RUN mix compile
 
-COPY assets assets
+USER root
+COPY --chown=appuser:appuser assets assets
 
 # compile assets
+USER appuser
 RUN mix assets.deploy
 
 # Changes to config/runtime.exs don't require recompiling the code
-COPY config/runtime.exs config/
+USER root
+COPY --chown=appuser:appuser config/runtime.exs config/
 
-COPY rel rel
+COPY --chown=appuser:appuser rel rel
+USER appuser
 RUN mix release
+USER root
 
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
