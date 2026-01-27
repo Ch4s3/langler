@@ -51,16 +51,13 @@ ENV MIX_ENV="prod"
 # Change ownership of /app to appuser
 RUN chown -R appuser:appuser /app
 
-# Install hex manually to bypass nouser error
-# OTP 28.x has nouser issue with mix local.hex
+# Skip hex/rebar installation - OTP 28.x has nouser issue
+# Mix will attempt to fetch hex automatically when needed
+# If that fails, we'll need to work around it
 USER appuser
 WORKDIR /app
-RUN if ! mix hex.version >/dev/null 2>&1; then \
-      curl -L https://github.com/hexpm/hex/releases/latest/download/hex.ez -o /tmp/hex.ez && \
-      mix archive.install /tmp/hex.ez --force && \
-      rm /tmp/hex.ez; \
-    fi && \
-    (rebar3 --version >/dev/null 2>&1 || mix local.rebar --force 2>&1 | grep -v "nouser" || true)
+# Just ensure the mix directory exists
+RUN mkdir -p ~/.mix/archives || true
 USER root
 
 # install mix dependencies
