@@ -28,15 +28,17 @@ WORKDIR /app
 
 # set build ENV early to avoid Erlang user process issues
 ENV MIX_ENV="prod"
-ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false -kernel logger_level warning"
 
-# Create a minimal user process to satisfy OTP 28.x requirements
-RUN mkdir -p /tmp/erl_pipes && \
-    mkfifo /tmp/erl_pipes/erl_crash.dump 2>/dev/null || true
+# Configure Erlang to work in Docker without user process (OTP 28.x requirement)
+# Use erl with -noshell and configure kernel to not require user
+ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
+ENV ERL_CRASH_DUMP=/dev/null
 
-# install hex + rebar (skip if already installed, use -f to force if needed)
-# Note: Some base images may already have these installed
-RUN (mix local.hex --force || true) && (mix local.rebar --force || true)
+# install hex + rebar using erl directly to avoid user process issues
+RUN erl -noshell -eval 'ok = application:load(hex), ok = application:start(hex), ok = application:stop(hex), init:stop().' || \
+    (mix local.hex --force 2>&1 | grep -v "nouser" || true)
+RUN erl -noshell -eval 'ok = application:load(rebar3), ok = application:start(rebar3), ok = application:stop(rebar3), init:stop().' || \
+    (mix local.rebar --force 2>&1 | grep -v "nouser" || true)
 
 # install mix dependencies
 COPY mix.exs mix.lock ./
