@@ -147,7 +147,7 @@ jobs:
       - name: Create Kamal secrets file
         run: |
           mkdir -p .kamal
-          cat > .kamal/secrets << 'EOF'
+          cat > .kamal/secrets << EOF
           SECRET_KEY_BASE=${{ secrets.SECRET_KEY_BASE }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
@@ -155,9 +155,5 @@ jobs:
           KAMAL_REGISTRY_PASSWORD=${{ secrets.GITHUB_TOKEN }}
           EOF
 
-      - name: Update deploy.yml with repository name
-        run: |
-          sed -i "s|ghcr.io/\${GITHUB_REPOSITORY}|ghcr.io/${{ github.repository }}|g" config/deploy.yml
-
       - name: Deploy with Kamal
-        run: kamal deploy
+        run: kamal deploy --version=${{ github.sha }}
