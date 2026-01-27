@@ -4,11 +4,16 @@ primary_region = "ewr"
 [build]
   dockerfile = "Dockerfile"
 
+[deploy]
+  release_command = "/app/bin/migrate"
+
 [env]
   MIX_ENV = "prod"
   PHX_SERVER = "true"
   PORT = "4000"
   LANG = "en_US.UTF-8"
+  POOL_SIZE = "10"
+  ECTO_IPV6 = "true"
 
 [[services]]
   internal_port = 4000

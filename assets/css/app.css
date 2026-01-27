@@ -54,8 +54,13 @@
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 400px;
   transform-style: preserve-3d;
+}
+
+@media (max-width: 640px) {
+  .study-card {
+    min-height: unset;
+  }
 }
 
 .study-card-inner {
@@ -378,6 +383,11 @@
 .text-study-word {
   font-size: var(--font-study-word);
   line-height: 1.2;
+}
+
+.text-2xs {
+  font-size: 0.625rem;
+  line-height: 0.75rem;
 }
 
 body {
@@ -854,6 +864,16 @@ body {
 .study-progress-dot.active {
   transform: scale(1.25);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+:root {
+  --header-height: 5rem;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --header-height: auto;
+  }
 }
 
 /* Audio Player Styles */

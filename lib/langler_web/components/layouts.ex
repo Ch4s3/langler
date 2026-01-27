@@ -12,6 +12,11 @@ defmodule LanglerWeb.Layouts do
   embed_templates "layouts/*"
 
   @dictionary_search_modal LanglerWeb.DictionarySearchLive.Modal
+  @theme_options [
+    %{name: "sage", label: "Sage", gradient: "from-teal-400 to-teal-600"},
+    %{name: "ocean", label: "Ocean", gradient: "from-blue-400 to-blue-600"},
+    %{name: "midnight", label: "Midnight", gradient: "from-purple-600 to-purple-800"}
+  ]
 
   @doc """
   Renders your app layout.
@@ -40,83 +45,102 @@ defmodule LanglerWeb.Layouts do
 
     ~H"""
     <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
-      <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <div class="mx-auto grid w-full max-w-6xl grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <.link
           navigate={~p"/articles"}
           class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
         >
-          <%!-- <img
-            src={~p"/images/logo.svg"}
-            width="36"
-            height="36"
-            alt="Langler logo"
-            loading="eager"
-            fetchpriority="high"
-          /> --%>
-          <span>Langler</span>
+          <span class="hidden sm:inline">Langler</span>
         </.link>
 
-        <nav class="flex flex-wrap items-center gap-2 text-sm font-semibold text-base-content/80">
-          <.link
-            navigate={~p"/articles"}
-            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
-          >
-            Library
-          </.link>
-          <.link
-            navigate={~p"/study"}
-            class="btn btn-ghost btn-sm rounded-full border border-transparent transition duration-200 hover:border-base-300 hover:bg-base-200/80 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
-          >
-            Study
-          </.link>
+        <nav class="flex min-w-0 justify-center overflow-x-auto">
+          <ul class="menu menu-horizontal items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-1 text-xs font-semibold text-base-content/80 shadow-[0_4px_30px_rgba(15,23,42,0.1)] shadow-slate-900/10 sm:text-sm">
+            <li class="rounded-full border border-transparent transition hover:border-base-300">
+              <.link
+                navigate={~p"/articles"}
+                class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+              >
+                <.icon name="hero-book-open" class="h-4 w-4" />
+                <span>Library</span>
+              </.link>
+            </li>
+            <li class="rounded-full border border-transparent transition hover:border-base-300">
+              <.link
+                navigate={~p"/study"}
+                class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+              >
+                <.icon name="hero-brain" class="h-4 w-4" />
+                <span>Study</span>
+              </.link>
+            </li>
+            <li :if={@current_scope} class="ml-auto flex items-center">
+              <div class="dropdown dropdown-end">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm rounded-full border border-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
+                  aria-label={"Account menu for #{@current_scope.user.email}"}
+                >
+                  <.icon name="hero-user-circle" class="h-5 w-5" />
+                  <span class="sr-only">{@current_scope.user.email}</span>
+                  <span aria-hidden="true">▾</span>
+                </button>
+                <ul
+                  class="dropdown-content menu rounded-box w-56 border border-base-200 bg-base-100 shadow-2xl mt-2 space-y-1"
+                  role="menu"
+                >
+                  <li role="none">
+                    <.link
+                      navigate={~p"/users/settings"}
+                      class="text-base text-base-content/80 w-full px-4 py-2"
+                      role="menuitem"
+                    >
+                      Settings
+                    </.link>
+                  </li>
+                  <li role="none">
+                    <.link
+                      href={~p"/users/log-out"}
+                      method="delete"
+                      class="text-base text-base-content/80 w-full px-4 py-2"
+                      role="menuitem"
+                    >
+                      Log out
+                    </.link>
+                  </li>
+                  <li class="px-4 pt-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-base-content/60">
+                    Theme
+                  </li>
+                  <li class="px-4 pb-3">
+                    <div class="grid grid-cols-3 gap-2">
+                      <%= for option <- theme_options() do %>
+                        <button
+                          type="button"
+                          phx-click={JS.dispatch("phx:set-theme")}
+                          data-theme={option.name}
+                          class="flex flex-col items-center gap-1 rounded-lg border border-base-200 bg-base-100 px-2 py-2 text-[0.6rem] font-semibold uppercase tracking-wide text-base-content/80 transition hover:border-base-content/60 hover:bg-base-200"
+                          onclick="this.closest('.dropdown').removeAttribute('open')"
+                        >
+                          <span class={"h-6 w-6 rounded-full bg-gradient-to-br #{option.gradient}"}>
+                          </span>
+                          <span>{option.label}</span>
+                        </button>
+                      <% end %>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
         </nav>
 
-        <div class="flex items-center gap-3">
+        <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
           <.theme_toggle />
-          <div :if={@current_scope} class="flex items-center gap-3">
-            <div class="dropdown dropdown-end">
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm rounded-full border border-base-200 px-4 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
-                aria-label="Account menu"
-              >
-                {@current_scope.user.email}
-                <span aria-hidden="true">▾</span>
-              </button>
-              <ul
-                class="dropdown-content menu rounded-box w-48 border border-base-200 bg-base-100 shadow-2xl mt-2"
-                role="menu"
-              >
-                <li role="none">
-                  <.link
-                    navigate={~p"/users/settings"}
-                    class="text-base text-base-content/80 w-full px-4 py-2"
-                    role="menuitem"
-                  >
-                    Settings
-                  </.link>
-                </li>
-                <li role="none">
-                  <.link
-                    href={~p"/users/log-out"}
-                    method="delete"
-                    class="text-base text-base-content/80 w-full px-4 py-2"
-                    role="menuitem"
-                  >
-                    Log out
-                  </.link>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
-            <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
-              Log in
-            </.link>
-            <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
-              Create account
-            </.link>
-          </div>
+          <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
+            Log in
+          </.link>
+          <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
+            Create account
+          </.link>
         </div>
       </div>
     </header>
@@ -206,47 +230,27 @@ defmodule LanglerWeb.Layouts do
         tabindex="0"
         class="dropdown-content menu bg-base-100 rounded-box z-[1] w-48 border border-base-300 p-2 shadow-lg"
       >
-        <li class="text-base-content">
-          <button
-            type="button"
-            phx-click={JS.dispatch("phx:set-theme")}
-            data-theme="sage"
-            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
-            onclick="this.closest('.dropdown').removeAttribute('open')"
-          >
-            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 shrink-0">
-            </span>
-            <span>Sage</span>
-          </button>
-        </li>
-        <li class="text-base-content">
-          <button
-            type="button"
-            phx-click={JS.dispatch("phx:set-theme")}
-            data-theme="ocean"
-            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
-            onclick="this.closest('.dropdown').removeAttribute('open')"
-          >
-            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shrink-0">
-            </span>
-            <span>Ocean</span>
-          </button>
-        </li>
-        <li class="text-base-content">
-          <button
-            type="button"
-            phx-click={JS.dispatch("phx:set-theme")}
-            data-theme="midnight"
-            class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
-            onclick="this.closest('.dropdown').removeAttribute('open')"
-          >
-            <span class="w-4 h-4 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 shrink-0">
-            </span>
-            <span>Midnight</span>
-          </button>
-        </li>
+        <%= for option <- theme_options() do %>
+          <li class="text-base-content">
+            <button
+              type="button"
+              phx-click={JS.dispatch("phx:set-theme")}
+              data-theme={option.name}
+              class="flex items-center gap-2 w-full text-left hover:bg-base-200 active:bg-base-300"
+              onclick="this.closest('.dropdown').removeAttribute('open')"
+            >
+              <span class={"w-4 h-4 rounded-full bg-gradient-to-br #{option.gradient} shrink-0"}>
+              </span>
+              <span>{option.label}</span>
+            </button>
+          </li>
+        <% end %>
       </ul>
     </div>
     """
+  end
+
+  defp theme_options do
+    @theme_options
   end
 end

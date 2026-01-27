@@ -52,23 +52,21 @@ defmodule LanglerWeb.StudyLive.Session do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div
-        id="study-session-container"
-        class="h-[calc(100vh-5rem)] flex flex-col overflow-hidden -mx-4 -my-10 sm:-mx-6 lg:-mx-8"
-        phx-hook="StudySession"
-      >
-        <%= if @completed do %>
-          {render_completion(assigns)}
+    <div
+      id="study-session-fullscreen"
+      class="fixed inset-0 z-40 bg-base-200 flex flex-col"
+      phx-hook="StudySession"
+    >
+      <%= if @completed do %>
+        {render_completion(assigns)}
+      <% else %>
+        <%= if @total_cards == 0 do %>
+          {render_empty_state(assigns)}
         <% else %>
-          <%= if @total_cards == 0 do %>
-            {render_empty_state(assigns)}
-          <% else %>
-            {render_study_session(assigns)}
-          <% end %>
+          {render_study_session(assigns)}
         <% end %>
-      </div>
-    </Layouts.app>
+      <% end %>
+    </div>
     """
   end
 
@@ -76,57 +74,54 @@ defmodule LanglerWeb.StudyLive.Session do
     assigns = assign(assigns, :current_card, Enum.at(assigns.cards, assigns.current_index))
 
     ~H"""
-    <div class="flex-1 flex items-center justify-center p-4 overflow-hidden min-h-0 px-4 py-4">
-      <div class="w-full max-w-2xl h-full max-h-full flex flex-col min-h-0">
-        <%!-- Exit button --%>
-        <div class="flex justify-end mb-4">
-          <.link
-            id="study-session-exit"
-            navigate={~p"/study"}
-            class="btn btn-sm btn-ghost"
-            aria-label="Exit study session"
-          >
-            <.icon name="hero-x-mark" class="h-5 w-5" />
-          </.link>
-        </div>
+    <div class="flex-1 flex flex-col overflow-hidden min-h-0">
+      <%!-- Compact header: Exit + Progress --%>
+      <div class="flex items-center justify-between px-4 py-2 border-b border-base-200 bg-base-100/90 backdrop-blur flex-shrink-0">
+        <.link
+          id="study-session-exit"
+          navigate={~p"/study"}
+          class="btn btn-sm btn-ghost min-h-[44px] min-w-[44px] p-2"
+          aria-label="Exit study session"
+        >
+          <.icon name="hero-x-mark" class="h-5 w-5" />
+        </.link>
 
-        <%!-- Progress indicator --%>
-        <div class="text-center mb-6">
-          <div class="flex items-center justify-center gap-2 mb-2">
-            <div class="flex gap-1.5">
-              <span
-                :for={i <- 0..(assigns.total_cards - 1)}
-                class={[
-                  "h-2 w-2 rounded-full transition-all duration-300",
-                  if(i < assigns.current_index, do: "bg-primary", else: "bg-base-300"),
-                  if(i == assigns.current_index, do: "h-2.5 w-2.5 bg-primary ring-2 ring-primary/30")
-                ]}
-                aria-label={"Card #{i + 1}"}
-              />
-            </div>
+        <div class="text-center flex-1">
+          <div class="flex items-center justify-center gap-1.5 mb-1">
+            <span
+              :for={i <- 0..(assigns.total_cards - 1)}
+              class={[
+                "h-1.5 w-1.5 rounded-full transition-all duration-300",
+                if(i < assigns.current_index, do: "bg-primary", else: "bg-base-300"),
+                if(i == assigns.current_index, do: "h-2 w-2 bg-primary ring-1 ring-primary/30")
+              ]}
+              aria-label={"Card #{i + 1}"}
+            />
           </div>
-          <p class="text-sm font-semibold text-base-content/70">
-            Card {assigns.current_index + 1} of {assigns.total_cards}
+          <p class="text-xs font-semibold text-base-content/70">
+            {assigns.current_index + 1}/{assigns.total_cards}
           </p>
         </div>
 
-        <%!-- Card container --%>
-        <div
-          id="study-card-container"
-          class="study-card-container flex-1 min-h-0 flex items-center justify-center"
-        >
-          <%= if @current_card && @current_card.word do %>
-            <div class="w-full h-full max-w-2xl min-h-[400px]">
-              {render_card(assigns, @current_card)}
+        <div class="min-w-[44px]"></div>
+      </div>
+
+      <%!-- Card container --%>
+      <div
+        id="study-card-container"
+        class="study-card-container flex-1 min-h-0 flex items-center justify-center p-3 overflow-hidden"
+      >
+        <%= if @current_card && @current_card.word do %>
+          <div class="w-full h-full max-w-2xl">
+            {render_card(assigns, @current_card)}
+          </div>
+        <% else %>
+          <div class="card bg-base-100 shadow-xl w-full">
+            <div class="card-body text-center">
+              <p class="text-base-content/70">Card data unavailable</p>
             </div>
-          <% else %>
-            <div class="card bg-base-100 shadow-xl w-full">
-              <div class="card-body text-center">
-                <p class="text-base-content/70">Card data unavailable</p>
-              </div>
-            </div>
-          <% end %>
-        </div>
+          </div>
+        <% end %>
       </div>
     </div>
     """
@@ -154,53 +149,28 @@ defmodule LanglerWeb.StudyLive.Session do
           <.card
             variant={:default}
             class="h-full w-full flex flex-col bg-gradient-to-br from-base-100 to-base-200/50"
-            body_class="flex flex-col h-full"
+            body_class="flex flex-col h-full p-3 sm:p-6"
           >
             <%!-- Word --%>
-            <div class="flex flex-col items-center justify-center gap-4 flex-1 min-h-0">
-              <p class="text-study-word font-semibold text-base-content text-center">
-                {@word.lemma || @word.normalized_form}
-              </p>
-              <p class="text-sm text-base-content/70">
-                Click or press spacebar to see definition
-              </p>
-            </div>
-
-            <div class="divider my-2"></div>
-
-            <%!-- Stats --%>
-            <div class="flex flex-wrap gap-6 text-sm text-base-content/70">
-              <div>
-                <p class="font-semibold text-base-content">Ease factor</p>
-                <p>{format_decimal(@item.ease_factor || 2.5)}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Interval</p>
-                <p>{interval_label(@item.interval)}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Repetitions</p>
-                <p>{@item.repetitions || 0}</p>
-              </div>
-              <div>
-                <p class="font-semibold text-base-content">Recent history</p>
-                <div class="flex gap-1">
-                  <span
-                    :for={score <- recent_history(@item.quality_history)}
-                    class={[
-                      "h-2.5 w-6 rounded-full bg-base-300",
-                      history_pill_class(score)
-                    ]}
-                    aria-label={"Score #{score}"}
-                  />
-                </div>
+            <div class="flex-[5] min-h-0 flex flex-col items-center justify-center sm:flex-1">
+              <div class="flex flex-col items-center gap-2">
+                <p class="text-study-word font-semibold text-base-content text-center leading-tight">
+                  {@word.lemma || @word.normalized_form}
+                </p>
+                <p class="text-xs text-base-content/60">
+                  Tap to flip
+                </p>
               </div>
             </div>
 
-            <div class="divider my-2"></div>
+            <%!-- Compact Stats --%>
+            <.card_stats
+              item={@item}
+              class="flex-[0.8]"
+            />
 
             <:actions>
-              <.card_rating
+              <.card_rating_mobile
                 item_id={@item.id}
                 buttons={@quality_buttons}
                 event="rate_card"
@@ -214,19 +184,19 @@ defmodule LanglerWeb.StudyLive.Session do
           <.card
             variant={:default}
             class="h-full w-full flex flex-col bg-gradient-to-br from-primary/5 to-primary/10"
-            body_class="flex flex-col h-full justify-center items-center"
+            body_class="flex flex-col h-full justify-center items-center p-4"
           >
-            <div class="flex flex-col gap-4 items-center w-full">
+            <div class="flex flex-col gap-3 items-center w-full overflow-auto">
               <p class="text-xs font-semibold uppercase tracking-widest text-primary/70">
                 Definition
               </p>
               <%= if @definitions != [] do %>
-                <ol class="space-y-3 text-reading text-base-content/90 text-left max-h-full overflow-auto w-full max-w-lg">
+                <ol class="space-y-2 text-sm sm:text-base text-base-content/90 text-left w-full">
                   <li
                     :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
                     class="flex gap-2 items-start break-words"
                   >
-                    <span class="font-semibold text-primary/80">{idx}.</span>
+                    <span class="font-semibold text-primary/80 flex-shrink-0">{idx}.</span>
                     <span class="break-words">{definition}</span>
                   </li>
                 </ol>
@@ -235,6 +205,41 @@ defmodule LanglerWeb.StudyLive.Session do
               <% end %>
             </div>
           </.card>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :class, :string, default: ""
+
+  defp card_stats(assigns) do
+    ~H"""
+    <div class={"grid grid-cols-4 text-2xs border-t border-base-200 py-1.5 #{@class}"}>
+      <div class="text-center">
+        <span class="font-semibold text-base-content/70">Ease</span>
+        <p class="text-xs">{format_decimal(@item.ease_factor || 2.5)}</p>
+      </div>
+      <div class="text-center">
+        <span class="font-semibold text-base-content/70">Int</span>
+        <p class="text-xs">{interval_label(@item.interval)}</p>
+      </div>
+      <div class="text-center">
+        <span class="font-semibold text-base-content/70">Reps</span>
+        <p class="text-xs">{@item.repetitions || 0}</p>
+      </div>
+      <div class="text-center">
+        <span class="font-semibold text-base-content/70">Hist</span>
+        <div class="flex gap-0.5 justify-center mt-0.5">
+          <span
+            :for={score <- recent_history(@item.quality_history)}
+            class={[
+              "h-1.5 w-2 rounded-full bg-base-300",
+              history_pill_class(score)
+            ]}
+            aria-label={"Score #{score}"}
+          />
         </div>
       </div>
     </div>
