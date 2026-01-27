@@ -28,7 +28,11 @@ WORKDIR /app
 
 # set build ENV early to avoid Erlang user process issues
 ENV MIX_ENV="prod"
-ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false"
+ENV ERL_FLAGS="-kernel prevent_overlapping_partitions false -kernel logger_level warning"
+
+# Create a minimal user process to satisfy OTP 28.x requirements
+RUN mkdir -p /tmp/erl_pipes && \
+    mkfifo /tmp/erl_pipes/erl_crash.dump 2>/dev/null || true
 
 # install hex + rebar (skip if already installed, use -f to force if needed)
 # Note: Some base images may already have these installed
