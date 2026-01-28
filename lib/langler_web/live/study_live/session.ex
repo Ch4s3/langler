@@ -265,7 +265,7 @@ defmodule LanglerWeb.StudyLive.Session do
       id="study-session-complete"
       class="flex-1 flex items-center justify-center p-4 animate-fade-in"
     >
-      <div class="card bg-base-100 shadow-xl max-w-2xl w-full">
+      <div class="card bg-base-100 shadow-xl max-w-xl w-full sm:max-w-2xl">
         <div class="card-body gap-6">
           <div class="text-center">
             <div class="mb-4">
@@ -321,11 +321,17 @@ defmodule LanglerWeb.StudyLive.Session do
 
           <div class="divider"></div>
 
-          <div class="flex gap-3 justify-center">
-            <.link navigate={~p"/study"} class="btn btn-primary text-white">
+          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
+            <.link
+              navigate={~p"/study"}
+              class="btn btn-primary text-white w-full sm:w-auto sm:min-w-[180px]"
+            >
               Return to Study Overview
             </.link>
-            <.link navigate={~p"/study/session"} class="btn btn-outline">
+            <.link
+              navigate={~p"/study/session"}
+              class="btn btn-outline w-full sm:w-auto sm:min-w-[180px]"
+            >
               Start New Session
             </.link>
           </div>

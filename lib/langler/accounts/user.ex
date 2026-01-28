@@ -12,6 +12,11 @@ defmodule Langler.Accounts.User do
     field :hashed_password, :string, redact: true
     field :confirmed_at, :utc_datetime
     field :authenticated_at, :utc_datetime, virtual: true
+    field :is_admin, :boolean, default: false
+    field :invites_remaining, :integer, default: 3
+
+    has_many :sent_invites, Langler.Accounts.UserInvite, foreign_key: :inviter_id
+    has_many :received_invites, Langler.Accounts.UserInvite, foreign_key: :invitee_id
 
     timestamps(type: :utc_datetime)
   end
@@ -110,6 +115,15 @@ defmodule Langler.Accounts.User do
     else
       changeset
     end
+  end
+
+  @doc """
+  A changeset for updating user fields like invites_remaining and is_admin.
+  """
+  def changeset(user, attrs) do
+    user
+    |> cast(attrs, [:invites_remaining, :is_admin])
+    |> validate_number(:invites_remaining, greater_than_or_equal_to: 0)
   end
 
   @doc """

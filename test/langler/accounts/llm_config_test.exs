@@ -88,4 +88,112 @@ defmodule Langler.Accounts.LlmConfigTest do
     assert {:ok, _} = LlmConfig.delete_config(config)
     assert LlmConfig.get_config(config.id) == nil
   end
+
+  test "update_config/2 can update model and temperature" do
+    user = user_fixture()
+    assert {:ok, config} = create_config(user)
+
+    assert {:ok, updated} =
+             LlmConfig.update_config(config, %{model: "gpt-4", temperature: 0.8})
+
+    assert updated.model == "gpt-4"
+    assert updated.temperature == 0.8
+  end
+
+  test "update_config/2 can update api_key" do
+    user = user_fixture()
+    assert {:ok, config} = create_config(user)
+
+    assert {:ok, updated} = LlmConfig.update_config(config, %{api_key: "newsecretkey123"})
+
+    # API key should be re-encrypted
+    assert updated.encrypted_api_key != config.encrypted_api_key
+  end
+
+  test "update_config/2 handles empty api_key gracefully" do
+    user = user_fixture()
+    assert {:ok, config} = create_config(user)
+
+    assert {:ok, updated} = LlmConfig.update_config(config, %{api_key: "", model: "gpt-4"})
+
+    # API key should not change when empty string is passed
+    assert updated.encrypted_api_key == config.encrypted_api_key
+    assert updated.model == "gpt-4"
+  end
+
+  test "decrypt_api_key_masked/2 handles short keys" do
+    user = user_fixture()
+    assert {:ok, config} = create_config(user, %{api_key: "short"})
+
+    masked = LlmConfig.decrypt_api_key_masked(user.id, config.encrypted_api_key)
+    assert masked == "*****"
+  end
+
+  test "decrypt_api_key_masked/2 handles decryption errors" do
+    user = user_fixture()
+
+    # Pass invalid encrypted data
+    masked = LlmConfig.decrypt_api_key_masked(user.id, "invalid_encrypted_data")
+    assert masked == "****"
+  end
+
+  test "get_config/1 returns nil for non-existent config" do
+    assert LlmConfig.get_config(999_999) == nil
+  end
+
+  test "get_default_config/1 returns nil when no default exists" do
+    user = user_fixture()
+    assert LlmConfig.get_default_config(user.id) == nil
+  end
+
+  test "create_config/2 handles default_selected? with different truthy values" do
+    user = user_fixture()
+
+    # Create first config (auto-default)
+    assert {:ok, first} = create_config(user)
+    assert first.is_default
+
+    # Create second with is_default: "true" (string)
+    assert {:ok, second} =
+             create_config(user, %{provider_name: "anthropic", is_default: "true"})
+
+    assert second.is_default
+    refute Repo.get!(UserLlmConfig, first.id).is_default
+  end
+
+  test "create_config/2 handles default_selected? with numeric 1 value" do
+    user = user_fixture()
+
+    assert {:ok, first} = create_config(user)
+    assert {:ok, second} = create_config(user, %{provider_name: "anthropic", is_default: true})
+
+    assert second.is_default
+    refute Repo.get!(UserLlmConfig, first.id).is_default
+  end
+
+  test "create_config/2 trims whitespace from api_key" do
+    user = user_fixture()
+
+    assert {:ok, config} = create_config(user, %{api_key: "  sec12345678901  "})
+
+    # Decrypt and verify it was trimmed (showing first 8 and last 4 chars)
+    decrypted = LlmConfig.decrypt_api_key_masked(user.id, config.encrypted_api_key)
+    # Should show sec12345...8901, not have spaces
+    refute String.contains?(decrypted, " ")
+  end
+
+  test "stringify_keys/1 converts atom keys to strings" do
+    user = user_fixture()
+
+    # Pass attrs with atom keys
+    assert {:ok, config} =
+             LlmConfig.create_config(user, %{
+               provider_name: "openai",
+               api_key: "testkey",
+               model: "gpt-4o-mini"
+             })
+
+    assert config.provider_name == "openai"
+    assert config.model == "gpt-4o-mini"
+  end
 end

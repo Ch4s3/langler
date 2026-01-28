@@ -31,6 +31,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   import Phoenix.HTML
 
   @token_regex ~r/\p{L}+\p{M}*|[^\p{L}]+/u
+  @session_expiry_seconds 4 * 60 * 60
 
   @impl true
   def mount(socket) do
@@ -912,7 +913,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     user = socket.assigns.current_scope.user
     default_config = LlmConfig.get_default_config(user.id)
     sessions = Session.list_user_sessions(user.id, limit: 20)
-    current_session = List.first(sessions)
+    {sessions, current_session} = ensure_recent_session(user, sessions)
     {studied_word_ids, studied_forms} = load_studied_words(user.id)
 
     socket
@@ -936,19 +937,56 @@ defmodule LanglerWeb.ChatLive.Drawer do
     )
   end
 
-  defp load_session_messages(socket, current_session) do
-    messages = Session.get_decrypted_messages(current_session)
-    total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
+defp load_session_messages(socket, current_session) do
+  messages = Session.get_decrypted_messages(current_session)
+  total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
 
-    socket
+  socket
     |> assign(:current_session, current_session)
     |> assign(:total_tokens, total_tokens)
-    |> stream(:messages, messages,
-      reset: true,
-      dom_id: fn msg ->
-        "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
+  |> stream(:messages, messages,
+    reset: true,
+    dom_id: fn msg ->
+      "msg-#{(msg.inserted_at && DateTime.to_unix(msg.inserted_at)) || System.unique_integer([:positive])}"
+    end
+  )
+end
+
+  defp ensure_recent_session(user, sessions) do
+    if should_start_new_session?(sessions) do
+      case Session.create_session(user) do
+        {:ok, new_session} ->
+          sessions = Session.list_user_sessions(user.id, limit: 20)
+          {sessions, new_session}
+
+        {:error, _reason} ->
+          {sessions, List.first(sessions)}
       end
-    )
+    else
+      {sessions, List.first(sessions)}
+    end
+  end
+
+  defp should_start_new_session?(sessions) do
+    case latest_session_by_inserted_at(sessions) do
+      nil -> true
+      %{inserted_at: %DateTime{} = inserted_at} ->
+        DateTime.diff(DateTime.utc_now(), inserted_at, :second) > @session_expiry_seconds
+
+      _ ->
+        false
+    end
+  end
+
+  defp latest_session_by_inserted_at([]), do: nil
+
+  defp latest_session_by_inserted_at(sessions) do
+    Enum.max_by(sessions, fn session ->
+      case session.inserted_at do
+        %DateTime{} = dt -> DateTime.to_unix(dt)
+        _ -> 0
+      end
+    end)
   end
 
   defp add_user_message_and_dispatch(socket, session, message, user) do

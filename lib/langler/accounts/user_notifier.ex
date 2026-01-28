@@ -85,4 +85,28 @@ defmodule Langler.Accounts.UserNotifier do
     ==============================
     """)
   end
+
+  @doc """
+  Deliver an invitation email with the invite link.
+  """
+  def deliver_invitation_email(inviter_email, invitee_email, invite_url) do
+    deliver(invitee_email, "You've been invited to Langler", """
+
+    ==============================
+
+    Hi,
+
+    #{inviter_email} has invited you to join Langler!
+
+    Click the link below to create your account:
+
+    #{invite_url}
+
+    This invitation will expire in 7 days.
+
+    If you didn't expect this invitation, you can safely ignore this email.
+
+    ==============================
+    """)
+  end
 end

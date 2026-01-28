@@ -9,6 +9,7 @@ builder:
 
 servers:
   web:
+    hostname: langler@142.93.178.180
     - 142.93.178.180
 
 proxy:

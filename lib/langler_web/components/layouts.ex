@@ -12,6 +12,7 @@ defmodule LanglerWeb.Layouts do
   embed_templates "layouts/*"
 
   @dictionary_search_modal LanglerWeb.DictionarySearchLive.Modal
+  @allow_registration_link Application.compile_env(:langler, :env) != :prod
   @theme_options [
     %{name: "sage", label: "Sage", gradient: "from-teal-400 to-teal-600"},
     %{name: "ocean", label: "Ocean", gradient: "from-blue-400 to-blue-600"},
@@ -41,7 +42,10 @@ defmodule LanglerWeb.Layouts do
   slot :inner_block, required: true
 
   def app(assigns) do
-    assigns = assign_new(assigns, :dictionary_search_modal, fn -> @dictionary_search_modal end)
+    assigns =
+      assigns
+      |> assign_new(:dictionary_search_modal, fn -> @dictionary_search_modal end)
+      |> assign_new(:allow_registration_link, fn -> @allow_registration_link end)
 
     ~H"""
     <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
@@ -139,9 +143,11 @@ defmodule LanglerWeb.Layouts do
           <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
             Log in
           </.link>
-          <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
-            Create account
-          </.link>
+          <%= if @allow_registration_link do %>
+            <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
+              Create account
+            </.link>
+          <% end %>
         </div>
       </div>
     </header>

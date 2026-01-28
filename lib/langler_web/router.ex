@@ -66,6 +66,7 @@ defmodule LanglerWeb.Router do
       live "/users/settings/llm", UserLive.LlmSettings, :index
       live "/users/settings/tts", UserLive.TtsSettings, :index
       live "/users/settings/google-translate", UserLive.GoogleTranslateSettings, :index
+      live "/users/invites", UserLive.Invites, :index
       live "/articles", ArticleLive.Index, :index
       live "/articles/recommendations", ArticleLive.Recommendations, :index
       live "/articles/:id", ArticleLive.Show, :show
@@ -87,7 +88,13 @@ defmodule LanglerWeb.Router do
 
     live_session :current_user,
       on_mount: [{LanglerWeb.UserAuth, :mount_current_scope}] do
-      live "/users/register", UserLive.Registration, :new
+      # Registration requires invite token - only accessible via invite link
+      # In production, only allow registration with token (invite-only)
+      # In dev/test, allow registration without token for testing
+      if Application.compile_env(:langler, :env) != :prod do
+        live "/users/register", UserLive.Registration, :new
+      end
+      live "/users/register/:token", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
     end

@@ -15,6 +15,8 @@ config :swoosh, api_client: Swoosh.ApiClient.Req
 # Disable Swoosh Local Memory Storage
 config :swoosh, local: false
 
+# Mailgun adapter will be configured in runtime.exs from environment variables
+
 # Do not print debug messages in production
 config :logger, level: :info
 

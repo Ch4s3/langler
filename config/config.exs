@@ -22,7 +22,8 @@ config :langler, :scopes,
 
 config :langler,
   ecto_repos: [Langler.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  env: config_env()
 
 # Configures the endpoint
 config :langler, LanglerWeb.Endpoint,

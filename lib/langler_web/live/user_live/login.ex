@@ -7,6 +7,7 @@ defmodule LanglerWeb.UserLive.Login do
 
   alias Langler.Accounts
 
+  @allow_registration_link Application.compile_env(:langler, :env) != :prod
   @impl true
   def render(assigns) do
     ~H"""
@@ -19,11 +20,13 @@ defmodule LanglerWeb.UserLive.Login do
               <%= if @current_scope do %>
                 You need to reauthenticate to perform sensitive actions on your account.
               <% else %>
-                Don't have an account? <.link
-                  navigate={~p"/users/register"}
-                  class="font-semibold text-brand hover:underline"
-                  phx-no-format
-                >Sign up</.link> for an account now.
+                <%= if @allow_registration_link do %>
+                  Don't have an account? <.link
+                    navigate={~p"/users/register"}
+                    class="font-semibold text-brand hover:underline"
+                    phx-no-format
+                  >Sign up</.link> for an account now.
+                <% end %>
               <% end %>
             </:subtitle>
           </.header>
@@ -108,7 +111,12 @@ defmodule LanglerWeb.UserLive.Login do
 
     form = to_form(%{"email" => email}, as: "user")
 
-    {:ok, assign(socket, form: form, trigger_submit: false)}
+    {:ok,
+     assign(socket,
+       form: form,
+       trigger_submit: false,
+       allow_registration_link: @allow_registration_link
+     )}
   end
 
   @impl true

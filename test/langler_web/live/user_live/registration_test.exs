@@ -4,31 +4,37 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
   import Phoenix.LiveViewTest
   import Langler.AccountsFixtures
 
+  alias Langler.Accounts
+
   describe "Registration page" do
     test "renders registration page", %{conn: conn} do
-      {:ok, _lv, html} = live(conn, ~p"/users/register")
+      {token, _email} = invite_token()
+      {:ok, _lv, html} = live(conn, ~p"/users/register/#{token}")
 
       assert html =~ "Register"
       assert html =~ "Log in"
     end
 
     test "redirects if already logged in", %{conn: conn} do
+      {token, _email} = invite_token()
+
       result =
         conn
         |> log_in_user(user_fixture())
-        |> live(~p"/users/register")
+        |> live(~p"/users/register/#{token}")
         |> follow_redirect(conn, ~p"/")
 
       assert {:ok, _conn} = result
     end
 
     test "renders errors for invalid data", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/register")
+      {token, _email} = invite_token()
+      {:ok, lv, _html} = live(conn, ~p"/users/register/#{token}")
 
       result =
         lv
-        |> element("#registration_form")
-        |> render_change(user: %{"email" => "with spaces"})
+        |> form("#registration_form", user: %{"email" => "with spaces"})
+        |> render_submit()
 
       assert result =~ "Register"
       assert result =~ "must have the @ sign and no spaces"
@@ -37,10 +43,10 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
 
   describe "register user" do
     test "creates account but does not log in", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/register")
+      {token, invite_email} = invite_token()
+      {:ok, lv, _html} = live(conn, ~p"/users/register/#{token}")
 
-      email = unique_user_email()
-      form = form(lv, "#registration_form", user: valid_user_attributes(email: email))
+      form = form(lv, "#registration_form", user: valid_user_attributes(email: invite_email))
 
       {:ok, _lv, html} =
         render_submit(form)
@@ -51,9 +57,9 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
     end
 
     test "renders errors for duplicated email", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/register")
-
       user = user_fixture(%{email: "test@email.com"})
+      {token, _invite_email} = invite_token(user.email)
+      {:ok, lv, _html} = live(conn, ~p"/users/register/#{token}")
 
       result =
         lv
@@ -68,7 +74,8 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
 
   describe "registration navigation" do
     test "redirects to login page when the Log in button is clicked", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/register")
+      {token, _email} = invite_token()
+      {:ok, lv, _html} = live(conn, ~p"/users/register/#{token}")
 
       {:ok, _login_live, login_html} =
         lv
@@ -78,5 +85,13 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
 
       assert login_html =~ "Log in"
     end
+  end
+
+  defp invite_token(email \\ unique_user_email()) do
+    inviter = user_fixture()
+
+    {:ok, invite} = Accounts.Invites.create_invite(inviter, email)
+
+    {invite.token, invite.email}
   end
 end
