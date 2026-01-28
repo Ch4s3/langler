@@ -36,15 +36,6 @@ config :langler, LanglerWeb.Endpoint,
   pubsub_server: Langler.PubSub,
   live_view: [signing_salt: "wOEkjjG2"]
 
-# Configures the mailer
-#
-# By default it uses the "Local" adapter which stores the emails
-# locally. You can see the emails in your browser, at "/dev/mailbox".
-#
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
-config :langler, Langler.Mailer, adapter: Swoosh.Adapters.Local
-
 config :langler, Oban,
   repo: Langler.Repo,
   engine: Oban.Engines.Basic,

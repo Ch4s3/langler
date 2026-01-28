@@ -94,6 +94,7 @@ defmodule LanglerWeb.Router do
       if Application.compile_env(:langler, :env) != :prod do
         live "/users/register", UserLive.Registration, :new
       end
+
       live "/users/register/:token", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new

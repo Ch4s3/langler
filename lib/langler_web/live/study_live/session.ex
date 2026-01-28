@@ -219,12 +219,10 @@ defmodule LanglerWeb.StudyLive.Session do
 
   defp card_stats(assigns) do
     ~H"""
-    <div
-      class={[
-        "grid grid-cols-4 gap-1 text-[0.6rem] leading-tight border-t border-base-200 py-1 lg:gap-2 lg:text-[0.65rem]",
-        @class
-      ]}
-    >
+    <div class={[
+      "grid grid-cols-4 gap-1 text-[0.6rem] leading-tight border-t border-base-200 py-1 lg:gap-2 lg:text-[0.65rem]",
+      @class
+    ]}>
       <div class="text-center">
         <span class="font-semibold text-base-content/70">Ease</span>
         <p class="text-[0.55rem] leading-none">{format_decimal(@item.ease_factor || 2.5)}</p>

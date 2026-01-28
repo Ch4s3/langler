@@ -6,8 +6,7 @@ import Config
 # which you should run after static files are built and
 # before starting your production server.
 # Note: SSL is handled by kamal-proxy, so we don't force SSL at the app level
-config :langler, LanglerWeb.Endpoint,
-  cache_static_manifest: "priv/static/cache_manifest.json"
+config :langler, LanglerWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Req

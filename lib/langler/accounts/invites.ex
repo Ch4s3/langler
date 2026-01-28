@@ -119,5 +119,4 @@ defmodule Langler.Accounts.Invites do
     |> User.changeset(%{invites_remaining: max(0, user.invites_remaining - 1)})
     |> Repo.update()
   end
-
 end

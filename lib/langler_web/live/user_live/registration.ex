@@ -76,7 +76,8 @@ defmodule LanglerWeb.UserLive.Registration do
          |> assign_form(%User{}, %{})}
 
       invite ->
-        changeset = Accounts.change_user_email(%User{}, %{email: invite.email}, validate_unique: false)
+        changeset =
+          Accounts.change_user_email(%User{}, %{email: invite.email}, validate_unique: false)
 
         {:ok,
          socket
@@ -84,8 +85,7 @@ defmodule LanglerWeb.UserLive.Registration do
          |> assign(:invite_token, token)
          |> assign(:invite_email, invite.email)
          |> assign(:invite, invite)
-         |> assign_form(changeset),
-         temporary_assigns: [form: nil]}
+         |> assign_form(changeset), temporary_assigns: [form: nil]}
     end
   end
 
@@ -108,9 +108,7 @@ defmodule LanglerWeb.UserLive.Registration do
       {:noreply,
        socket
        |> put_flash(:error, "Invalid invitation. Please use a valid invite link.")
-       |> assign_form(
-         Accounts.change_user_email(%User{}, user_params, validate_unique: false)
-       )}
+       |> assign_form(Accounts.change_user_email(%User{}, user_params, validate_unique: false))}
     end
   end
 
@@ -151,11 +149,12 @@ defmodule LanglerWeb.UserLive.Registration do
          |> push_navigate(to: ~p"/users/log-in")}
 
       {:error, _} ->
-
         {:noreply,
          socket
          |> put_flash(:error, "Failed to process invitation. Please try again.")
-         |> assign_form(Accounts.change_user_email(%User{}, %{email: email}, validate_unique: false))}
+         |> assign_form(
+           Accounts.change_user_email(%User{}, %{email: email}, validate_unique: false)
+         )}
     end
   end
 

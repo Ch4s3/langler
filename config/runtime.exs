@@ -105,7 +105,7 @@ if config_env() == :prod do
   # Configure Mailgun adapter for production
   mailgun_api_key = System.get_env("MAILGUN_API_KEY")
   mailgun_domain = System.get_env("MAILGUN_DOMAIN")
-  mailgun_base_url = System.get_env("MAILGUN_BASE_URL", "https://api.mailgun.net")
+  mailgun_base_url = System.get_env("MAILGUN_BASE_URL", "https://api.mailgun.net/v3")
 
   if mailgun_api_key && mailgun_domain do
     config :langler, Langler.Mailer,
@@ -117,15 +117,16 @@ if config_env() == :prod do
     # In production, warn if Mailgun is not configured
     if config_env() == :prod do
       require Logger
+
       Logger.warning("""
       ⚠️  Mailgun is not configured for production!
-      
+
       Email delivery will fail. Please set the following environment variables:
-      - MAILGUN_API_KEY
-      - MAILGUN_DOMAIN
-      
+      - MAILGUN_API_KEY: #{if mailgun_api_key, do: "SET", else: "NOT SET"}
+      - MAILGUN_DOMAIN: #{if mailgun_domain, do: "SET", else: "NOT SET"}
+
       Optional:
-      - MAILGUN_BASE_URL (defaults to https://api.mailgun.net)
+      - MAILGUN_BASE_URL (defaults to https://api.mailgun.net/v3)
       """)
     end
   end
