@@ -10,15 +10,32 @@ defmodule Langler.Accounts.UserNotifier do
 
   # Delivers the email using the application mailer.
   defp deliver(recipient, subject, body) do
+    from_email = get_from_email()
+
     email =
       new()
       |> to(recipient)
-      |> from({"Langler", "contact@example.com"})
+      |> from({"Langler", from_email})
       |> subject(subject)
       |> text_body(body)
 
     with {:ok, _metadata} <- Mailer.deliver(email) do
       {:ok, email}
+    end
+  end
+
+  # Gets the from email address based on the configured mailer domain
+  # Uses the Mailgun domain if configured, otherwise falls back to example.com
+  defp get_from_email do
+    case Application.get_env(:langler, Langler.Mailer, []) do
+      config when is_list(config) ->
+        case Keyword.get(config, :domain) do
+          nil -> "contact@example.com"
+          domain -> "postmaster@#{domain}"
+        end
+
+      _ ->
+        "contact@example.com"
     end
   end
 

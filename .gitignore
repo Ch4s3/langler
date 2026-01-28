@@ -52,3 +52,5 @@ priv/static/audio/
 fly.secrets.local
 
 .kamal/secrets
+
+/scripts/
