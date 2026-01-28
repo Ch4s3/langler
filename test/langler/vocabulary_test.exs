@@ -1,6 +1,9 @@
 defmodule Langler.VocabularyTest do
   use Langler.DataCase, async: true
 
+  import Langler.AccountsFixtures
+  import Langler.VocabularyFixtures
+
   alias Langler.ContentFixtures
   alias Langler.Vocabulary
 
