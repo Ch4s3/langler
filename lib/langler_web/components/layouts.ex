@@ -54,7 +54,8 @@ defmodule LanglerWeb.Layouts do
     end
   end
 
-  defp app_with_registration(assigns) do
+  if @allow_registration_link do
+    defp app_with_registration(assigns) do
     ~H"""
     <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
       <div class="mx-auto grid w-full max-w-6xl grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -81,7 +82,7 @@ defmodule LanglerWeb.Layouts do
                 navigate={~p"/study"}
                 class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
               >
-                <.icon name="hero-brain" class="h-4 w-4" />
+                <.icon name="hero-academic-cap" class="h-4 w-4" />
                 <span>Study</span>
               </.link>
             </li>
@@ -151,7 +152,7 @@ defmodule LanglerWeb.Layouts do
           <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
             Log in
           </.link>
-          <.link navigate={~p"/users/register"} class="btn btn-sm btn-primary text-white">
+          <.link navigate="/users/register" class="btn btn-sm btn-primary text-white">
             Create account
           </.link>
         </div>
@@ -182,6 +183,7 @@ defmodule LanglerWeb.Layouts do
       />
     <% end %>
     """
+    end
   end
 
   defp app_without_registration(assigns) do
@@ -211,7 +213,7 @@ defmodule LanglerWeb.Layouts do
                 navigate={~p"/study"}
                 class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
               >
-                <.icon name="hero-brain" class="h-4 w-4" />
+                <.icon name="hero-academic-cap" class="h-4 w-4" />
                 <span>Study</span>
               </.link>
             </li>

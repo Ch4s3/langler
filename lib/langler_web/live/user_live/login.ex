@@ -17,7 +17,8 @@ defmodule LanglerWeb.UserLive.Login do
     end
   end
 
-  defp render_with_registration(assigns) do
+  if @allow_registration_link do
+    defp render_with_registration(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
       <div class="mx-auto max-w-sm space-y-4">
@@ -29,7 +30,7 @@ defmodule LanglerWeb.UserLive.Login do
                 You need to reauthenticate to perform sensitive actions on your account.
               <% else %>
                 Don't have an account? <.link
-                  navigate={~p"/users/register"}
+                  navigate="/users/register"
                   class="font-semibold text-brand hover:underline"
                   phx-no-format
                 >Sign up</.link> for an account now.
@@ -107,6 +108,7 @@ defmodule LanglerWeb.UserLive.Login do
       </div>
     </Layouts.app>
     """
+    end
   end
 
   defp render_without_registration(assigns) do
