@@ -1097,4 +1097,430 @@ defmodule Langler.ContentTest do
       assert Enum.empty?(sports_urls)
     end
   end
+
+  describe "list_articles_for_user/2 with search" do
+    test "filters articles by title search query" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 =
+        article_fixture(%{
+          title: "Learning Spanish Grammar",
+          url: "https://example.com/grammar"
+        })
+
+      article2 =
+        article_fixture(%{
+          title: "Advanced Vocabulary Tips",
+          url: "https://example.com/vocab"
+        })
+
+      article3 =
+        article_fixture(%{
+          title: "Spanish Food Culture",
+          url: "https://example.com/food"
+        })
+
+      # Associate all articles with user
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+      Content.ensure_article_user(article3, user.id)
+
+      # Search for "spanish"
+      results = Content.list_articles_for_user(user.id, query: "spanish")
+      result_ids = Enum.map(results, & &1.id)
+
+      assert article1.id in result_ids
+      assert article3.id in result_ids
+      refute article2.id in result_ids
+    end
+
+    test "filters articles by URL search query" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 =
+        article_fixture(%{
+          title: "Test Article 1",
+          url: "https://example.com/spanish-grammar"
+        })
+
+      article2 =
+        article_fixture(%{
+          title: "Test Article 2",
+          url: "https://example.com/french-grammar"
+        })
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Search by URL pattern
+      results = Content.list_articles_for_user(user.id, query: "spanish")
+      result_ids = Enum.map(results, & &1.id)
+
+      assert article1.id in result_ids
+      refute article2.id in result_ids
+    end
+
+    test "filters articles by source search query" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 =
+        article_fixture(%{
+          title: "Article 1",
+          source: "El País",
+          url: "https://example.com/1"
+        })
+
+      article2 =
+        article_fixture(%{
+          title: "Article 2",
+          source: "BBC News",
+          url: "https://example.com/2"
+        })
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Search by source
+      results = Content.list_articles_for_user(user.id, query: "país")
+      result_ids = Enum.map(results, & &1.id)
+
+      assert article1.id in result_ids
+      refute article2.id in result_ids
+    end
+
+    test "returns empty list when search query matches nothing" do
+      user = AccountsFixtures.user_fixture()
+
+      article =
+        article_fixture(%{
+          title: "Spanish Grammar",
+          url: "https://example.com/test"
+        })
+
+      Content.ensure_article_user(article, user.id)
+
+      results = Content.list_articles_for_user(user.id, query: "nonexistentquery")
+      assert results == []
+    end
+
+    test "trims whitespace from search query" do
+      user = AccountsFixtures.user_fixture()
+
+      article =
+        article_fixture(%{
+          title: "Spanish Grammar",
+          url: "https://example.com/test"
+        })
+
+      Content.ensure_article_user(article, user.id)
+
+      # Query with extra whitespace
+      results = Content.list_articles_for_user(user.id, query: "  spanish  ")
+      assert length(results) == 1
+      assert hd(results).id == article.id
+    end
+
+    test "treats empty string query as nil" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Article 1"})
+      article2 = article_fixture(%{title: "Article 2"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Empty string should return all articles
+      results = Content.list_articles_for_user(user.id, query: "")
+      assert length(results) == 2
+    end
+
+    test "search is case insensitive" do
+      user = AccountsFixtures.user_fixture()
+
+      article =
+        article_fixture(%{
+          title: "Spanish Grammar Basics",
+          url: "https://example.com/test"
+        })
+
+      Content.ensure_article_user(article, user.id)
+
+      # Search with different cases
+      results_lower = Content.list_articles_for_user(user.id, query: "spanish")
+      results_upper = Content.list_articles_for_user(user.id, query: "SPANISH")
+      results_mixed = Content.list_articles_for_user(user.id, query: "SpAnIsH")
+
+      assert length(results_lower) == 1
+      assert length(results_upper) == 1
+      assert length(results_mixed) == 1
+    end
+  end
+
+  describe "list_articles_for_user/2 with topic filter" do
+    test "filters articles by topic" do
+      user = AccountsFixtures.user_fixture()
+
+      # Create articles
+      article1 = article_fixture(%{title: "Sports News"})
+      article2 = article_fixture(%{title: "Tech News"})
+      article3 = article_fixture(%{title: "More Sports"})
+
+      # Associate with user
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+      Content.ensure_article_user(article3, user.id)
+
+      # Tag articles with topics
+      Content.tag_article(article1, [{"sports", 0.9}])
+      Content.tag_article(article2, [{"technology", 0.9}])
+      Content.tag_article(article3, [{"sports", 0.8}])
+
+      # Filter by sports topic
+      results = Content.list_articles_for_user(user.id, topic: "sports")
+      result_ids = Enum.map(results, & &1.id)
+
+      assert article1.id in result_ids
+      assert article3.id in result_ids
+      refute article2.id in result_ids
+    end
+
+    test "returns empty list when topic has no matching articles" do
+      user = AccountsFixtures.user_fixture()
+
+      article = article_fixture(%{title: "Tech Article"})
+      Content.ensure_article_user(article, user.id)
+      Content.tag_article(article, [{"technology", 0.9}])
+
+      results = Content.list_articles_for_user(user.id, topic: "sports")
+      assert results == []
+    end
+
+    test "returns all articles when topic is empty string" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Article 1"})
+      article2 = article_fixture(%{title: "Article 2"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Empty string topic should not filter
+      results = Content.list_articles_for_user(user.id, topic: "")
+      assert length(results) == 2
+    end
+
+    test "returns all articles when topic is nil" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Article 1"})
+      article2 = article_fixture(%{title: "Article 2"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Nil topic should not filter
+      results = Content.list_articles_for_user(user.id, topic: nil)
+      assert length(results) == 2
+    end
+  end
+
+  describe "list_articles_for_user/2 with combined filters" do
+    test "applies both search and topic filters together" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Spanish Sports News"})
+      article2 = article_fixture(%{title: "Spanish Tech News"})
+      article3 = article_fixture(%{title: "French Sports News"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+      Content.ensure_article_user(article3, user.id)
+
+      Content.tag_article(article1, [{"sports", 0.9}])
+      Content.tag_article(article2, [{"technology", 0.9}])
+      Content.tag_article(article3, [{"sports", 0.9}])
+
+      # Filter by both topic and search query
+      results = Content.list_articles_for_user(user.id, topic: "sports", query: "spanish")
+
+      assert length(results) == 1
+      assert hd(results).id == article1.id
+    end
+  end
+
+  describe "list_topics_for_article/1" do
+    test "returns empty list for nil article_id" do
+      assert Content.list_topics_for_article(nil) == []
+    end
+
+    test "returns topics ordered by confidence desc" do
+      article = article_fixture()
+
+      Content.tag_article(article, [
+        {"sports", 0.9},
+        {"culture", 0.5},
+        {"politics", 0.7}
+      ])
+
+      topics = Content.list_topics_for_article(article.id)
+      confidences = Enum.map(topics, fn t -> Decimal.to_float(t.confidence) end)
+
+      assert confidences == Enum.sort(confidences, :desc)
+      assert List.first(topics).topic == "sports"
+    end
+  end
+
+  describe "get_articles_by_topic/2" do
+    test "excludes archived articles" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Sports 1"})
+      article2 = article_fixture(%{title: "Sports 2"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      # Archive one article
+      Content.archive_article_for_user(user.id, article2.id)
+
+      Content.tag_article(article1, [{"sports", 0.9}])
+      Content.tag_article(article2, [{"sports", 0.9}])
+
+      results = Content.get_articles_by_topic("sports", user.id)
+      result_ids = Enum.map(results, & &1.id)
+
+      assert article1.id in result_ids
+      refute article2.id in result_ids
+    end
+
+    test "preloads article_topics" do
+      user = AccountsFixtures.user_fixture()
+
+      article = article_fixture()
+      Content.ensure_article_user(article, user.id)
+      Content.tag_article(article, [{"sports", 0.9}])
+
+      [result] = Content.get_articles_by_topic("sports", user.id)
+
+      assert Ecto.assoc_loaded?(result.article_topics)
+      assert length(result.article_topics) == 1
+    end
+  end
+
+  describe "list_archived_articles_for_user/1" do
+    test "only returns archived articles" do
+      user = AccountsFixtures.user_fixture()
+
+      article1 = article_fixture(%{title: "Active Article"})
+      article2 = article_fixture(%{title: "Archived Article"})
+
+      Content.ensure_article_user(article1, user.id)
+      Content.ensure_article_user(article2, user.id)
+
+      Content.archive_article_for_user(user.id, article2.id)
+
+      archived = Content.list_archived_articles_for_user(user.id)
+      archived_ids = Enum.map(archived, & &1.id)
+
+      refute article1.id in archived_ids
+      assert article2.id in archived_ids
+    end
+  end
+
+  describe "list_finished_articles_for_user/1" do
+    test "preloads article_topics" do
+      user = AccountsFixtures.user_fixture()
+
+      article = article_fixture()
+      Content.ensure_article_user(article, user.id)
+      Content.tag_article(article, [{"sports", 0.9}])
+      Content.finish_article_for_user(user.id, article.id)
+
+      [result] = Content.list_finished_articles_for_user(user.id)
+
+      assert Ecto.assoc_loaded?(result.article_topics)
+      assert length(result.article_topics) == 1
+    end
+  end
+
+  describe "get_article_by_url/1" do
+    test "returns article when URL matches" do
+      article = article_fixture(%{url: "https://example.com/test"})
+
+      result = Content.get_article_by_url("https://example.com/test")
+
+      assert result.id == article.id
+    end
+
+    test "returns nil when URL doesn't match" do
+      article_fixture(%{url: "https://example.com/test"})
+
+      result = Content.get_article_by_url("https://example.com/other")
+
+      assert result == nil
+    end
+  end
+
+  describe "get_article_for_user/2" do
+    test "returns article when user has access" do
+      user = AccountsFixtures.user_fixture()
+      article = article_fixture()
+
+      Content.ensure_article_user(article, user.id)
+
+      result = Content.get_article_for_user(user.id, article.id)
+
+      assert result.id == article.id
+    end
+
+    test "returns nil when user doesn't have access" do
+      user = AccountsFixtures.user_fixture()
+      other_user = AccountsFixtures.user_fixture()
+      article = article_fixture()
+
+      Content.ensure_article_user(article, other_user.id)
+
+      result = Content.get_article_for_user(user.id, article.id)
+
+      assert result == nil
+    end
+  end
+
+  describe "restore_article_for_user/2" do
+    test "returns error when article_user doesn't exist" do
+      user = AccountsFixtures.user_fixture()
+      article = article_fixture()
+
+      # Don't create article_user association
+
+      assert {:error, :not_found} = Content.restore_article_for_user(user.id, article.id)
+    end
+  end
+
+  describe "get_discovered_article_by_url/1" do
+    test "returns discovered article when URL matches" do
+      {:ok, source_site} =
+        Content.create_source_site(%{
+          name: "Test Site",
+          url: "https://example.com",
+          feed_url: "https://example.com/feed",
+          language: "spanish",
+          discovery_method: "rss"
+        })
+
+      Content.upsert_discovered_articles(source_site.id, [
+        %{url: "https://example.com/article1", title: "Test"}
+      ])
+
+      result = Content.get_discovered_article_by_url("https://example.com/article1")
+
+      assert result.url == "https://example.com/article1"
+    end
+
+    test "returns nil when URL doesn't match" do
+      result = Content.get_discovered_article_by_url("https://nonexistent.com/test")
+
+      assert result == nil
+    end
+  end
 end

@@ -37,6 +37,9 @@ env:
   secret:
     - SECRET_KEY_BASE
     - DATABASE_URL
+    - MAILGUN_API_KEY
+    - MAILGUN_DOMAIN
+    - MAILGUN_BASE_URL
 
 accessories:
   db:

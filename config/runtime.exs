@@ -113,5 +113,20 @@ if config_env() == :prod do
       api_key: mailgun_api_key,
       domain: mailgun_domain,
       base_url: mailgun_base_url
+  else
+    # In production, warn if Mailgun is not configured
+    if config_env() == :prod do
+      require Logger
+      Logger.warning("""
+      ⚠️  Mailgun is not configured for production!
+      
+      Email delivery will fail. Please set the following environment variables:
+      - MAILGUN_API_KEY
+      - MAILGUN_DOMAIN
+      
+      Optional:
+      - MAILGUN_BASE_URL (defaults to https://api.mailgun.net)
+      """)
+    end
   end
 end
