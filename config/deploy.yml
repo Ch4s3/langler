@@ -9,7 +9,6 @@ builder:
 
 servers:
   web:
-    hostname: langler@142.93.178.180
     - 142.93.178.180
 
 proxy:
@@ -33,6 +32,8 @@ env:
     PHX_HOST: 142.93.178.180
     PORT: "4000"
     POOL_SIZE: "5"
+    RELEASE_DISTRIBUTION: "name"
+    RELEASE_NODE: "langler@142.93.178.180"
   secret:
     - SECRET_KEY_BASE
     - DATABASE_URL
