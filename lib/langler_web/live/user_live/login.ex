@@ -8,16 +8,13 @@ defmodule LanglerWeb.UserLive.Login do
   alias Langler.Accounts
 
   @allow_registration_link Application.compile_env(:langler, :env) != :prod
-  @impl true
-  def render(assigns) do
-    if @allow_registration_link do
-      render_with_registration(assigns)
-    else
-      render_without_registration(assigns)
-    end
-  end
 
   if @allow_registration_link do
+    @impl true
+    def render(assigns) do
+      render_with_registration(assigns)
+    end
+
     defp render_with_registration(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
@@ -108,6 +105,11 @@ defmodule LanglerWeb.UserLive.Login do
       </div>
     </Layouts.app>
     """
+    end
+  else
+    @impl true
+    def render(assigns) do
+      render_without_registration(assigns)
     end
   end
 

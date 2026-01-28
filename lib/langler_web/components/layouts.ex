@@ -41,20 +41,16 @@ defmodule LanglerWeb.Layouts do
 
   slot :inner_block, required: true
 
-  def app(assigns) do
-    assigns =
-      assigns
-      |> assign_new(:dictionary_search_modal, fn -> @dictionary_search_modal end)
-      |> assign_new(:allow_registration_link, fn -> @allow_registration_link end)
-
-    if @allow_registration_link do
-      app_with_registration(assigns)
-    else
-      app_without_registration(assigns)
-    end
-  end
-
   if @allow_registration_link do
+    def app(assigns) do
+      assigns =
+        assigns
+        |> assign_new(:dictionary_search_modal, fn -> @dictionary_search_modal end)
+        |> assign_new(:allow_registration_link, fn -> @allow_registration_link end)
+
+      app_with_registration(assigns)
+    end
+
     defp app_with_registration(assigns) do
     ~H"""
     <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
@@ -183,6 +179,15 @@ defmodule LanglerWeb.Layouts do
       />
     <% end %>
     """
+    end
+  else
+    def app(assigns) do
+      assigns =
+        assigns
+        |> assign_new(:dictionary_search_modal, fn -> @dictionary_search_modal end)
+        |> assign_new(:allow_registration_link, fn -> @allow_registration_link end)
+
+      app_without_registration(assigns)
     end
   end
 

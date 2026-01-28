@@ -153,4 +153,220 @@ defmodule Langler.VocabularyTest do
     assert Vocabulary.normalize_form("Árbol") == "arbol"
     assert Vocabulary.normalize_form("Niño") == "nino"
   end
+
+  describe "deck management" do
+    test "get_or_create_default_deck/1 creates default deck when none exists" do
+      user = user_fixture()
+
+      assert {:ok, deck} = Vocabulary.get_or_create_default_deck(user.id)
+      assert deck.name == "Default"
+      assert deck.is_default == true
+      assert deck.user_id == user.id
+    end
+
+    test "get_or_create_default_deck/1 returns existing default deck" do
+      user = user_fixture()
+
+      {:ok, first} = Vocabulary.get_or_create_default_deck(user.id)
+      {:ok, second} = Vocabulary.get_or_create_default_deck(user.id)
+
+      assert first.id == second.id
+    end
+
+    test "create_deck/2 creates a new deck" do
+      user = user_fixture()
+
+      assert {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Spanish Verbs"})
+      assert deck.name == "Spanish Verbs"
+      assert deck.user_id == user.id
+      assert deck.is_default == false
+    end
+
+    test "list_decks_for_user/1 returns all user decks" do
+      user = user_fixture()
+
+      {:ok, deck1} = Vocabulary.create_deck(user.id, %{name: "Deck 1"})
+      {:ok, deck2} = Vocabulary.create_deck(user.id, %{name: "Deck 2"})
+
+      decks = Vocabulary.list_decks_for_user(user.id)
+
+      assert length(decks) == 2
+      assert Enum.any?(decks, &(&1.id == deck1.id))
+      assert Enum.any?(decks, &(&1.id == deck2.id))
+    end
+
+    test "list_decks_for_user/1 preloads words association" do
+      user = user_fixture()
+      word = word_fixture()
+
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test Deck"})
+      Vocabulary.add_word_to_deck(deck.id, word.id, user.id)
+
+      decks = Vocabulary.list_decks_for_user(user.id)
+
+      # Should have words preloaded
+      found_deck = Enum.find(decks, &(&1.id == deck.id))
+      assert found_deck
+      assert Ecto.assoc_loaded?(found_deck.words)
+    end
+
+    test "get_deck_for_user!/2 returns deck when it belongs to user" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+
+      found = Vocabulary.get_deck_for_user!(deck.id, user.id)
+      assert found.id == deck.id
+    end
+
+    test "get_deck_for_user!/2 raises when deck doesn't belong to user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user1.id, %{name: "Test"})
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Vocabulary.get_deck_for_user!(deck.id, user2.id)
+      end
+    end
+
+    test "get_deck_for_user/2 returns deck when it belongs to user" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+
+      found = Vocabulary.get_deck_for_user(deck.id, user.id)
+      assert found.id == deck.id
+    end
+
+    test "get_deck_for_user/2 returns nil when deck doesn't belong to user" do
+      user1 = user_fixture()
+      user2 = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user1.id, %{name: "Test"})
+
+      assert Vocabulary.get_deck_for_user(deck.id, user2.id) == nil
+    end
+
+    test "update_deck/3 updates deck attributes" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Original"})
+
+      assert {:ok, updated} = Vocabulary.update_deck(deck.id, user.id, %{name: "Updated"})
+      assert updated.name == "Updated"
+    end
+
+    test "update_deck/3 prevents unsetting is_default on default deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.get_or_create_default_deck(user.id)
+
+      assert {:ok, updated} =
+               Vocabulary.update_deck(deck.id, user.id, %{is_default: false, name: "New Name"})
+
+      assert updated.is_default == true
+      assert updated.name == "New Name"
+    end
+
+    test "update_deck/3 returns error when deck not found" do
+      user = user_fixture()
+
+      assert {:error, :not_found} = Vocabulary.update_deck(999_999, user.id, %{name: "Test"})
+    end
+
+    test "delete_deck/2 deletes non-default deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Temp"})
+
+      assert {:ok, _} = Vocabulary.delete_deck(deck.id, user.id)
+      assert Vocabulary.get_deck_for_user(deck.id, user.id) == nil
+    end
+
+    test "delete_deck/2 prevents deleting default deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.get_or_create_default_deck(user.id)
+
+      assert {:error, :cannot_delete_default} = Vocabulary.delete_deck(deck.id, user.id)
+    end
+
+    test "delete_deck/2 returns error when deck not found" do
+      user = user_fixture()
+
+      assert {:error, :not_found} = Vocabulary.delete_deck(999_999, user.id)
+    end
+
+    test "add_word_to_deck/3 adds word to deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+      word = word_fixture()
+
+      assert {:ok, deck_word} = Vocabulary.add_word_to_deck(deck.id, word.id, user.id)
+      assert deck_word.deck_id == deck.id
+      assert deck_word.word_id == word.id
+    end
+
+    test "add_word_to_deck/3 returns existing association if already added" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+      word = word_fixture()
+
+      {:ok, first} = Vocabulary.add_word_to_deck(deck.id, word.id, user.id)
+      {:ok, second} = Vocabulary.add_word_to_deck(deck.id, word.id, user.id)
+
+      assert first.id == second.id
+    end
+
+    test "add_word_to_deck/3 returns error when deck not found" do
+      user = user_fixture()
+      word = word_fixture()
+
+      assert {:error, :deck_not_found} = Vocabulary.add_word_to_deck(999_999, word.id, user.id)
+    end
+
+    test "remove_word_from_deck/3 removes word from deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+      word = word_fixture()
+
+      {:ok, _} = Vocabulary.add_word_to_deck(deck.id, word.id, user.id)
+      assert {:ok, _} = Vocabulary.remove_word_from_deck(deck.id, word.id, user.id)
+
+      # Verify it's removed
+      words = Vocabulary.list_words_in_deck(deck.id, user.id)
+      refute Enum.any?(words, &(&1.id == word.id))
+    end
+
+    test "remove_word_from_deck/3 succeeds when word not in deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+      word = word_fixture()
+
+      assert {:ok, nil} = Vocabulary.remove_word_from_deck(deck.id, word.id, user.id)
+    end
+
+    test "remove_word_from_deck/3 returns error when deck not found" do
+      user = user_fixture()
+      word = word_fixture()
+
+      assert {:error, :deck_not_found} =
+               Vocabulary.remove_word_from_deck(999_999, word.id, user.id)
+    end
+
+    test "list_words_in_deck/2 returns all words in deck" do
+      user = user_fixture()
+      {:ok, deck} = Vocabulary.create_deck(user.id, %{name: "Test"})
+      word1 = word_fixture()
+      word2 = word_fixture()
+
+      Vocabulary.add_word_to_deck(deck.id, word1.id, user.id)
+      Vocabulary.add_word_to_deck(deck.id, word2.id, user.id)
+
+      words = Vocabulary.list_words_in_deck(deck.id, user.id)
+
+      assert length(words) == 2
+      assert Enum.any?(words, &(&1.id == word1.id))
+      assert Enum.any?(words, &(&1.id == word2.id))
+    end
+
+    test "list_words_in_deck/2 returns empty list when deck not found" do
+      user = user_fixture()
+
+      assert Vocabulary.list_words_in_deck(999_999, user.id) == []
+    end
+  end
 end
