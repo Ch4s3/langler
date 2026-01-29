@@ -20,6 +20,10 @@ ARG RUNNER_IMAGE="docker.io/debian:${DEBIAN_VERSION}"
 
 FROM ${BUILDER_IMAGE} AS builder
 
+# Erlang needs a locale or user_sup fails with nouser in Docker
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
 # install build dependencies (Rust needed for NIF compilation, Node.js for assets)
 RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
@@ -84,13 +88,13 @@ FROM ${RUNNER_IMAGE} AS final
 ARG COMMIT
 ENV APP_REVISION=$COMMIT
 
-RUN apt-get update \
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && apt-get install -y --no-install-recommends libstdc++6 openssl libncurses6 locales ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Set the locale
+# Set the locale (noninteractive so debconf doesn't block)
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
-  && locale-gen
+  && DEBIAN_FRONTEND=noninteractive locale-gen
 
 ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
