@@ -39,6 +39,9 @@ env:
     POOL_SIZE: "15"
     RELEASE_DISTRIBUTION: "name"
     RELEASE_NODE: "langler@142.93.178.180"
+    # DATABASE_URL must use host langler-db (not the server IP) so the app
+    # container can reach Postgres over the Docker network, e.g.:
+    # postgres://langler:YOUR_PASSWORD@langler-db:5432/langler_prod
   secret:
     - SECRET_KEY_BASE
     - DATABASE_URL
