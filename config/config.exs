@@ -39,7 +39,10 @@ config :langler, LanglerWeb.Endpoint,
 config :langler, Oban,
   repo: Langler.Repo,
   engine: Oban.Engines.Basic,
-  queues: [default: 50, ingestion: 10],
+  # Keep total queue concurrency within DB pool (web + Oban + CacheLoader share pool)
+  queues: [default: 8, ingestion: 3],
+  # Reduce Stager frequency to avoid Sonar timeouts when pool is busy
+  stage_interval: :timer.seconds(5),
   plugins: [
     Oban.Plugins.Pruner,
     {Oban.Plugins.Cron,

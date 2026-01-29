@@ -30,13 +30,14 @@ defmodule Langler.External.Dictionary.CacheLoader do
 
   @impl true
   def handle_info(:warm, state) do
-    warm_all_tables()
+    # Run in a task so DB pool contention doesn't block this GenServer or crash it
+    Task.start(fn -> warm_all_tables() end)
     {:noreply, state}
   end
 
   @impl true
   def handle_call(:warm, _from, state) do
-    warm_all_tables()
+    Task.start(fn -> warm_all_tables() end)
     {:reply, :ok, state}
   end
 
@@ -69,6 +70,11 @@ defmodule Langler.External.Dictionary.CacheLoader do
           "Dictionary cache loader: failed to warm #{table}: #{inspect(reason)}. Cache will populate on-demand."
         )
     end
+  rescue
+    error ->
+      Logger.warning(
+        "Dictionary cache loader: warm failed (#{table}): #{inspect(error)}. Cache will populate on-demand."
+      )
   end
 
   defp table_size(table) do

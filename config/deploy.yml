@@ -36,7 +36,7 @@ env:
     PHX_SERVER: "true"
     PHX_HOST: news-deck.com
     PORT: "4000"
-    POOL_SIZE: "5"
+    POOL_SIZE: "15"
     RELEASE_DISTRIBUTION: "name"
     RELEASE_NODE: "langler@142.93.178.180"
   secret:
