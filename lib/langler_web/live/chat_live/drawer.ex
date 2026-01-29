@@ -275,7 +275,11 @@ defmodule LanglerWeb.ChatLive.Drawer do
           <.chat_header current_session={@current_session} myself={@myself} fullscreen={@fullscreen} />
 
           <%!-- Messages Area --%>
-          <div id="chat-main-area" class="chat-main-area" phx-hook="ChatAutoScroll">
+          <div
+            id="chat-main-area"
+            class={["chat-main-area", @sidebar_open && "overflow-x-hidden"]}
+            phx-hook="ChatAutoScroll"
+          >
             <%= if @current_session == nil do %>
               <.empty_state llm_config_missing={@llm_config_missing} />
             <% else %>
@@ -291,8 +295,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
                   ]}
                 >
                   <%= if msg.role == "user" do %>
-                    <div class="flex flex-col items-end gap-2 w-1/2">
-                      <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-3 py-2 shadow-lg">
+                    <div class={[
+                      "flex flex-col items-end gap-2 w-full",
+                      @sidebar_open && "max-w-full",
+                      !@sidebar_open && "max-w-[66.666%]"
+                    ]}>
+                      <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-3 py-2 shadow-lg w-full">
                         <p class="text-left text-sm leading-relaxed whitespace-normal break-words">
                           {msg.content}
                         </p>
