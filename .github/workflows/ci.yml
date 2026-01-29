@@ -178,12 +178,20 @@ jobs:
     needs: [test, lint, assay]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check GHCR_PAT is set
+        run: |
+          if [ -z "$GHCR_PAT" ]; then
+            echo "::error::GHCR_PAT secret is not set or is empty. Add it under Settings → Secrets and variables → Actions (repository secret)."
+            exit 1
+          fi
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
 
       - name: Set image repo (lowercase for OCI)
         run: |
