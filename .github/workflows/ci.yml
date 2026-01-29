@@ -22,11 +22,6 @@ jobs:
           elixir-version: 1.20.0-rc.1
           otp-version: 28.3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Cache Mix deps
         uses: actions/cache@v4
         with:
@@ -43,25 +38,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-mix-build-
 
-      - name: Cache npm modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
       - name: Install Elixir dependencies
         run: mix deps.get
 
-      - name: Install npm dependencies
-        run: npm ci
-
       - name: Compile app
         run: mix compile --warnings-as-errors
-
-      - name: Prepare assets
-        run: mix assets.setup
 
   test:
     needs: build
@@ -92,11 +73,6 @@ jobs:
           elixir-version: 1.20.0-rc.1
           otp-version: 28.3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Cache Mix deps
         uses: actions/cache@v4
         with:
@@ -112,20 +88,6 @@ jobs:
           key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**', 'config/**', 'native/**') }}
           restore-keys: |
             ${{ runner.os }}-mix-build-
-
-      - name: Cache npm modules
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-npm-
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Prepare assets
-        run: mix assets.setup
 
       - name: Run tests with coverage gate
         run: mix test --cover
@@ -237,7 +199,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -273,7 +235,7 @@ jobs:
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
           DATABASE_URL=${{ secrets.DATABASE_URL }}
           KAMAL_REGISTRY_USERNAME=${{ github.actor }}
-          KAMAL_REGISTRY_PASSWORD=${{ secrets.GITHUB_TOKEN }}
+          KAMAL_REGISTRY_PASSWORD=${{ secrets.GHCR_PAT }}
           EOF
 
       - name: Deploy with Kamal
