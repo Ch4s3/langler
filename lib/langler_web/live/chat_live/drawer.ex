@@ -396,6 +396,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
               llm_config_missing={@llm_config_missing}
               total_tokens={@total_tokens}
               show_tokens={@current_session != nil}
+              sidebar_open={@sidebar_open}
               myself={@myself}
             />
           </div>
@@ -422,6 +423,11 @@ defmodule LanglerWeb.ChatLive.Drawer do
   @impl true
   def handle_event("toggle_sidebar", _params, socket) do
     {:noreply, assign(socket, :sidebar_open, !socket.assigns.sidebar_open)}
+  end
+
+  @impl true
+  def handle_event("close_sidebar", _params, socket) do
+    {:noreply, assign(socket, :sidebar_open, false)}
   end
 
   @impl true

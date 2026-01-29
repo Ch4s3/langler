@@ -51,7 +51,7 @@ defmodule LanglerWeb.ChatLive.ChatHeader do
           type="button"
           phx-click="toggle_fullscreen"
           phx-target={@myself}
-          class="btn btn-ghost btn-sm btn-circle"
+          class="btn btn-ghost btn-sm btn-circle hidden lg:inline-flex"
           aria-label={if @fullscreen, do: "Exit fullscreen", else: "Enter fullscreen"}
         >
           <.icon

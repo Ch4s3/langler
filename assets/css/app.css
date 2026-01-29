@@ -819,6 +819,18 @@ body {
   }
 }
 
+@media (max-width: 1023px) {
+  .chat-drawer-panel {
+    inset: 0;
+    width: 100vw;
+  }
+
+  .chat-drawer-main {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+}
+
 /* Fullscreen styles for mobile */
 @media (max-width: 1023px) {
   #chat-drawer-container.chat-fullscreen {

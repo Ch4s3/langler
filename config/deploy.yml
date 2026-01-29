@@ -12,9 +12,14 @@ servers:
     - 142.93.178.180
 
 proxy:
-  ssl: false
-  host: 142.93.178.180
+  ssl: true
+  # Domain(s) for routing and Let's Encrypt; must resolve to this server
+  hosts:
+    - news-deck.com
+    - app.news-deck.com
+    - www.news-deck.com
   app_port: 4000
+  forward_headers: true
   healthcheck:
     path: /
     interval: 3
@@ -29,7 +34,7 @@ registry:
 env:
   clear:
     PHX_SERVER: "true"
-    PHX_HOST: 142.93.178.180
+    PHX_HOST: news-deck.com
     PORT: "4000"
     POOL_SIZE: "5"
     RELEASE_DISTRIBUTION: "name"

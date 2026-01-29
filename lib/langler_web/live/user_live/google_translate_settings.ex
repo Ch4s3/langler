@@ -16,7 +16,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
      socket
      |> assign(:configs, configs)
      |> assign(:editing_config, nil)
-     |> assign(:form, nil)}
+     |> assign(:form, to_form(%{}, as: :google_translate_config))}
   end
 
   @impl true
@@ -148,15 +148,14 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
             </div>
 
             <.form
-              :let={f}
-              for={@form || %{}}
+              for={@form}
               id="google-translate-config-form"
               phx-submit="save_config"
               phx-change="validate"
               class="space-y-4"
             >
               <.input
-                field={f[:api_key]}
+                field={@form[:api_key]}
                 type="text"
                 label="API Key"
                 placeholder="Enter your Google Cloud API key"
@@ -174,20 +173,20 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
               </p>
 
               <.input
-                field={f[:is_default]}
+                field={@form[:is_default]}
                 type="checkbox"
                 label="Set as default configuration"
               />
 
               <.input
-                field={f[:enabled]}
+                field={@form[:enabled]}
                 type="checkbox"
                 label="Enable Google Translate feature"
-                value={get_field_value(f, :enabled, true)}
+                value={get_field_value(@form, :enabled, true)}
               />
 
-              <div class="flex gap-2">
-                <button type="submit" class="btn btn-primary">
+              <div class="flex flex-wrap gap-2">
+                <button type="submit" class="btn btn-primary w-full sm:w-auto">
                   <.icon name="hero-check" class="h-4 w-4" />
                   {if @editing_config, do: "Update", else: "Add"} Configuration
                 </button>
@@ -195,7 +194,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
                 <button
                   :if={@editing_config}
                   type="button"
-                  class="btn btn-ghost"
+                  class="btn btn-ghost w-full sm:w-auto"
                   phx-click="cancel_edit"
                 >
                   Cancel
@@ -203,7 +202,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
 
                 <button
                   type="button"
-                  class="btn btn-outline"
+                  class="btn btn-outline w-full sm:w-auto"
                   phx-click="test_config"
                   disabled={!can_test_config(@form)}
                 >
@@ -253,7 +252,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
          socket
          |> assign(:configs, configs)
          |> assign(:editing_config, nil)
-         |> assign(:form, nil)
+         |> assign(:form, to_form(%{}, as: :google_translate_config))
          |> put_flash(:info, "Configuration saved successfully")}
 
       {:error, changeset} ->
@@ -290,7 +289,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
     {:noreply,
      socket
      |> assign(:editing_config, nil)
-     |> assign(:form, nil)}
+     |> assign(:form, to_form(%{}, as: :google_translate_config))}
   end
 
   def handle_event("delete_config", %{"id" => id}, socket) do

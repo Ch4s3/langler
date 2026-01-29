@@ -40,6 +40,12 @@ const ArticleStickyHeader = {
     }
   },
   measureArticle() {
+    const heroEl = this.heroContent || this.el
+    if (heroEl) {
+      this.heroHeight = heroEl.offsetHeight
+      this.heroBottomOffset = this.initialOffsetTop + this.heroHeight
+    }
+
     if (!this.readerEl) return
     const rect = this.readerEl.getBoundingClientRect()
     this.articleTop = rect.top + window.scrollY
@@ -58,7 +64,7 @@ const ArticleStickyHeader = {
     const heroRect = this.heroContent
       ? this.heroContent.getBoundingClientRect()
       : this.el.getBoundingClientRect()
-    this.heroBottom = heroRect.bottom + scrollY
+    this.heroBottom = this.heroBottomOffset || heroRect.bottom + scrollY
     const hysteresis = viewportBreakpoint ? 6 : 12
     const heroTopViewport = heroRect.top
 

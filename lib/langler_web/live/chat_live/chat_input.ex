@@ -20,19 +20,21 @@ defmodule LanglerWeb.ChatLive.ChatInput do
       |> assign_new(:llm_config_missing, fn -> false end)
       |> assign_new(:total_tokens, fn -> 0 end)
       |> assign_new(:show_tokens, fn -> true end)
+      |> assign_new(:sidebar_open, fn -> false end)
 
     ~H"""
     <div class="p-4 bg-base-100/95 backdrop-blur-sm">
-      <form phx-submit="send_message" phx-target={@myself} class="flex gap-3 items-end">
-        <div class="flex-1 relative">
+      <form phx-submit="send_message" phx-target={@myself} class="w-full">
+        <div class="relative">
           <textarea
             name="message"
             value={@input_value}
             phx-change="update_input"
+            phx-focus="close_sidebar"
             phx-target={@myself}
-            placeholder="Type your message..."
+            placeholder={if @sidebar_open, do: "", else: "Type your message..."}
             rows="1"
-            class="textarea textarea-bordered w-full rounded-2xl pr-12 resize-none min-h-[44px] max-h-[200px]"
+            class="textarea textarea-bordered w-full rounded-2xl pr-14 py-3 resize-none min-h-[48px] max-h-[200px]"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
@@ -42,7 +44,10 @@ defmodule LanglerWeb.ChatLive.ChatInput do
           ></textarea>
           <button
             type="submit"
-            class="absolute right-2 bottom-2 btn btn-primary btn-circle btn-sm shadow-lg hover:scale-110 transition-transform"
+            class={[
+              "absolute right-2 top-1/2 -translate-y-1/2 btn btn-primary btn-circle btn-xs sm:btn-sm shadow-lg hover:scale-110 transition-transform",
+              @sidebar_open && "hidden"
+            ]}
             disabled={@llm_config_missing || @input_value == "" || @sending}
             aria-label="Send message"
           >
