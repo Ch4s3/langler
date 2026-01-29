@@ -8,7 +8,63 @@ on:
   workflow_dispatch:
 
 jobs:
-  ci-suite:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+      OTP_VERSION: 28.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Erlang/Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: 1.20.0-rc.1
+          otp-version: 28.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache Mix deps
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-deps-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-deps-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: _build
+          key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**', 'config/**', 'native/**') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-build-
+
+      - name: Cache npm modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install Elixir dependencies
+        run: mix deps.get
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Compile app
+        run: mix compile --warnings-as-errors
+
+      - name: Prepare assets
+        run: mix assets.setup
+
+  test:
+    needs: build
     runs-on: ubuntu-latest
     env:
       MIX_ENV: test
@@ -53,7 +109,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: _build
-          key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock') }}
+          key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**', 'config/**', 'native/**') }}
           restore-keys: |
             ${{ runner.os }}-mix-build-
 
@@ -68,14 +124,42 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Install Elixir dependencies
-        run: mix deps.get
-
-      - name: Compile app
-        run: mix compile --warnings-as-errors
-
       - name: Prepare assets
         run: mix assets.setup
+
+      - name: Run tests with coverage gate
+        run: mix test --cover
+
+  lint:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+      OTP_VERSION: 28.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Erlang/Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: 1.20.0-rc.1
+          otp-version: 28.3
+
+      - name: Cache Mix deps
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-deps-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-deps-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: _build
+          key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**', 'config/**', 'native/**') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-build-
 
       - name: Check formatting
         run: mix format --check-formatted
@@ -85,6 +169,37 @@ jobs:
 
       - name: Run Sobelow
         run: mix sobelow --config config/sobelow.json
+
+  assay:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      MIX_ENV: test
+      OTP_VERSION: 28.3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Erlang/Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: 1.20.0-rc.1
+          otp-version: 28.3
+
+      - name: Cache Mix deps
+        uses: actions/cache@v4
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-deps-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-deps-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: _build
+          key: ${{ runner.os }}-mix-build-${{ hashFiles('mix.lock', 'mix.exs', 'lib/**', 'config/**', 'native/**') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-build-
 
       - name: Cache Dialyzer PLT
         uses: actions/cache@v4
@@ -97,13 +212,8 @@ jobs:
       - name: Run assay (GitHub format)
         run: mix assay --format github
 
-      - name: Run tests with coverage gate
-        shell: bash
-
-        run: mix test --cover
-
   deploy-to-digitalocean:
-    needs: ci-suite
+    needs: [test, lint, assay]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     environment: production
