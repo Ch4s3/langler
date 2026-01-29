@@ -291,7 +291,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
                   ]}
                 >
                   <%= if msg.role == "user" do %>
-                    <div class="flex flex-col items-end gap-2 max-w-[80%] sm:max-w-[70%]">
+                    <div class="flex flex-col items-end gap-2 w-1/2">
                       <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-3 py-2 shadow-lg">
                         <p class="text-left text-sm leading-relaxed whitespace-normal break-words">
                           {msg.content}
@@ -299,14 +299,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
                       </div>
                     </div>
                   <% else %>
-                    <div class="flex items-start gap-3 max-w-[80%] sm:max-w-[70%]">
+                    <div class="flex w-full items-start gap-3">
                       <div class="avatar placeholder">
-                        <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center shrink-0">
+                        <div class="bg-primary/20 text-primary rounded-full w-8 h-8 !flex items-center justify-center shrink-0">
                           <.icon name="hero-sparkles" class="h-4 w-4 block" />
                         </div>
                       </div>
                       <div class="flex flex-col gap-2 flex-1">
-                        <div class="chat-bubble bg-base-200 text-base-content rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
+                        <div class="chat-bubble bg-base-200 text-base-content rounded-2xl rounded-tl-sm px-4 py-3 shadow-md w-full">
                           <%= if @current_session do %>
                             <div class="markdown-content prose prose-sm max-w-none dark:prose-invert">
                               {raw(
@@ -361,7 +361,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
                 aria-label="Assistant is typing"
               >
                 <div class="avatar placeholder">
-                  <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center">
+                  <div class="bg-primary/20 text-primary rounded-full w-8 h-8 !flex items-center justify-center">
                     <.icon name="hero-sparkles" class="h-4 w-4 block" />
                   </div>
                 </div>

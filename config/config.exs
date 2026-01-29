@@ -124,8 +124,12 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :appsignal, :config,
+  otp_app: :langler,
+  name: "newsdeck",
+  push_api_key: "16d66b9b-b686-415c-960f-199ebc1f9e57",
+  env: Mix.env()
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"
-
-import_config "appsignal.exs"
