@@ -66,7 +66,13 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    # Allow LiveView/WebSocket from all app hostnames (PHX_HOST may be one; users may use another)
+    check_origin: [
+      "https://news-deck.com",
+      "https://app.news-deck.com",
+      "https://www.news-deck.com"
+    ]
 
   # ## SSL Support
   #

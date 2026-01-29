@@ -104,11 +104,10 @@ const ArticleStickyHeader = {
   updateProgress(scrollY) {
     if (!this.readerEl || !this.progressFill) return
 
-    const heroInfluence = this.heroBottom
-      ? this.heroBottom - window.innerHeight * 0.25
-      : this.articleTop
-    const start = heroInfluence
-    const end = this.articleBottom - window.innerHeight
+    const articleTop = this.articleTop ?? 0
+    const articleBottom = this.articleBottom ?? articleTop + 1
+    const start = articleTop
+    const end = articleBottom - window.innerHeight
     const denominator = Math.max(end - start, 1)
     const progress = clamp((scrollY - start) / denominator)
 
