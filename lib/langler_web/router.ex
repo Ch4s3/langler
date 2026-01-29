@@ -67,6 +67,7 @@ defmodule LanglerWeb.Router do
       live "/users/settings/tts", UserLive.TtsSettings, :index
       live "/users/settings/google-translate", UserLive.GoogleTranslateSettings, :index
       live "/users/invites", UserLive.Invites, :index
+      live "/library", ArticleLive.Index, :index
       live "/articles", ArticleLive.Index, :index
       live "/articles/recommendations", ArticleLive.Recommendations, :index
       live "/articles/:id", ArticleLive.Show, :show

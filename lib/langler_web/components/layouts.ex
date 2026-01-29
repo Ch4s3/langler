@@ -56,7 +56,7 @@ defmodule LanglerWeb.Layouts do
       <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
         <div class="mx-auto grid w-full max-w-6xl grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <.link
-            navigate={~p"/articles"}
+            navigate={~p"/library"}
             class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
           >
             <span class="hidden sm:inline">Langler</span>
@@ -66,7 +66,7 @@ defmodule LanglerWeb.Layouts do
             <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-xs font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
-                  navigate={~p"/articles"}
+                  navigate={~p"/library"}
                   class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
                 >
                   <.icon name="hero-book-open" class="h-4 w-4" />
@@ -194,7 +194,7 @@ defmodule LanglerWeb.Layouts do
       <header class="primary-nav border-b border-base-200 bg-base-100/90 backdrop-blur sticky top-0 z-50 transition-all duration-200">
         <div class="mx-auto grid w-full max-w-6xl grid-cols-[auto,1fr,auto] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <.link
-            navigate={~p"/articles"}
+            navigate={~p"/library"}
             class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
           >
             <span class="hidden sm:inline">Langler</span>
@@ -204,7 +204,7 @@ defmodule LanglerWeb.Layouts do
             <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-xs font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
-                  navigate={~p"/articles"}
+                  navigate={~p"/library"}
                   class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
                 >
                   <.icon name="hero-book-open" class="h-4 w-4" />

@@ -667,6 +667,32 @@ body {
 }
 
 @media (max-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .kpi-card {
+    padding: 0.75rem;
+    min-height: auto;
+    border-radius: 0.9rem;
+    align-items: flex-start;
+  }
+
+  .kpi-card__title {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+  }
+
+  .kpi-card__value {
+    font-size: 1.1rem;
+  }
+
+  .kpi-card__meta {
+    display: none;
+  }
+
   .article-meta .tooltip::before,
   .article-meta .tooltip::after {
     display: none;

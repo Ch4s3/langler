@@ -38,10 +38,33 @@ defmodule LanglerWeb.UserAuth do
   """
   def log_in_user(conn, user, params \\ %{}) do
     user_return_to = get_session(conn, :user_return_to)
+    referer_path = referring_path(conn)
 
     conn
     |> create_or_extend_session(user, params)
-    |> redirect(to: user_return_to || signed_in_path(conn))
+    |> redirect(to: user_return_to || referer_path || signed_in_path(conn))
+  end
+
+  defp referring_path(conn) do
+    conn
+    |> get_req_header("referer")
+    |> List.first()
+    |> parse_referer_path()
+  end
+
+  defp parse_referer_path(nil), do: nil
+
+  defp parse_referer_path(referer) do
+    uri = URI.parse(referer)
+    path = if uri.path in [nil, ""], do: "/", else: uri.path
+
+    query =
+      case uri.query do
+        nil -> ""
+        q -> "?#{q}"
+      end
+
+    path <> query
   end
 
   @doc """
@@ -266,7 +289,7 @@ defmodule LanglerWeb.UserAuth do
     ~p"/users/settings"
   end
 
-  def signed_in_path(_), do: ~p"/"
+  def signed_in_path(_), do: ~p"/library"
 
   @doc """
   Plug for routes that require the user to be authenticated.

@@ -18,7 +18,7 @@ defmodule LanglerWeb.UserSessionControllerTest do
         })
 
       assert get_session(conn, :user_token)
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/library"
 
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/users/settings")
@@ -40,7 +40,7 @@ defmodule LanglerWeb.UserSessionControllerTest do
         })
 
       assert conn.resp_cookies["_langler_web_user_remember_me"]
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/library"
     end
 
     test "logs the user in with return to", %{conn: conn, user: user} do
@@ -81,7 +81,7 @@ defmodule LanglerWeb.UserSessionControllerTest do
         })
 
       assert get_session(conn, :user_token)
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/library"
 
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/users/settings")
@@ -101,7 +101,7 @@ defmodule LanglerWeb.UserSessionControllerTest do
         })
 
       assert get_session(conn, :user_token)
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/library"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "User confirmed successfully."
 
       assert Accounts.get_user!(user.id).confirmed_at

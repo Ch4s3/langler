@@ -22,7 +22,7 @@ defmodule LanglerWeb.UserLive.RegistrationTest do
         conn
         |> log_in_user(user_fixture())
         |> live(~p"/users/register/#{token}")
-        |> follow_redirect(conn, ~p"/")
+        |> follow_redirect(conn, ~p"/library")
 
       assert {:ok, _conn} = result
     end

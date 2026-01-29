@@ -25,8 +25,17 @@ defmodule LanglerWeb.UserAuthTest do
       conn = UserAuth.log_in_user(conn, user)
       assert token = get_session(conn, :user_token)
       assert get_session(conn, :live_socket_id) == "users_sessions:#{Base.url_encode64(token)}"
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/library"
       assert Accounts.get_user_by_session_token(token)
+    end
+
+    test "prefers the referring page over the default", %{conn: conn, user: user} do
+      conn =
+        conn
+        |> put_req_header("referer", "https://example.com/library?page=2")
+        |> UserAuth.log_in_user(user)
+
+      assert redirected_to(conn) == "/library?page=2"
     end
 
     test "clears everything previously stored in the session", %{conn: conn, user: user} do

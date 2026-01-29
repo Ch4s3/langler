@@ -236,7 +236,11 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+          # Store host by IP (no -H) so lookup matches when Kamal connects; clear stale key if droplet was recreated
+          ssh-keygen -R ${{ secrets.DROPLET_IP }} 2>/dev/null || true
+          ssh-keyscan ${{ secrets.DROPLET_IP }} >> ~/.ssh/known_hosts
+          echo "Host *" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking accept-new" >> ~/.ssh/config
 
       - name: Create Kamal secrets file
         run: |

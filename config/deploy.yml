@@ -1,6 +1,6 @@
 service: langler
-# Image built in GHA and pushed to GHCR; set KAMAL_IMAGE in CI (e.g. ghcr.io/owner/repo)
-image: <%= ENV["KAMAL_IMAGE"] || "ghcr.io/ch4s3/langler" %>
+# Image built in GHA and pushed to GHCR; set KAMAL_IMAGE in CI to owner/repo only (Kamal prepends registry)
+image: <%= ENV["KAMAL_IMAGE"] || "ch4s3/langler" %>
 
 # Build locally (or in GHA); image is pushed from CI, deploy uses --skip-push so droplet only pulls
 builder:
