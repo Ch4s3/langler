@@ -221,7 +221,7 @@ jobs:
       - name: Set image repo (lowercase for OCI)
         run: |
           REPO_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
-          echo "KAMAL_IMAGE=ghcr.io/$REPO_LOWER" >> $GITHUB_ENV
+          echo "KAMAL_IMAGE=$REPO_LOWER" >> $GITHUB_ENV
 
       - name: Set up Ruby for Kamal
         uses: ruby/setup-ruby@v1

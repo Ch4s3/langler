@@ -102,6 +102,9 @@ RUN chown nobody /app
 # set runner ENV
 ENV MIX_ENV="prod"
 
+# Kamal expects this label to match deploy.yml service name
+LABEL service="langler"
+
 # Only copy the final release from the build stage
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/langler ./
 
