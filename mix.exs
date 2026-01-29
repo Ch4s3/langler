@@ -100,7 +100,8 @@ defmodule Langler.MixProject do
       {:bandit, "~> 1.5"},
       {:tidewave, "~> 0.5", only: :dev},
       {:live_isolated_component, "~> 0.10.0", only: [:dev, :test]},
-      {:nimble_csv, "~> 1.2"}
+      {:nimble_csv, "~> 1.2"},
+      {:appsignal_phoenix, "~> 2.0"}
     ]
   end
 

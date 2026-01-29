@@ -88,3 +88,5 @@ config :phoenix_live_view,
 config :swoosh, :api_client, false
 
 config :langler, Langler.Mailer, adapter: Swoosh.Adapters.Local
+
+config :appsignal, :config, active: true
