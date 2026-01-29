@@ -195,8 +195,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
         class={[
           "chat-drawer-panel fixed inset-y-0 right-0 flex bg-base-100/70 backdrop-blur-md transition-transform duration-300 ease-in-out",
           "lg:bg-transparent lg:backdrop-blur-0",
-          @chat_open && "translate-x-0 opacity-100",
-          !@chat_open && "translate-x-full opacity-0 pointer-events-none",
+          @chat_open && "translate-x-0 opacity-100 visible",
+          !@chat_open && "opacity-0 pointer-events-none invisible",
           @fullscreen && "chat-drawer-fullscreen"
         ]}
         aria-hidden={!@chat_open}
@@ -292,8 +292,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
                 >
                   <%= if msg.role == "user" do %>
                     <div class="flex flex-col items-end gap-2 max-w-[80%] sm:max-w-[70%]">
-                      <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-4 py-3 shadow-lg">
-                        <p class="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      <div class="chat-bubble chat-bubble-primary bg-gradient-to-br from-primary to-primary/80 text-primary-content rounded-2xl rounded-tr-sm px-3 py-2 shadow-lg">
+                        <p class="text-left text-sm leading-relaxed whitespace-normal break-words">
                           {msg.content}
                         </p>
                       </div>
@@ -301,8 +301,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
                   <% else %>
                     <div class="flex items-start gap-3 max-w-[80%] sm:max-w-[70%]">
                       <div class="avatar placeholder">
-                        <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center">
-                          <.icon name="hero-sparkles" class="h-4 w-4" />
+                        <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center shrink-0">
+                          <.icon name="hero-sparkles" class="h-4 w-4 block" />
                         </div>
                       </div>
                       <div class="flex flex-col gap-2 flex-1">
@@ -362,7 +362,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
               >
                 <div class="avatar placeholder">
                   <div class="bg-primary/20 text-primary rounded-full w-8 h-8 flex items-center justify-center">
-                    <.icon name="hero-sparkles" class="h-4 w-4" />
+                    <.icon name="hero-sparkles" class="h-4 w-4 block" />
                   </div>
                 </div>
                 <div class="chat-bubble bg-base-200 text-base-content/70 flex items-center gap-2 rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">

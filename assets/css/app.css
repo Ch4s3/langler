@@ -520,6 +520,7 @@ body {
   transition: padding 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   border-radius: 0;
   border: none;
+  overflow-x: hidden;
 }
 
 .article-meta__full {
@@ -666,6 +667,11 @@ body {
 }
 
 @media (max-width: 640px) {
+  .article-meta .tooltip::before,
+  .article-meta .tooltip::after {
+    display: none;
+  }
+
   .article-meta__controls {
     flex-direction: column;
     align-items: flex-start;
@@ -705,6 +711,7 @@ body {
   .article-meta--stuck .article-meta__actions {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .article-meta--stuck .article-meta__sticky-title {

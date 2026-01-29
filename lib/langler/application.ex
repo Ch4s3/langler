@@ -2,11 +2,16 @@ defmodule Langler.Application do
   @moduledoc """
   OTP application entry point for Langler.
   """
+  alias Appsignal.Logger.Handler, as: AppsignalLoggerHandler
+  alias Appsignal.Phoenix.LiveView, as: AppsignalLiveView
 
   use Application
 
   @impl true
   def start(_type, _args) do
+    AppsignalLoggerHandler.add("phoenix")
+    AppsignalLiveView.attach()
+
     children =
       [
         LanglerWeb.Telemetry,

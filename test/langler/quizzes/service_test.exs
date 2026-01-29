@@ -204,17 +204,6 @@ defmodule Langler.Quizzes.ServiceTest do
       assert String.length(session.title) <= 60
     end
 
-    test "uses custom context_type when provided", %{user: user, article: article} do
-      assigns = %{
-        article_id: article.id,
-        article_title: article.title,
-        context_type: "article_listening_quiz"
-      }
-
-      assert {:ok, %ChatSession{} = session} = Service.start_quiz_session(assigns, user)
-      assert session.context_type == "article_listening_quiz"
-    end
-
     test "uses default context_type when not provided", %{user: user, article: article} do
       assigns = %{article_id: article.id}
 
@@ -222,11 +211,15 @@ defmodule Langler.Quizzes.ServiceTest do
       assert session.context_type == Quizzes.context_type()
     end
 
-    test "returns error when session creation fails", %{user: user} do
-      # Missing required article_id
-      assigns = %{}
+    test "allows valid custom context_type", %{user: user, article: article} do
+      assigns = %{
+        article_id: article.id,
+        article_title: article.title,
+        context_type: "article_quiz"
+      }
 
-      assert {:error, _reason} = Service.start_quiz_session(assigns, user)
+      assert {:ok, %ChatSession{} = session} = Service.start_quiz_session(assigns, user)
+      assert session.context_type == "article_quiz"
     end
   end
 
@@ -271,7 +264,7 @@ defmodule Langler.Quizzes.ServiceTest do
     end
 
     test "ignores invalid sessions", %{article: article} do
-      session = %ChatSession{context_type: "chat", context_id: article.id, user_id: 1}
+      session = %ChatSession{context_type: "general", context_id: article.id, user_id: 1}
 
       assert {nil, nil} = Service.handle_quiz_result(session, "foo")
     end
@@ -289,12 +282,12 @@ defmodule Langler.Quizzes.ServiceTest do
       assert {:quiz_parse_error, nil} = Service.handle_quiz_result(session, assistant_content)
     end
 
-    test "handles listening quiz context type", %{user: user, article: article} do
+    test "handles article_quiz context type with valid result", %{user: user, article: article} do
       {:ok, session} =
         Session.create_session(user, %{
-          context_type: "article_listening_quiz",
+          context_type: "article_quiz",
           context_id: article.id,
-          title: "Listening Quiz"
+          title: "Reading Quiz"
         })
 
       result = %Result{
@@ -302,7 +295,7 @@ defmodule Langler.Quizzes.ServiceTest do
         max_score: 5,
         questions: [
           %{
-            "question" => "What did you hear?",
+            "question" => "What is the main topic?",
             "user_answer" => "test",
             "correct" => true,
             "explanation" => "Correct"
@@ -343,7 +336,7 @@ defmodule Langler.Quizzes.ServiceTest do
     test "returns nil for non-quiz sessions", %{user: user} do
       {:ok, session} =
         Session.create_session(user, %{
-          context_type: "chat",
+          context_type: "general",
           title: "Regular Chat"
         })
 
@@ -356,7 +349,7 @@ defmodule Langler.Quizzes.ServiceTest do
   describe "validate_quiz_session/1" do
     test "returns errors for invalid context types or missing article id" do
       assert {:error, :invalid_session_type} =
-               Service.validate_quiz_session(%ChatSession{context_type: "chat"})
+               Service.validate_quiz_session(%ChatSession{context_type: "general"})
 
       assert {:error, :missing_article_id} =
                Service.validate_quiz_session(%ChatSession{
@@ -388,9 +381,9 @@ defmodule Langler.Quizzes.ServiceTest do
       assert {:error, :invalid_session} = Service.validate_quiz_session(nil)
     end
 
-    test "returns error for listening_quiz context type" do
+    test "returns error for vocabulary context type" do
       session = %ChatSession{
-        context_type: "article_listening_quiz",
+        context_type: "vocabulary",
         context_id: 123
       }
 

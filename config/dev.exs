@@ -89,4 +89,4 @@ config :swoosh, :api_client, false
 
 config :langler, Langler.Mailer, adapter: Swoosh.Adapters.Local
 
-config :appsignal, :config, active: true
+config :appsignal, :config, active: false

@@ -37,7 +37,7 @@ defmodule Langler.External.Dictionary.CacheLoader do
 
   @impl true
   def handle_call(:warm, _from, state) do
-    Task.start(fn -> warm_all_tables() end)
+    warm_all_tables()
     {:reply, :ok, state}
   end
 

@@ -10,14 +10,15 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettingsTest do
 
     assert has_element?(view, "#google-translate-config-form")
 
-    # Initial params (flat, will be nested after validation)
+    # Form uses nested params (as: :google_translate_config)
     initial_params = %{
-      "api_key" => "secret-key-1234",
-      "is_default" => "true",
-      "enabled" => "true"
+      "google_translate_config" => %{
+        "api_key" => "secret-key-1234",
+        "is_default" => "true",
+        "enabled" => "true"
+      }
     }
 
-    # After render_change, form uses nested structure
     view
     |> form("#google-translate-config-form", initial_params)
     |> render_change()
@@ -68,7 +69,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettingsTest do
     {:ok, view, _html} = live(conn, "/users/settings/google-translate")
 
     view
-    |> form("#google-translate-config-form", %{"api_key" => ""})
+    |> form("#google-translate-config-form", %{"google_translate_config" => %{"api_key" => ""}})
     |> render_change()
 
     # Form should still be visible (validation happens on submit)
