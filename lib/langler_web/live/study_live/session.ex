@@ -263,8 +263,8 @@ defmodule LanglerWeb.StudyLive.Session do
       id="study-session-complete"
       class="flex-1 flex items-center justify-center p-4 animate-fade-in"
     >
-      <div class="card bg-base-100 shadow-xl max-w-xl w-full sm:max-w-2xl">
-        <div class="card-body gap-6">
+      <div class="card bg-base-100 shadow-xl max-w-xl w-full sm:max-w-2xl max-h-[85vh] sm:max-h-none overflow-hidden">
+        <div class="card-body gap-6 max-h-[85vh] sm:max-h-none overflow-y-auto sm:overflow-visible">
           <div class="text-center">
             <div class="mb-4">
               <.icon name="hero-check-circle" class="h-16 w-16 text-success mx-auto animate-fade-in" />
