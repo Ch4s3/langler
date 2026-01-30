@@ -38,6 +38,24 @@ defmodule LanglerWeb.UserAuthTest do
       assert redirected_to(conn) == "/library?page=2"
     end
 
+    test "ignores referer paths that point to log in or register", %{conn: conn, user: user} do
+      conn =
+        conn
+        |> put_req_header("referer", "https://example.com/users/log-in/also-invalid")
+        |> UserAuth.log_in_user(user)
+
+      assert redirected_to(conn) == ~p"/library"
+    end
+
+    test "ignores referer pointing to register page", %{conn: conn, user: user} do
+      conn =
+        conn
+        |> put_req_header("referer", "https://example.com/users/register")
+        |> UserAuth.log_in_user(user)
+
+      assert redirected_to(conn) == ~p"/library"
+    end
+
     test "clears everything previously stored in the session", %{conn: conn, user: user} do
       conn = conn |> put_session(:to_be_removed, "value") |> UserAuth.log_in_user(user)
       refute get_session(conn, :to_be_removed)

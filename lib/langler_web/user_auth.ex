@@ -58,13 +58,21 @@ defmodule LanglerWeb.UserAuth do
     uri = URI.parse(referer)
     path = if uri.path in [nil, ""], do: "/", else: uri.path
 
-    query =
-      case uri.query do
-        nil -> ""
-        q -> "?#{q}"
-      end
+    if skip_referer_path?(path) do
+      nil
+    else
+      query =
+        case uri.query do
+          nil -> ""
+          q -> "?#{q}"
+        end
 
-    path <> query
+      path <> query
+    end
+  end
+
+  defp skip_referer_path?(path) do
+    String.starts_with?(path, "/users/log-in") || String.starts_with?(path, "/users/register")
   end
 
   @doc """

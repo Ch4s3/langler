@@ -24,9 +24,9 @@ FROM ${BUILDER_IMAGE} AS builder
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-# install build dependencies (Rust needed for NIF compilation, Node.js for assets)
+# install build dependencies (Rust needed for NIF compilation, Node.js for assets, script for PTY)
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg \
+  && apt-get install -y --no-install-recommends build-essential git curl ca-certificates gnupg bsdutils \
   && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
   && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get install -y nodejs \

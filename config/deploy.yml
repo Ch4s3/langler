@@ -1,11 +1,14 @@
 service: langler
-# Image built in GHA and pushed to GHCR; set KAMAL_IMAGE in CI to owner/repo only (Kamal prepends registry)
+# Image built in GHA and pushed to GHCR. CI sets KAMAL_IMAGE to owner/repo. For local deploy (e.g. --skip-push),
+# set KAMAL_IMAGE to the same value so the server pulls the image CI pushed: KAMAL_IMAGE=owner/repo kamal deploy --skip-push
 image: <%= ENV["KAMAL_IMAGE"] || "ch4s3/langler" %>
 
-# Build locally (or in GHA); image is pushed from CI, deploy uses --skip-push so droplet only pulls
+# Build locally (or in GHA); image is pushed from CI, deploy uses --skip-push so droplet only pulls.
+# context: . uses this repo checkout; default is a git clone which can have a different Dockerfile.
 builder:
   arch: amd64
   local: true
+  context: .
 
 servers:
   web:
