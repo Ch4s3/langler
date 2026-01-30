@@ -1075,7 +1075,7 @@ defmodule LanglerWeb.ArticleLive.Show do
       "hover:underline hover:underline-offset-2 hover:decoration-primary/60 hover:text-primary",
       "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
       studied_token?(token, studied_word_ids, studied_forms) &&
-        "underline decoration-primary/40 underline-offset-2 text-primary/90"
+        "bg-primary/15 text-primary/90 shadow-[inset_0_-0.12em_0_0] shadow-primary/20"
     ]
   end
 

@@ -59,7 +59,7 @@ defmodule LanglerWeb.Layouts do
             navigate={~p"/library"}
             class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
           >
-            <span class="hidden sm:inline">Langler</span>
+            <span class="hidden sm:inline">NewsDeck</span>
           </.link>
 
           <nav class="flex min-w-0 justify-center">
@@ -197,7 +197,7 @@ defmodule LanglerWeb.Layouts do
             navigate={~p"/library"}
             class="flex items-center gap-3 text-lg font-semibold text-base-content no-underline"
           >
-            <span class="hidden sm:inline">Langler</span>
+            <span class="hidden sm:inline">NewsDeck</span>
           </.link>
 
           <nav class="flex min-w-0 justify-center">
