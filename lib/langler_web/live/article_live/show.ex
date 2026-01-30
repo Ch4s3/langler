@@ -1072,7 +1072,7 @@ defmodule LanglerWeb.ArticleLive.Show do
   defp lexical_token_class(token, studied_word_ids, studied_forms) do
     [
       "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200",
-      "hover:underline hover:underline-offset-2 hover:decoration-primary/60 hover:text-primary",
+      "hover:bg-primary/15 hover:text-primary/90 hover:shadow-[inset_0_-0.12em_0_0] hover:shadow-primary/20",
       "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
       studied_token?(token, studied_word_ids, studied_forms) &&
         "bg-primary/15 text-primary/90 shadow-[inset_0_-0.12em_0_0] shadow-primary/20"
