@@ -4,7 +4,6 @@ service: langler
 image: <%= ENV["KAMAL_IMAGE"] || "ch4s3/langler" %>
 
 # Build locally (or in GHA); image is pushed from CI, deploy uses --skip-push so droplet only pulls.
-# context: . uses this repo checkout; default is a git clone which can have a different Dockerfile.
 builder:
   arch: amd64
   local: true

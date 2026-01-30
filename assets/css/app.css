@@ -326,7 +326,10 @@
 
 /* Markdown styling in chat bubbles */
 .markdown-content table {
-  @apply w-full border-collapse my-2;
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .markdown-content table th,
