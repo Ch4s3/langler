@@ -22,6 +22,7 @@ defmodule Langler.Content do
 
   alias Langler.Content.Workers.CalculateArticleDifficultyWorker
   alias Langler.Repo
+  alias Langler.Vocabulary.IdiomOccurrence
   alias Oban
 
   def list_articles do
@@ -93,6 +94,7 @@ defmodule Langler.Content do
     |> Repo.all()
   end
 
+  def get_article(id), do: Repo.get(Article, id)
   def get_article!(id), do: Repo.get!(Article, id)
 
   def get_article_by_url(url), do: Repo.get_by(Article, url: url)
@@ -228,13 +230,26 @@ defmodule Langler.Content do
     |> where(article_id: ^article.id)
     |> order_by([s], asc: s.position)
     |> Repo.all()
-    |> Repo.preload(word_occurrences: [:word])
+    |> Repo.preload(word_occurrences: [:word], idiom_occurrences: [:word])
   end
 
   def create_sentence(attrs \\ %{}) do
     %Sentence{}
     |> Sentence.changeset(attrs)
     |> Repo.insert()
+  end
+
+  @doc """
+  Deletes all idiom occurrences for sentences belonging to the given article.
+  Used by ExtractIdiomsWorker before inserting new occurrences (idempotent rerun).
+  """
+  def delete_idiom_occurrences_for_article(article_id) when is_integer(article_id) do
+    from(io in IdiomOccurrence,
+      join: s in Sentence,
+      on: s.id == io.sentence_id,
+      where: s.article_id == ^article_id
+    )
+    |> Repo.delete_all()
   end
 
   @doc """

@@ -11,7 +11,7 @@ defmodule Langler.Vocabulary do
   alias Langler.External.Dictionary
   alias Langler.Repo
   alias Langler.Study
-  alias Langler.Vocabulary.{Deck, DeckWord, Word, WordOccurrence}
+  alias Langler.Vocabulary.{Deck, DeckWord, IdiomOccurrence, Word, WordOccurrence}
 
   def normalize_form(nil), do: nil
 
@@ -115,6 +115,20 @@ defmodule Langler.Vocabulary do
     WordOccurrence
     |> where(sentence_id: ^sentence_id)
     |> order_by([o], asc: o.position)
+    |> Repo.all()
+    |> Repo.preload(:word)
+  end
+
+  def create_idiom_occurrence(attrs \\ %{}) do
+    %IdiomOccurrence{}
+    |> IdiomOccurrence.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def list_idiom_occurrences_for_sentence(sentence_id) do
+    IdiomOccurrence
+    |> where(sentence_id: ^sentence_id)
+    |> order_by([o], asc: o.start_position)
     |> Repo.all()
     |> Repo.preload(:word)
   end

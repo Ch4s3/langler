@@ -10,6 +10,7 @@ defmodule Langler.Content.ArticleImporter do
   alias Langler.Content
   alias Langler.Content.Classifier
   alias Langler.Content.Readability
+  alias Langler.Content.Workers.ExtractIdiomsWorker
   alias Langler.Content.Workers.ExtractWordsWorker
   alias Langler.Repo
   alias Oban
@@ -29,6 +30,7 @@ defmodule Langler.Content.ArticleImporter do
           case refresh_article(article, user, normalized_url, html, parsed) do
             {:ok, refreshed} ->
               enqueue_word_extraction(refreshed)
+              enqueue_idiom_extraction(refreshed, user)
               {:ok, refreshed, :existing}
 
             {:error, reason} ->
@@ -40,6 +42,7 @@ defmodule Langler.Content.ArticleImporter do
           case persist_article(user, normalized_url, html, parsed) do
             {:ok, article} ->
               enqueue_word_extraction(article)
+              enqueue_idiom_extraction(article, user)
               {:ok, article, :new}
 
             {:error, _} = error ->
@@ -585,6 +588,18 @@ defmodule Langler.Content.ArticleImporter do
     %{article_id: article.id}
     |> ExtractWordsWorker.new()
     |> Oban.insert()
+  end
+
+  defp enqueue_idiom_extraction(article, user) do
+    pref = Accounts.get_user_preference(user.id)
+
+    if pref && pref.auto_detect_idioms do
+      %{article_id: article.id, user_id: user.id}
+      |> ExtractIdiomsWorker.new()
+      |> Oban.insert()
+    end
+
+    :ok
   end
 
   @doc """

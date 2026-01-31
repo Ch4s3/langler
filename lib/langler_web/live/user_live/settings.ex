@@ -122,6 +122,50 @@ defmodule LanglerWeb.UserLive.Settings do
           </div>
         </div>
 
+        <%!-- Article Processing --%>
+        <div class="rounded-3xl border border-base-200 bg-base-100/90 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <.icon name="hero-document-text" class="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-base-content">Article Processing</h2>
+              <p class="text-sm text-base-content/60">Options when importing articles</p>
+            </div>
+          </div>
+
+          <div class="divider my-2"></div>
+
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-4">
+              <input
+                type="checkbox"
+                id="auto-detect-idioms"
+                class="toggle toggle-primary"
+                checked={@auto_detect_idioms}
+                phx-click="toggle_idiom_detection"
+              />
+              <div>
+                <span class="label-text font-medium">Auto-detect idioms in articles</span>
+                <p class="text-xs text-base-content/60 mt-0.5">
+                  Use AI to identify idioms and expressions when importing articles.
+                  Requires an LLM provider to be configured.
+                </p>
+              </div>
+            </label>
+          </div>
+
+          <div :if={@auto_detect_idioms && !@has_llm_config} class="alert alert-warning">
+            <.icon name="hero-exclamation-triangle" class="h-5 w-5" />
+            <span>No LLM configuration found. Please configure your AI Chat settings first.</span>
+          </div>
+
+          <div :if={@auto_detect_idioms && @has_llm_config} class="alert alert-info">
+            <.icon name="hero-information-circle" class="h-5 w-5" />
+            <span>Idioms will be detected when you import new articles.</span>
+          </div>
+        </div>
+
         <%!-- Account Details --%>
         <div class="grid gap-8 lg:grid-cols-2">
           <div class="space-y-8">
@@ -336,9 +380,10 @@ defmodule LanglerWeb.UserLive.Settings do
     archived = Content.list_archived_articles_for_user(user.id)
     finished = load_finished_articles_with_scores(user.id)
 
-    # Load dictionary preferences
+    # Load dictionary and article processing preferences
     user_pref = Accounts.get_user_preference(user.id)
     use_llm_for_definitions = user_pref && user_pref.use_llm_for_definitions
+    auto_detect_idioms = user_pref && user_pref.auto_detect_idioms
     has_llm_config = Accounts.LlmConfig.get_default_config(user.id) != nil
 
     socket =
@@ -350,6 +395,7 @@ defmodule LanglerWeb.UserLive.Settings do
       |> assign(:archived_articles, archived)
       |> assign(:finished_articles, finished)
       |> assign(:use_llm_for_definitions, use_llm_for_definitions || false)
+      |> assign(:auto_detect_idioms, auto_detect_idioms || false)
       |> assign(:has_llm_config, has_llm_config)
 
     {:ok, socket}
@@ -466,6 +512,22 @@ defmodule LanglerWeb.UserLive.Settings do
          socket
          |> assign(:use_llm_for_definitions, new_value)
          |> put_flash(:info, "Dictionary preference updated")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to update preference")}
+    end
+  end
+
+  def handle_event("toggle_idiom_detection", _params, socket) do
+    user = socket.assigns.current_scope.user
+    new_value = !socket.assigns.auto_detect_idioms
+
+    case Accounts.upsert_user_preference(user, %{auto_detect_idioms: new_value}) do
+      {:ok, _pref} ->
+        {:noreply,
+         socket
+         |> assign(:auto_detect_idioms, new_value)
+         |> put_flash(:info, "Article processing preference updated")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to update preference")}

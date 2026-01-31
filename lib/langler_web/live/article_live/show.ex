@@ -287,16 +287,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                   class="mb-4 break-words last:mb-0"
                   style="font-size: 0;"
                 >
-                  <.token_span
-                    :for={
-                      token <- tokenize_sentence(sentence.content, sentence.word_occurrences || [])
-                    }
-                    token={token}
-                    sentence_id={sentence.id}
-                    language={@article.language}
-                    studied_word_ids={@studied_word_ids}
-                    studied_forms={@studied_forms}
-                  />
+                  {build_sentence_html(sentence, @article.language, @studied_word_ids, @studied_forms)}
                 </p>
               </div>
             </div>
@@ -1003,15 +994,136 @@ defmodule LanglerWeb.ArticleLive.Show do
     String.match?(text, ~r/\p{L}/u) and not String.match?(text, ~r/^\s+$/u)
   end
 
-  # Build token span programmatically to avoid HEEx whitespace issues.
-  # HEEx inserts whitespace when content is on a separate line from the tag,
-  # but building the HTML as iodata avoids this regardless of code formatting.
-  defp token_span(assigns) do
-    assigns = assign(assigns, :html, build_token_html(assigns))
+  # Build sentence HTML with idiom wrapper spans (single clickable element per idiom).
+  defp build_sentence_html(sentence, language, studied_word_ids, studied_forms) do
+    tokens = tokenize_sentence(sentence.content, sentence.word_occurrences || [])
 
-    ~H"{@html}"
+    idiom_list =
+      sentence.idiom_occurrences
+      |> ensure_loaded_list()
+      |> Enum.sort_by(& &1.start_position)
+
+    {iodata, _} =
+      Enum.reduce(Enum.with_index(tokens), {[], nil}, fn {token, idx}, {acc, current_idiom} ->
+        segment =
+          segment_for_token(
+            token,
+            idx,
+            sentence,
+            idiom_list,
+            current_idiom,
+            language,
+            studied_word_ids,
+            studied_forms
+          )
+
+        acc = acc ++ segment.parts
+        next_idiom = segment.next_idiom
+        {acc, next_idiom}
+      end)
+
+    html_string = sentence_iodata_to_binary(iodata)
+    Phoenix.HTML.raw(html_string)
   end
 
+  defp segment_for_token(
+         token,
+         idx,
+         sentence,
+         idiom_list,
+         current_idiom,
+         language,
+         studied_word_ids,
+         studied_forms
+       ) do
+    enter_idiom = Enum.find(idiom_list, fn io -> io.start_position == idx end)
+    exit_idiom = current_idiom && current_idiom.end_position == idx
+
+    open_part =
+      if enter_idiom,
+        do: [
+          idiom_wrapper_open(
+            sentence.id,
+            idiom_phrase(enter_idiom),
+            enter_idiom.word && enter_idiom.word.id,
+            language
+          )
+        ],
+        else: []
+
+    token_part =
+      token_html_for_segment(
+        token,
+        enter_idiom,
+        current_idiom,
+        sentence,
+        language,
+        studied_word_ids,
+        studied_forms
+      )
+
+    close_part = if exit_idiom, do: ["</span>"], else: []
+
+    next_idiom =
+      if enter_idiom, do: enter_idiom, else: if(exit_idiom, do: nil, else: current_idiom)
+
+    %{parts: open_part ++ [token_part] ++ close_part, next_idiom: next_idiom}
+  end
+
+  defp idiom_phrase(occurrence) do
+    (occurrence.word && (occurrence.word.lemma || occurrence.word.normalized_form)) || ""
+  end
+
+  defp token_html_for_segment(
+         token,
+         enter_idiom,
+         current_idiom,
+         sentence,
+         language,
+         studied_word_ids,
+         studied_forms
+       ) do
+    if enter_idiom || current_idiom do
+      escape_html(token.text)
+    else
+      build_token_html(%{
+        token: token,
+        sentence_id: sentence.id,
+        language: language,
+        studied_word_ids: studied_word_ids,
+        studied_forms: studied_forms
+      })
+    end
+  end
+
+  defp sentence_iodata_to_binary(iodata) do
+    Enum.map(iodata, fn
+      bin when is_binary(bin) -> bin
+      {:safe, content} -> IO.iodata_to_binary(content)
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp ensure_loaded_list(%Ecto.Association.NotLoaded{}), do: []
+  defp ensure_loaded_list(list) when is_list(list), do: list
+  defp ensure_loaded_list(_), do: []
+
+  defp idiom_wrapper_open(sentence_id, phrase, word_id, language) do
+    phrase_attr = escape_attr(phrase || "")
+    id = "idiom-#{sentence_id}-#{word_id || "phrase"}"
+
+    class =
+      "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200 hover:bg-accent/15 hover:text-accent/90"
+
+    base =
+      ~s(<span id="#{id}" class="#{class}" data-sentence-id="#{sentence_id}" data-language="#{language}")
+
+    word_attr = if word_id, do: ~s( data-word-id="#{word_id}"), else: ""
+    word_data = ~s( data-word="#{phrase_attr}")
+    base <> word_data <> word_attr <> ~s( phx-hook="WordTooltip">)
+  end
+
+  # Build token span programmatically (used by build_sentence_html for non-idiom tokens).
   defp build_token_html(assigns) do
     token = assigns.token
     attrs = build_token_attrs(assigns)

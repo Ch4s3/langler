@@ -15,8 +15,10 @@ defmodule Langler.Vocabulary.Word do
     field :conjugations, :map
     field :frequency_rank, :integer
     field :cefr_level, :string
+    field :is_idiom, :boolean, default: false
 
     has_many :occurrences, Langler.Vocabulary.WordOccurrence
+    has_many :idiom_occurrences, Langler.Vocabulary.IdiomOccurrence
     has_many :fsrs_items, Langler.Study.FSRSItem
 
     timestamps(type: :utc_datetime)
@@ -33,7 +35,8 @@ defmodule Langler.Vocabulary.Word do
       :definitions,
       :conjugations,
       :frequency_rank,
-      :cefr_level
+      :cefr_level,
+      :is_idiom
     ])
     |> validate_required([:normalized_form, :language])
     |> put_default_definitions()

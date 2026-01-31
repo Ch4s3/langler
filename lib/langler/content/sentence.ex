@@ -12,6 +12,7 @@ defmodule Langler.Content.Sentence do
 
     belongs_to :article, Langler.Content.Article
     has_many :word_occurrences, Langler.Vocabulary.WordOccurrence
+    has_many :idiom_occurrences, Langler.Vocabulary.IdiomOccurrence
 
     timestamps(type: :utc_datetime)
   end
