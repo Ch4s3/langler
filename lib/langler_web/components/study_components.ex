@@ -270,6 +270,15 @@ defmodule LanglerWeb.StudyComponents do
                     tabindex="0"
                     class="dropdown-content menu bg-base-100 rounded-box z-[1] w-32 border border-base-300 p-2 shadow-lg"
                   >
+                    <li :if={not deck.is_default}>
+                      <button
+                        type="button"
+                        phx-click="set_default_deck"
+                        phx-value-deck_id={deck.id}
+                      >
+                        <.icon name="hero-star" class="h-4 w-4" /> Set default
+                      </button>
+                    </li>
                     <li>
                       <button
                         type="button"
@@ -394,7 +403,8 @@ defmodule LanglerWeb.StudyComponents do
       id={@card_id}
       variant={:panel}
       hover
-      class="border border-base-200 animate-fade-in"
+      class="border border-base-200 animate-fade-in overflow-visible"
+      body_class="overflow-visible"
     >
       <button
         type="button"

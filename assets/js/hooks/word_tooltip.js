@@ -22,7 +22,7 @@ const ensureTooltipEl = () => {
   const tooltip = document.createElement("div")
   tooltip.id = TOOLTIP_ID
   tooltip.className =
-    "fixed z-50 w-80 max-w-xs rounded-2xl border border-base-200 bg-base-100/95 p-5 shadow-2xl transition-all duration-200 opacity-0"
+    "fixed z-[70] w-80 max-w-xs rounded-2xl border border-base-200 bg-base-100/95 p-5 shadow-2xl transition-all duration-200 opacity-0"
   tooltip.setAttribute("role", "status")
   tooltip.dataset.actionsBound = "true"
   tooltip.addEventListener("click", event => {
@@ -271,10 +271,12 @@ const renderCornerAction = entry => {
 const renderActionSection = entry => {
   if (!entry.word_id) return ""
 
+  const searchQuery = entry.word ? encodeURIComponent(entry.word) : ""
+  const studyPath = searchQuery ? `/study?q=${searchQuery}` : "/study"
   const viewButton = entry.study_item_id
     ? `<a
         class="btn btn-xs btn-ghost border border-base-300/70 text-sm"
-        href="/study#items-${entry.study_item_id}"
+        href="${studyPath}#study-cards"
       >
         View card
       </a>`

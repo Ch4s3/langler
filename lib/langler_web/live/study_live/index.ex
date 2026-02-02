@@ -69,12 +69,13 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:all_items, [])
      |> assign(:visible_count, 0)
      |> assign(:flipped_cards, MapSet.new())
-     |> assign(:expanded_conjugations, MapSet.new())
-     |> assign(:conjugations_loading, MapSet.new())
-     |> assign(:definitions_loading, MapSet.new())
-     |> assign(:user_level, %{cefr_level: "A1", numeric_level: 1.0})
-     |> assign(:decks, decks)
-     |> assign(:current_deck, current_deck)
+    |> assign(:expanded_conjugations, MapSet.new())
+    |> assign(:conjugations_loading, MapSet.new())
+    |> assign(:definitions_loading, MapSet.new())
+    |> assign(:user_level, %{cefr_level: "A1", numeric_level: 1.0})
+    |> assign(:decks, decks)
+    |> assign(:deck_words_by_word_id, %{})
+    |> assign(:current_deck, current_deck)
      |> assign(:filter_deck_id, nil)
      |> assign(:show_deck_modal, false)
      |> assign(:editing_deck, nil)
@@ -167,7 +168,8 @@ defmodule LanglerWeb.StudyLive.Index do
       stats = Study.build_study_stats(items)
       # Calculate level from already-loaded items to avoid duplicate query
       user_level = Study.calculate_level_from_items(items)
-      %{items: items, stats: stats, user_level: user_level}
+      deck_words = build_deck_words_map(user_id, items)
+      %{items: items, stats: stats, user_level: user_level, deck_words: deck_words}
     end)
   end
 
@@ -250,12 +252,6 @@ defmodule LanglerWeb.StudyLive.Index do
                 class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
                 Go to library
-              </.link>
-              <.link
-                navigate={~p"/articles/new"}
-                class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
-              >
-                Import article
               </.link>
             </div>
 
@@ -344,7 +340,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
             <div class="flex flex-wrap items-end justify-between gap-4">
               <div class="space-y-1">
-                <h2 class="text-base font-semibold text-base-content">Cards</h2>
+                <h2 id="study-cards" class="text-base font-semibold text-base-content">Cards</h2>
                 <p class="text-sm text-base-content/70">
                   Showing <span class="font-semibold text-base-content">{@visible_count}</span>
                   <span class="text-base-content/50">·</span>
@@ -476,7 +472,80 @@ defmodule LanglerWeb.StudyLive.Index do
                   </:conjugations>
 
                   <:actions>
-                    <.card_rating item_id={item.id} buttons={@quality_buttons} />
+                    <div class="grid w-full grid-cols-[1fr_auto] items-end gap-3">
+                      <.card_rating item_id={item.id} buttons={@quality_buttons} />
+                      <%= if item.word do %>
+                        <% deck_ids =
+                          Map.get(@deck_words_by_word_id, item.word.id, MapSet.new()) %>
+                        <div class="dropdown dropdown-top dropdown-end">
+                          <div
+                            tabindex="0"
+                            role="button"
+                            class="btn btn-sm btn-ghost border border-base-200/80"
+                          >
+                            <.icon name="hero-rectangle-stack" class="h-4 w-4" />
+                            Decks
+                          </div>
+                          <ul
+                            tabindex="0"
+                            class="dropdown-content menu bg-base-100 rounded-box z-[50] w-56 border border-base-300 p-2 shadow-lg"
+                          >
+                            <li class="menu-title">
+                              <span>Add to deck</span>
+                            </li>
+                            <li
+                              :for={
+                                deck <-
+                                  Enum.filter(@decks, fn deck ->
+                                    not MapSet.member?(deck_ids, deck.id)
+                                  end)
+                              }
+                            >
+                              <button
+                                type="button"
+                                phx-click="add_word_to_deck"
+                                phx-value-deck_id={deck.id}
+                                phx-value-word_id={item.word.id}
+                              >
+                                <.icon name="hero-plus" class="h-4 w-4" />
+                                {deck.name}
+                              </button>
+                            </li>
+                            <li :if={MapSet.size(deck_ids) == 0} class="text-xs text-base-content/60">
+                              <span>Not in any deck yet.</span>
+                            </li>
+                            <li class="menu-title">
+                              <span>Remove from deck</span>
+                            </li>
+                            <li
+                              :for={
+                                deck <-
+                                  Enum.filter(@decks, fn deck ->
+                                    MapSet.member?(deck_ids, deck.id)
+                                  end)
+                              }
+                            >
+                              <button
+                                type="button"
+                                class="text-error"
+                                phx-click="remove_word_from_deck"
+                                phx-value-deck_id={deck.id}
+                                phx-value-word_id={item.word.id}
+                              >
+                                <.icon name="hero-minus" class="h-4 w-4" />
+                                {deck.name}
+                              </button>
+                            </li>
+                            <li
+                              :if={MapSet.size(deck_ids) == 0}
+                              class="text-xs text-base-content/60"
+                            >
+                              <span>No decks to remove.</span>
+                            </li>
+                          </ul>
+                        </div>
+                      <% end %>
+                    </div>
                   </:actions>
                 </.study_card>
               </div>
@@ -705,6 +774,91 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
+  def handle_event(
+        "add_word_to_deck",
+        %{"deck_id" => deck_id_str, "word_id" => word_id_str},
+        socket
+      ) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with {:ok, deck_id} <- parse_deck_id(deck_id_str),
+         {:ok, word_id} <- parse_word_id(word_id_str) do
+      case Vocabulary.add_word_to_deck(deck_id, word_id, user_id) do
+        {:ok, _deck_word} ->
+          deck_words =
+            add_word_to_deck_map(socket.assigns.deck_words_by_word_id, word_id, deck_id)
+
+          {:noreply,
+           socket
+           |> assign(:deck_words_by_word_id, deck_words)
+           |> put_flash(:info, "Added to deck")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Unable to add to deck: #{inspect(reason)}")}
+      end
+    else
+      {:error, :invalid_deck_id} ->
+        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+
+      {:error, :invalid_word_id} ->
+        {:noreply, put_flash(socket, :error, "Invalid word ID")}
+    end
+  end
+
+  def handle_event(
+        "remove_word_from_deck",
+        %{"deck_id" => deck_id_str, "word_id" => word_id_str},
+        socket
+      ) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with {:ok, deck_id} <- parse_deck_id(deck_id_str),
+         {:ok, word_id} <- parse_word_id(word_id_str) do
+      case Vocabulary.remove_word_from_deck(deck_id, word_id, user_id) do
+        {:ok, _deck_word} ->
+          deck_words =
+            remove_word_from_deck_map(socket.assigns.deck_words_by_word_id, word_id, deck_id)
+
+          {:noreply,
+           socket
+           |> assign(:deck_words_by_word_id, deck_words)
+           |> put_flash(:info, "Removed from deck")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Unable to remove from deck: #{inspect(reason)}")}
+      end
+    else
+      {:error, :invalid_deck_id} ->
+        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+
+      {:error, :invalid_word_id} ->
+        {:noreply, put_flash(socket, :error, "Invalid word ID")}
+    end
+  end
+
+  def handle_event("set_default_deck", %{"deck_id" => deck_id_str}, socket) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with_deck_id(deck_id_str, socket, fn deck_id ->
+      case Vocabulary.set_default_deck(user_id, deck_id) do
+        {:ok, deck} ->
+          _ = Accounts.set_current_deck(user_id, deck_id)
+          decks = Vocabulary.list_decks_for_user(user_id)
+          current_deck = Accounts.get_current_deck(user_id)
+
+          {:noreply,
+           socket
+           |> assign(:decks, decks)
+           |> assign(:current_deck, current_deck)
+           |> assign(:csv_import_deck_id, current_deck && current_deck.id)
+           |> put_flash(:info, "\"#{deck.name}\" is now your default deck")}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, "Unable to set default deck: #{inspect(reason)}")}
+      end
+    end)
+  end
+
   def handle_event("show_deck_modal", _params, socket) do
     {:noreply,
      socket
@@ -894,6 +1048,37 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
+  defp build_deck_words_map(user_id, items) do
+    word_ids =
+      items
+      |> Enum.map(& &1.word_id)
+      |> Enum.reject(&is_nil/1)
+
+    Vocabulary.list_deck_word_ids_for_user(user_id, word_ids)
+  end
+
+  defp add_word_to_deck_map(deck_words_by_word_id, word_id, deck_id) do
+    Map.update(deck_words_by_word_id, word_id, MapSet.new([deck_id]), fn deck_ids ->
+      MapSet.put(deck_ids, deck_id)
+    end)
+  end
+
+  defp remove_word_from_deck_map(deck_words_by_word_id, word_id, deck_id) do
+    case Map.get(deck_words_by_word_id, word_id) do
+      nil ->
+        deck_words_by_word_id
+
+      deck_ids ->
+        updated = MapSet.delete(deck_ids, deck_id)
+
+        if MapSet.size(updated) == 0 do
+          Map.delete(deck_words_by_word_id, word_id)
+        else
+          Map.put(deck_words_by_word_id, word_id, updated)
+        end
+    end
+  end
+
   defp handle_csv_import_with_content(socket, deck_id, user_id, default_language, content) do
     # Get deck name for completion message
     deck = Enum.find(socket.assigns.decks, &(&1.id == deck_id))
@@ -1055,6 +1240,13 @@ defmodule LanglerWeb.StudyLive.Index do
     end
   end
 
+  defp parse_word_id(word_id_str) do
+    case Integer.parse(to_string(word_id_str)) do
+      {word_id, ""} -> {:ok, word_id}
+      _ -> {:error, :invalid_word_id}
+    end
+  end
+
   defp with_deck_id(deck_id_str, socket, fun) do
     case parse_deck_id(deck_id_str) do
       {:ok, deck_id} -> fun.(deck_id)
@@ -1169,7 +1361,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
   def handle_async(
         :load_items,
-        {:ok, %{items: items, stats: stats, user_level: user_level}},
+        {:ok, %{items: items, stats: stats, user_level: user_level, deck_words: deck_words}},
         socket
       ) do
     visible =
@@ -1186,6 +1378,7 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:all_items, items)
      |> assign(:stats, stats)
      |> assign(:user_level, user_level)
+     |> assign(:deck_words_by_word_id, deck_words)
      |> assign(:visible_count, length(visible))
      |> stream(:items, visible, reset: true)}
   end

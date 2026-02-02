@@ -131,82 +131,93 @@ defmodule LanglerWeb.AudioLive.Player do
               data-sentences={Jason.encode!(Enum.map(@sentences, &%{id: &1.id, content: &1.content}))}
               data-initial-position={@initial_listening_position}
             >
-              <div class="flex items-center gap-4">
-                <button
-                  type="button"
-                  class="btn btn-circle btn-primary btn-lg audio-play-button shadow-lg hover:scale-110 transition-transform"
-                  aria-label={if @is_playing, do: "Pause", else: "Play"}
-                >
-                  <%= if @is_playing do %>
-                    <.icon name="hero-pause" class="h-6 w-6" />
-                  <% else %>
-                    <.icon name="hero-play" class="h-6 w-6" />
-                  <% end %>
-                </button>
-
-                <button
-                  type="button"
-                  class="btn btn-circle btn-ghost audio-skip-back-button"
-                  aria-label="Skip backward 10 seconds"
-                >
-                  <.icon name="hero-arrow-uturn-left" class="h-5 w-5" />
-                </button>
-
-                <span
-                  id="audio-time-display"
-                  class="text-sm font-mono min-w-[120px] text-center text-base-content/80"
-                >
-                  0:00 / 0:00
-                </span>
-
-                <div class="flex-1">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value="0"
-                    class="range range-primary range-lg"
-                    id="audio-seek"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  class="btn btn-circle btn-ghost audio-skip-forward-button"
-                  aria-label="Skip forward 10 seconds"
-                >
-                  <.icon name="hero-arrow-uturn-right" class="h-5 w-5" />
-                </button>
-
-                <div class="flex items-center gap-3">
-                  <.form
-                    for={%{}}
-                    as={:playback_rate}
-                    phx-change="change_playback_rate"
-                    phx-target="#audio-player"
+              <div class="flex flex-col gap-4">
+                <div class="flex flex-wrap items-center gap-3 lg:grid lg:grid-cols-10">
+                  <span
+                    id="audio-time-current"
+                    class="text-xs sm:text-sm font-mono text-base-content/70 lg:col-span-1"
                   >
-                    <select
-                      class="select select-bordered select-sm bg-base-100"
-                      name="playback_rate[rate]"
-                      value={@playback_rate}
-                    >
-                      <option value="0.5">0.5x</option>
-                      <option value="1.0">1.0x</option>
-                      <option value="1.5">1.5x</option>
-                      <option value="2.0">2.0x</option>
-                    </select>
-                  </.form>
-
-                  <div class="flex items-center gap-2">
-                    <.icon name="hero-speaker-wave" class="h-4 w-4 text-base-content/60" />
+                    0:00
+                  </span>
+                  <div class="flex-1 min-w-[180px] lg:col-span-8 lg:min-w-0">
                     <input
                       type="range"
                       min="0"
                       max="100"
-                      value="100"
-                      class="range range-secondary range-sm w-20"
-                      id="audio-volume"
+                      value="0"
+                      class="range range-primary range-lg w-full"
+                      id="audio-seek"
                     />
+                  </div>
+                  <span
+                    id="audio-time-duration"
+                    class="text-xs sm:text-sm font-mono text-base-content/70 lg:col-span-1 lg:text-right"
+                  >
+                    --:--
+                  </span>
+                </div>
+
+                <div class="flex flex-col gap-4 lg:grid lg:grid-cols-10 lg:items-center">
+                  <div class="flex items-center justify-center gap-4 lg:col-start-4 lg:col-span-4">
+                    <button
+                      type="button"
+                      class="btn btn-circle btn-ghost btn-md sm:btn-sm lg:btn-xs audio-skip-back-button"
+                      aria-label="Skip backward 10 seconds"
+                    >
+                      <.icon name="hero-arrow-uturn-left" class="h-5 w-5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-circle btn-primary btn-lg sm:btn-md lg:btn-sm audio-play-button shadow-lg hover:scale-110 transition-transform"
+                      aria-label={if @is_playing, do: "Pause", else: "Play"}
+                    >
+                      <%= if @is_playing do %>
+                        <.icon name="hero-pause" class="h-6 w-6" />
+                      <% else %>
+                        <.icon name="hero-play" class="h-6 w-6" />
+                      <% end %>
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn btn-circle btn-ghost btn-md sm:btn-sm lg:btn-xs audio-skip-forward-button"
+                      aria-label="Skip forward 10 seconds"
+                    >
+                      <.icon name="hero-arrow-uturn-right" class="h-5 w-5" />
+                      </button>
+                  </div>
+
+                  <div class="flex flex-wrap items-center justify-center gap-3 lg:col-start-8 lg:col-span-3 lg:justify-end">
+                    <.form
+                      for={%{}}
+                      as={:playback_rate}
+                      phx-change="change_playback_rate"
+                      phx-target="#audio-player"
+                    >
+                      <select
+                        class="select select-bordered select-sm bg-base-100"
+                        name="playback_rate[rate]"
+                        value={@playback_rate}
+                      >
+                        <option value="0.5">0.5x</option>
+                        <option value="1.0">1.0x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2.0">2.0x</option>
+                      </select>
+                    </.form>
+
+                    <div class="flex items-center gap-2">
+                      <.icon name="hero-speaker-wave" class="h-4 w-4 text-base-content/60" />
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value="100"
+                        class="range range-secondary range-sm w-24"
+                        id="audio-volume"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -222,11 +233,11 @@ defmodule LanglerWeb.AudioLive.Player do
                 <p
                   :for={{sentence, idx} <- Enum.with_index(@sentences)}
                   class={[
-                    "p-3 rounded-xl transition-all duration-300 cursor-pointer text-base break-words",
+                    "w-full p-3 rounded-xl transition-all duration-300 cursor-pointer text-base break-words",
                     if(idx == @current_sentence_idx,
                       do: [
                         "bg-primary/15 border-2 border-primary/40 text-primary",
-                        "scale-[1.02] shadow-lg"
+                        "shadow-lg"
                       ],
                       else: [
                         "bg-base-200/50 border-2 border-transparent",
@@ -244,12 +255,12 @@ defmodule LanglerWeb.AudioLive.Player do
             </div>
 
             <%!-- Actions --%>
-            <div class="flex items-center justify-between gap-4 border-t border-base-300 pt-6">
+            <div class="flex flex-wrap items-center justify-between gap-4 border-t border-base-300 pt-6">
               <button type="button" class="btn btn-ghost" phx-click="toggle_subtitles">
                 {if @subtitles_visible, do: "Hide Subtitles", else: "Show Subtitles"}
               </button>
 
-              <div class="flex gap-3">
+              <div class="flex flex-wrap gap-3">
                 <button type="button" class="btn btn-primary" phx-click="start_listening_quiz">
                   <.icon name="hero-academic-cap" class="h-5 w-5" /> Take Listening Quiz
                 </button>

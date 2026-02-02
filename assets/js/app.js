@@ -30,6 +30,7 @@ import ChatAutoScroll from "./hooks/chat_auto_scroll"
 import ChatMenuDropdown from "./hooks/chat_menu_dropdown"
 import StudySession from "./hooks/study_session"
 import ChatDrawerState from "./hooks/chat_drawer_state"
+import ChatInput from "./hooks/chat_input"
 import TextDownloader from "./hooks/text_downloader"
 import DictionarySearch from "./hooks/dictionary_search"
 import AudioPlayer from "./hooks/audio_player"
@@ -88,6 +89,7 @@ const hooks = {
   ChatMenuDropdown,
   StudySession,
   ChatDrawerState,
+  ChatInput,
   TextDownloader,
   DictionarySearch,
   AudioPlayer,

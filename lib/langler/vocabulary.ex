@@ -169,6 +169,32 @@ defmodule Langler.Vocabulary do
   end
 
   @doc """
+  Sets the default deck for a user.
+  Ensures only one default deck exists per user.
+  """
+  def set_default_deck(user_id, deck_id) do
+    case get_deck_for_user(deck_id, user_id) do
+      nil ->
+        {:error, :deck_not_found}
+
+      deck ->
+        Repo.transaction(fn ->
+          from(d in Deck, where: d.user_id == ^user_id and d.id != ^deck_id)
+          |> Repo.update_all(set: [is_default: false])
+
+          deck
+          |> Deck.changeset(%{is_default: true})
+          |> Repo.update()
+        end)
+        |> case do
+          {:ok, {:ok, updated}} -> {:ok, updated}
+          {:ok, {:error, changeset}} -> {:error, changeset}
+          {:error, reason} -> {:error, reason}
+        end
+    end
+  end
+
+  @doc """
   Creates a new deck for a user.
   """
   def create_deck(user_id, attrs) do
@@ -292,6 +318,28 @@ defmodule Langler.Vocabulary do
             {:ok, existing}
         end
     end
+  end
+
+  @doc """
+  Lists deck memberships for the given word IDs for a user.
+
+  Returns a map of word_id => MapSet of deck_ids.
+  """
+  def list_deck_word_ids_for_user(_user_id, []), do: %{}
+
+  def list_deck_word_ids_for_user(user_id, word_ids) when is_list(word_ids) do
+    from(dw in DeckWord,
+      join: d in Deck,
+      on: d.id == dw.deck_id,
+      where: d.user_id == ^user_id and dw.word_id in ^word_ids,
+      select: {dw.word_id, dw.deck_id}
+    )
+    |> Repo.all()
+    |> Enum.reduce(%{}, fn {word_id, deck_id}, acc ->
+      Map.update(acc, word_id, MapSet.new([deck_id]), fn deck_ids ->
+        MapSet.put(deck_ids, deck_id)
+      end)
+    end)
   end
 
   @doc """

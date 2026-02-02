@@ -27,20 +27,21 @@ defmodule LanglerWeb.ChatLive.ChatInput do
       <form phx-submit="send_message" phx-target={@myself} class="w-full">
         <div class="relative">
           <textarea
+            id="chat-message-input"
             name="message"
             value={@input_value}
             phx-change="update_input"
             phx-focus="close_sidebar"
             phx-target={@myself}
+            phx-hook="ChatInput"
             placeholder={if @sidebar_open, do: "", else: "Type your message..."}
             rows="1"
-            class="textarea textarea-bordered w-full rounded-2xl pr-14 py-3 resize-none min-h-[48px] max-h-[200px]"
+            class="textarea textarea-bordered w-full rounded-2xl pr-14 py-3 resize-none min-h-[48px]"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
             spellcheck="false"
             disabled={@llm_config_missing || @sending}
-            oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 200) + 'px';"
           ></textarea>
           <button
             type="submit"

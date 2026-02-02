@@ -52,6 +52,7 @@ defmodule LanglerWeb.StudyLive.IndexRenderTest do
       user_level: %{cefr_level: "A1"},
       recommended_articles: AsyncResult.ok([]),
       streams: streams,
+      deck_words_by_word_id: %{},
       decks: [],
       current_deck: nil,
       filter_deck_id: nil,

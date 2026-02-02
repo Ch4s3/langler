@@ -158,6 +158,7 @@ defmodule LanglerWeb.ChatLive.DrawerComponentTest do
       total_tokens: 0,
       input_value: "",
       show_tokens: true,
+      studied_word_form_ids: %{},
       sessions: [],
       session_search: "",
       open_menu_id: nil,

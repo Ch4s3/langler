@@ -65,6 +65,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> assign_new(:messages, fn -> [] end)
     |> assign_new(:studied_word_ids, fn -> MapSet.new() end)
     |> assign_new(:studied_forms, fn -> MapSet.new() end)
+    |> assign_new(:studied_word_form_ids, fn -> %{} end)
     |> assign_new(:llm_config_missing, fn -> false end)
     |> assign_new(:renaming_session_id, fn -> nil end)
     |> assign_new(:rename_input_value, fn -> nil end)
@@ -323,6 +324,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
                                   @current_session.target_language,
                                   @studied_word_ids,
                                   @studied_forms,
+                                  @studied_word_form_ids,
                                   id,
                                   @myself.cid
                                 )
@@ -522,6 +524,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
           form -> MapSet.put(socket.assigns.studied_forms, form)
         end
 
+      studied_word_form_ids =
+        case normalized_form_from_word(word) do
+          nil -> socket.assigns.studied_word_form_ids
+          form -> Map.put(socket.assigns.studied_word_form_ids, form, word.id)
+        end
+
       # Re-render messages to update word highlighting
       messages =
         if socket.assigns.current_session do
@@ -534,6 +542,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
        socket
        |> assign(:studied_word_ids, studied_word_ids)
        |> assign(:studied_forms, studied_forms)
+       |> assign(:studied_word_form_ids, studied_word_form_ids)
        |> stream(:messages, messages,
          reset: true,
          dom_id: fn msg ->
@@ -569,6 +578,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
           form -> MapSet.delete(socket.assigns.studied_forms, form)
         end
 
+      studied_word_form_ids =
+        case normalized_form_from_word(word) do
+          nil -> socket.assigns.studied_word_form_ids
+          form -> Map.delete(socket.assigns.studied_word_form_ids, form)
+        end
+
       messages =
         if socket.assigns.current_session do
           Session.get_decrypted_messages(socket.assigns.current_session)
@@ -580,6 +595,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
        socket
        |> assign(:studied_word_ids, studied_word_ids)
        |> assign(:studied_forms, studied_forms)
+       |> assign(:studied_word_form_ids, studied_word_form_ids)
        |> stream(:messages, messages,
          reset: true,
          dom_id: fn msg ->
@@ -608,13 +624,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
       if current_session do
         messages = Session.get_decrypted_messages(current_session)
         total_tokens = total_tokens(messages)
-        {studied_word_ids, studied_forms} = load_studied_words(user.id)
+        {studied_word_ids, studied_forms, studied_word_form_ids} = load_studied_words(user.id)
 
         socket
         |> assign(:current_session, current_session)
         |> assign(:sessions, sessions)
         |> assign(:studied_word_ids, studied_word_ids)
         |> assign(:studied_forms, studied_forms)
+        |> assign(:studied_word_form_ids, studied_word_form_ids)
         |> assign(:total_tokens, total_tokens)
         |> reset_messages_stream(messages)
       else
@@ -768,7 +785,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
         # Reload sessions list
         sessions = Session.list_user_sessions(user.id, limit: 20)
         # Reload studied words
-        {studied_word_ids, studied_forms} = load_studied_words(user.id)
+        {studied_word_ids, studied_forms, studied_word_form_ids} = load_studied_words(user.id)
 
         socket =
           socket
@@ -776,6 +793,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
           |> assign(:sessions, sessions)
           |> assign(:studied_word_ids, studied_word_ids)
           |> assign(:studied_forms, studied_forms)
+          |> assign(:studied_word_form_ids, studied_word_form_ids)
           |> assign(:total_tokens, 0)
           |> stream(:messages, [],
             reset: true,
@@ -928,7 +946,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     default_config = LlmConfig.get_default_config(user.id)
     sessions = Session.list_user_sessions(user.id, limit: 20)
     {sessions, current_session} = ensure_recent_session(user, sessions)
-    {studied_word_ids, studied_forms} = load_studied_words(user.id)
+    {studied_word_ids, studied_forms, studied_word_form_ids} = load_studied_words(user.id)
 
     socket
     |> assign(:chat_open, true)
@@ -937,6 +955,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> assign(:session_search, "")
     |> assign(:studied_word_ids, studied_word_ids)
     |> assign(:studied_forms, studied_forms)
+    |> assign(:studied_word_form_ids, studied_word_form_ids)
     |> assign(:llm_config_missing, is_nil(default_config))
     |> load_session_messages(current_session)
   end
@@ -1038,11 +1057,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
       |> assign(:sessions, sessions)
       |> assign(:current_session, new_current_session)
 
-    {studied_word_ids, studied_forms} = load_studied_words(user.id)
+    {studied_word_ids, studied_forms, studied_word_form_ids} = load_studied_words(user.id)
 
     socket
     |> assign(:studied_word_ids, studied_word_ids)
     |> assign(:studied_forms, studied_forms)
+    |> assign(:studied_word_form_ids, studied_word_form_ids)
     |> load_session_messages(new_current_session)
   end
 
@@ -1213,12 +1233,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
   defp refresh_chat_with_session(socket, session, opts) do
     messages = Session.get_decrypted_messages(session)
     total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
-    {studied_word_ids, studied_forms} = load_studied_words(socket.assigns.current_scope.user.id)
+    {studied_word_ids, studied_forms, studied_word_form_ids} =
+      load_studied_words(socket.assigns.current_scope.user.id)
 
     socket
     |> assign(:current_session, session)
     |> assign(:studied_word_ids, studied_word_ids)
     |> assign(:studied_forms, studied_forms)
+    |> assign(:studied_word_form_ids, studied_word_form_ids)
     |> assign(:total_tokens, total_tokens)
     |> assign(:chat_open, Keyword.get(opts, :chat_open, socket.assigns.chat_open))
     |> assign(:sidebar_open, Keyword.get(opts, :sidebar_open, socket.assigns.sidebar_open))
@@ -1609,6 +1631,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
          language,
          studied_word_ids,
          studied_forms,
+         studied_word_form_ids,
          message_id,
          component_id
        )
@@ -1620,6 +1643,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
           language,
           studied_word_ids,
           studied_forms,
+          studied_word_form_ids,
           message_id,
           component_id
         )
@@ -1629,13 +1653,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
     end
   end
 
-  defp add_word_tooltips(html, _, _, _, _, _), do: html
+  defp add_word_tooltips(html, _, _, _, _, _, _), do: html
 
   defp process_html_document(
          doc,
          language,
          studied_word_ids,
          studied_forms,
+         studied_word_form_ids,
          message_id,
          component_id
        ) do
@@ -1648,6 +1673,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
             language,
             studied_word_ids,
             studied_forms,
+            studied_word_form_ids,
             message_id,
             component_id
           )
@@ -1665,6 +1691,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
          language,
          studied_word_ids,
          studied_forms,
+         studied_word_form_ids,
          message_id,
          component_id
        ) do
@@ -1675,6 +1702,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
           language,
           studied_word_ids,
           studied_forms,
+          studied_word_form_ids,
           message_id,
           component_id
         )
@@ -1689,6 +1717,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
          language,
          _studied_word_ids,
          studied_forms,
+         studied_word_form_ids,
          message_id,
          component_id
        ) do
@@ -1697,26 +1726,50 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> Enum.map(&hd/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.map(fn token ->
-      wrap_token_if_lexical(token, language, studied_forms, message_id, component_id)
+      wrap_token_if_lexical(token, language, studied_forms, studied_word_form_ids, message_id, component_id)
     end)
   end
 
-  defp wrap_token_if_lexical(token, language, studied_forms, message_id, component_id) do
+  defp wrap_token_if_lexical(
+         token,
+         language,
+         studied_forms,
+         studied_word_form_ids,
+         message_id,
+         component_id
+       ) do
     trimmed = String.trim(token)
 
     if lexical_token?(trimmed) do
-      build_wrapped_token(trimmed, language, studied_forms, message_id, component_id, token)
+      build_wrapped_token(
+        trimmed,
+        language,
+        studied_forms,
+        studied_word_form_ids,
+        message_id,
+        component_id,
+        token
+      )
     else
       token
     end
   end
 
-  defp build_wrapped_token(trimmed, language, studied_forms, message_id, component_id, token) do
+  defp build_wrapped_token(
+         trimmed,
+         language,
+         studied_forms,
+         studied_word_form_ids,
+         message_id,
+         component_id,
+         token
+       ) do
     normalized = Vocabulary.normalize_form(trimmed)
     studied? = normalized && MapSet.member?(studied_forms, normalized)
     token_id = "chat-word-#{message_id}-#{System.unique_integer([:positive])}"
     component_attr = build_component_attr(component_id)
-    attrs = build_token_attrs(trimmed, language, component_attr, token_id, studied?)
+    word_id = normalized && Map.get(studied_word_form_ids, normalized)
+    attrs = build_token_attrs(trimmed, language, component_attr, token_id, studied?, message_id, word_id)
 
     {"span", attrs, [token]}
   end
@@ -1724,7 +1777,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   defp build_component_attr(nil), do: nil
   defp build_component_attr(component_id), do: {"data-component-id", to_string(component_id)}
 
-  defp build_token_attrs(trimmed, language, component_attr, token_id, studied?) do
+  defp build_token_attrs(trimmed, language, component_attr, token_id, studied?, message_id, word_id) do
     class_base =
       "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40"
 
@@ -1733,6 +1786,8 @@ defmodule LanglerWeb.ChatLive.Drawer do
     [
       {"data-word", trimmed},
       {"data-language", language},
+      {"data-sentence-id", message_id},
+      if(word_id, do: {"data-word-id", to_string(word_id)}, else: nil),
       component_attr,
       {"phx-hook", "WordTooltip"},
       {"id", token_id},
@@ -1759,7 +1814,19 @@ defmodule LanglerWeb.ChatLive.Drawer do
       |> Enum.reject(&is_nil/1)
       |> MapSet.new()
 
-    {ids, forms}
+    form_ids =
+      items
+      |> Enum.reduce(%{}, fn item, acc ->
+        normalized_form = item.word && item.word.normalized_form
+
+        if normalized_form do
+          Map.put(acc, normalized_form, item.word_id)
+        else
+          acc
+        end
+      end)
+
+    {ids, forms, form_ids}
   end
 
   defp fetch_word(nil), do: {:error, :missing_word_id}

@@ -428,16 +428,24 @@ export default {
   },
 
   updateTimeDisplay() {
-    const timeDisplay = this.el.querySelector("#audio-time-display")
-    if (!timeDisplay) return
-
     const currentTime = this.getCurrentTime()
     const duration = this.getDuration()
+    const currentText = this.formatTime(currentTime)
+    const durationText = duration > 0 ? this.formatTime(duration) : "--:--"
 
-    if (duration > 0) {
-      timeDisplay.textContent = `${this.formatTime(currentTime)} / ${this.formatTime(duration)}`
-    } else {
-      timeDisplay.textContent = `${this.formatTime(currentTime)} / --:--`
+    const timeDisplay = this.el.querySelector("#audio-time-display")
+    if (timeDisplay) {
+      timeDisplay.textContent = `${currentText} / ${durationText}`
+    }
+
+    const timeCurrent = this.el.querySelector("#audio-time-current")
+    if (timeCurrent) {
+      timeCurrent.textContent = currentText
+    }
+
+    const timeDuration = this.el.querySelector("#audio-time-duration")
+    if (timeDuration) {
+      timeDuration.textContent = durationText
     }
   },
 
