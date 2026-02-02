@@ -1,4 +1,5 @@
 service: langler
+# DB migrations run automatically during deploy via .kamal/hooks/pre-app-boot (one-off container, primary host).
 # Image built in GHA and pushed to GHCR. CI sets KAMAL_IMAGE to owner/repo. For local deploy (e.g. --skip-push),
 # set KAMAL_IMAGE to the same value so the server pulls the image CI pushed: KAMAL_IMAGE=owner/repo kamal deploy --skip-push
 image: <%= ENV["KAMAL_IMAGE"] || "ch4s3/langler" %>

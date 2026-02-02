@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Run DB migrations in a one-off container using the new app image before
+# Kamal boots the app. Uses --primary so migrations run once (single host).
+set -eu
+exec kamal app exec --primary --version="${KAMAL_VERSION}" /app/bin/migrate
