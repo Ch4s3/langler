@@ -28,8 +28,8 @@ defmodule LanglerWeb.ArticleLive.ShowRenderTest do
 
       html = render_component(&LanglerWeb.ArticleLive.Show.render/1, assigns)
 
-      assert html =~ "Practice with chat"
-      assert html =~ "Take quiz"
+      assert html =~ "Chat"
+      assert html =~ "Quiz"
       assert html =~ "Finish without quiz"
       assert html =~ "5 min read"
       assert html =~ "deportes"
@@ -41,8 +41,8 @@ defmodule LanglerWeb.ArticleLive.ShowRenderTest do
       html = render_component(&LanglerWeb.ArticleLive.Show.render/1, assigns)
 
       refute html =~ "Finish without quiz"
-      assert html =~ "Practice with chat"
-      assert html =~ "Take quiz"
+      assert html =~ "Chat"
+      assert html =~ "Quiz"
     end
   end
 
