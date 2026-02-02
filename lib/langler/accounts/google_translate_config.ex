@@ -55,15 +55,12 @@ defmodule Langler.Accounts.GoogleTranslateConfig do
   """
   @spec get_api_key(integer()) :: String.t() | nil
   def get_api_key(user_id) when is_integer(user_id) do
-    case get_default_config(user_id) do
-      %UserGoogleTranslateConfig{enabled: true, encrypted_api_key: encrypted_key} ->
-        case Encryption.decrypt_message(user_id, encrypted_key) do
-          {:ok, key} -> key
-          {:error, _} -> nil
-        end
-
-      _ ->
-        nil
+    with %UserGoogleTranslateConfig{enabled: true, encrypted_api_key: encrypted_key} <-
+           get_default_config(user_id),
+         {:ok, key} <- Encryption.decrypt_message(user_id, encrypted_key) do
+      key
+    else
+      _ -> nil
     end
   end
 
@@ -95,18 +92,7 @@ defmodule Langler.Accounts.GoogleTranslateConfig do
       %UserGoogleTranslateConfig{}
       |> UserGoogleTranslateConfig.changeset(attrs)
       |> Repo.insert()
-      |> case do
-        {:ok, config} = result ->
-          # If setting as default, unset other defaults
-          if default_selected?(attrs) do
-            unset_other_defaults(user.id, config.id)
-          end
-
-          result
-
-        error ->
-          error
-      end
+      |> finalize_google_translate_config_result(attrs, user.id)
     end
   end
 
@@ -124,18 +110,7 @@ defmodule Langler.Accounts.GoogleTranslateConfig do
     config
     |> UserGoogleTranslateConfig.changeset(attrs)
     |> Repo.update()
-    |> case do
-      {:ok, _updated_config} = result ->
-        # If setting as default, unset other defaults
-        if default_selected?(attrs) do
-          unset_other_defaults(config.user_id, config.id)
-        end
-
-        result
-
-      error ->
-        error
-    end
+    |> finalize_google_translate_config_result(attrs, config.user_id)
   end
 
   @doc """
@@ -227,6 +202,19 @@ defmodule Langler.Accounts.GoogleTranslateConfig do
       end
     else
       Map.delete(attrs, "api_key")
+    end
+  end
+
+  defp finalize_google_translate_config_result({:ok, config} = result, attrs, user_id) do
+    maybe_unset_google_defaults(attrs, user_id, config.id)
+    result
+  end
+
+  defp finalize_google_translate_config_result(error, _attrs, _user_id), do: error
+
+  defp maybe_unset_google_defaults(attrs, user_id, config_id) do
+    if default_selected?(attrs) do
+      unset_other_defaults(user_id, config_id)
     end
   end
 

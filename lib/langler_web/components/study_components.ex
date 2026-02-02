@@ -382,8 +382,12 @@ defmodule LanglerWeb.StudyComponents do
 
   def study_card(assigns) do
     card_id = assigns.id || "items-#{assigns.item.id}"
+    is_phrase = assigns.item.word && Map.get(assigns.item.word, :type) == "phrase"
 
-    assigns = assign(assigns, :card_id, card_id)
+    assigns =
+      assigns
+      |> assign(:card_id, card_id)
+      |> assign(:is_phrase, is_phrase)
 
     ~H"""
     <.card
@@ -409,21 +413,24 @@ defmodule LanglerWeb.StudyComponents do
           ]}>
             <div class="flex flex-wrap items-start justify-between gap-4">
               <div class="flex flex-col gap-1">
-                <p
-                  class="inline-flex items-center gap-2 text-2xl font-semibold text-base-content cursor-pointer transition hover:text-primary sm:text-3xl"
-                  phx-hook="CopyToClipboard"
-                  data-copy-text={@item.word && (@item.word.lemma || @item.word.normalized_form)}
-                  title="Click to copy"
-                  id={"study-card-word-#{@item.id}"}
-                >
-                  <span>{@item.word && (@item.word.lemma || @item.word.normalized_form)}</span>
-                  <span
-                    class="opacity-0 text-primary/80 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
-                    aria-hidden="true"
+                <div class="flex items-center gap-2">
+                  <p
+                    class="inline-flex items-center gap-2 text-2xl font-semibold text-base-content cursor-pointer transition hover:text-primary sm:text-3xl"
+                    phx-hook="CopyToClipboard"
+                    data-copy-text={@item.word && (@item.word.lemma || @item.word.normalized_form)}
+                    title="Click to copy"
+                    id={"study-card-word-#{@item.id}"}
                   >
-                    <.icon name="hero-clipboard-document" class="h-5 w-5" />
-                  </span>
-                </p>
+                    <span>{@item.word && (@item.word.lemma || @item.word.normalized_form)}</span>
+                    <span
+                      class="opacity-0 text-primary/80 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      <.icon name="hero-clipboard-document" class="h-5 w-5" />
+                    </span>
+                  </p>
+                  <span :if={@is_phrase} class="badge badge-secondary badge-sm">Phrase</span>
+                </div>
                 <p class="text-sm text-base-content/70">
                   Next review {format_due_label(@item.due_date)}
                 </p>
@@ -464,7 +471,7 @@ defmodule LanglerWeb.StudyComponents do
               </div>
             </div>
             <p class="text-xs font-semibold uppercase tracking-widest text-base-content/50">
-              Tap to reveal definition
+              Tap to reveal {if @is_phrase, do: "translation", else: "definition"}
             </p>
           </div>
 
@@ -474,26 +481,34 @@ defmodule LanglerWeb.StudyComponents do
             !@flipped && "hidden"
           ]}>
             <p class="text-sm font-semibold uppercase tracking-widest text-primary/70">
-              Definition
+              {if @is_phrase, do: "Translation", else: "Definition"}
             </p>
             <%= if @definitions_loading do %>
               <div class="flex items-center gap-2">
                 <span class="loading loading-spinner loading-sm"></span>
-                <span class="text-sm text-base-content/70">Loading definition...</span>
+                <span class="text-sm text-base-content/70">
+                  Loading {if @is_phrase, do: "translation", else: "definition"}...
+                </span>
               </div>
             <% else %>
-              <ol class="space-y-3 text-sm leading-relaxed text-base-content/90">
-                <li
-                  :for={{definition, idx} <- Enum.with_index(definitions, 1)}
-                  class="break-words"
-                >
-                  <span class="font-semibold text-primary/80">{idx}.</span>
-                  <span class="ml-2 break-words">{definition}</span>
-                </li>
-              </ol>
-              <p :if={definitions == []} class="text-sm text-base-content/70">
-                We haven't saved a definition yet for this word. Tap refresh in the reader to fetch one.
-              </p>
+              <%= if @is_phrase do %>
+                <p class="text-base text-base-content/90 break-words">
+                  {@item.word.translation || List.first(definitions) || "No translation available"}
+                </p>
+              <% else %>
+                <ol class="space-y-3 text-sm leading-relaxed text-base-content/90">
+                  <li
+                    :for={{definition, idx} <- Enum.with_index(definitions, 1)}
+                    class="break-words"
+                  >
+                    <span class="font-semibold text-primary/80">{idx}.</span>
+                    <span class="ml-2 break-words">{definition}</span>
+                  </li>
+                </ol>
+                <p :if={definitions == []} class="text-sm text-base-content/70">
+                  We haven't saved a definition yet for this word. Tap refresh in the reader to fetch one.
+                </p>
+              <% end %>
             <% end %>
             <p class="text-xs text-base-content/60">Tap again to return.</p>
           </div>

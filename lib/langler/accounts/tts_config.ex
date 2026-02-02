@@ -80,18 +80,7 @@ defmodule Langler.Accounts.TtsConfig do
       %UserTtsConfig{}
       |> UserTtsConfig.changeset(attrs)
       |> Repo.insert()
-      |> case do
-        {:ok, config} = result ->
-          # If setting as default, unset other defaults
-          if default_selected?(attrs) do
-            unset_other_defaults(user.id, config.id)
-          end
-
-          result
-
-        error ->
-          error
-      end
+      |> finalize_tts_config_result(attrs, user.id)
     end
   end
 
@@ -111,18 +100,7 @@ defmodule Langler.Accounts.TtsConfig do
     config
     |> UserTtsConfig.changeset(attrs)
     |> Repo.update()
-    |> case do
-      {:ok, _updated_config} = result ->
-        # If setting as default, unset other defaults
-        if default_selected?(attrs) do
-          unset_other_defaults(config.user_id, config.id)
-        end
-
-        result
-
-      error ->
-        error
-    end
+    |> finalize_tts_config_result(attrs, config.user_id)
   end
 
   @doc """
@@ -213,6 +191,19 @@ defmodule Langler.Accounts.TtsConfig do
       end
     else
       Map.delete(attrs, "api_key")
+    end
+  end
+
+  defp finalize_tts_config_result({:ok, config} = result, attrs, user_id) do
+    maybe_unset_other_defaults(attrs, user_id, config.id)
+    result
+  end
+
+  defp finalize_tts_config_result(error, _attrs, _user_id), do: error
+
+  defp maybe_unset_other_defaults(attrs, user_id, config_id) do
+    if default_selected?(attrs) do
+      unset_other_defaults(user_id, config_id)
     end
   end
 

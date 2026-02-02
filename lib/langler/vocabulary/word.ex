@@ -15,6 +15,8 @@ defmodule Langler.Vocabulary.Word do
     field :conjugations, :map
     field :frequency_rank, :integer
     field :cefr_level, :string
+    field :type, :string, default: "word"
+    field :translation, :string
 
     has_many :occurrences, Langler.Vocabulary.WordOccurrence
     has_many :fsrs_items, Langler.Study.FSRSItem
@@ -33,9 +35,12 @@ defmodule Langler.Vocabulary.Word do
       :definitions,
       :conjugations,
       :frequency_rank,
-      :cefr_level
+      :cefr_level,
+      :type,
+      :translation
     ])
     |> validate_required([:normalized_form, :language])
+    |> validate_inclusion(:type, ["word", "phrase"])
     |> put_default_definitions()
     |> unique_constraint([:normalized_form, :language])
   end

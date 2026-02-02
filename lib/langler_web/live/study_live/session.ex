@@ -133,9 +133,13 @@ defmodule LanglerWeb.StudyLive.Session do
   defp render_card(assigns, item) do
     word = item.word
     definitions = word.definitions || []
+    is_phrase = word && word.type == "phrase"
 
     assigns =
-      assign(assigns, :word, word) |> assign(:definitions, definitions) |> assign(:item, item)
+      assign(assigns, :word, word)
+      |> assign(:definitions, definitions)
+      |> assign(:item, item)
+      |> assign(:is_phrase, is_phrase)
 
     ~H"""
     <div
@@ -157,9 +161,12 @@ defmodule LanglerWeb.StudyLive.Session do
             <%!-- Word --%>
             <div class="flex-[5] min-h-0 flex flex-col items-center justify-center sm:flex-1">
               <div class="flex flex-col items-center gap-2">
-                <p class="text-study-word font-semibold text-base-content text-center leading-tight">
-                  {@word.lemma || @word.normalized_form}
-                </p>
+                <div class="flex items-center gap-2">
+                  <p class="text-study-word font-semibold text-base-content text-center leading-tight">
+                    {@word.lemma || @word.normalized_form}
+                  </p>
+                  <span :if={@is_phrase} class="badge badge-secondary badge-sm">Phrase</span>
+                </div>
                 <p class="text-xs text-base-content/60">
                   Tap to flip
                 </p>
@@ -182,7 +189,7 @@ defmodule LanglerWeb.StudyLive.Session do
           </.card>
         </div>
 
-        <%!-- Back side - Definition only --%>
+        <%!-- Back side - Definition or Translation --%>
         <div class="study-card-face study-card-back">
           <.card
             variant={:default}
@@ -191,20 +198,26 @@ defmodule LanglerWeb.StudyLive.Session do
           >
             <div class="flex flex-col gap-3 items-center w-full overflow-auto">
               <p class="text-xs font-semibold uppercase tracking-widest text-primary/70">
-                Definition
+                {if @is_phrase, do: "Translation", else: "Definition"}
               </p>
-              <%= if @definitions != [] do %>
-                <ol class="space-y-2 text-sm sm:text-base text-base-content/90 text-left w-full">
-                  <li
-                    :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
-                    class="flex gap-2 items-start break-words"
-                  >
-                    <span class="font-semibold text-primary/80 flex-shrink-0">{idx}.</span>
-                    <span class="break-words">{definition}</span>
-                  </li>
-                </ol>
+              <%= if @is_phrase do %>
+                <p class="text-base sm:text-lg text-base-content/90 text-center break-words">
+                  {@word.translation || List.first(@definitions) || "No translation available"}
+                </p>
               <% else %>
-                <p class="text-sm text-base-content/70">No definition available</p>
+                <%= if @definitions != [] do %>
+                  <ol class="space-y-2 text-sm sm:text-base text-base-content/90 text-left w-full">
+                    <li
+                      :for={{definition, idx} <- Enum.with_index(@definitions, 1)}
+                      class="flex gap-2 items-start break-words"
+                    >
+                      <span class="font-semibold text-primary/80 flex-shrink-0">{idx}.</span>
+                      <span class="break-words">{definition}</span>
+                    </li>
+                  </ol>
+                <% else %>
+                  <p class="text-sm text-base-content/70">No definition available</p>
+                <% end %>
               <% end %>
             </div>
           </.card>
@@ -361,49 +374,62 @@ defmodule LanglerWeb.StudyLive.Session do
 
   def handle_event(
         "rate_card",
-        %{"quality" => quality} = params,
+        %{"quality" => quality, "item_id" => item_id_str},
         socket
-      ) do
-    item_id_str = params["item_id"] || params["item-id"]
+      )
+      when is_binary(item_id_str) do
+    process_rate_card(item_id_str, quality, socket)
+  end
 
-    if item_id_str do
-      item_id = String.to_integer(item_id_str)
-      current_card = Enum.at(socket.assigns.cards, socket.assigns.current_index)
+  def handle_event(
+        "rate_card",
+        %{"quality" => quality, "item-id" => item_id_str},
+        socket
+      )
+      when is_binary(item_id_str) do
+    process_rate_card(item_id_str, quality, socket)
+  end
 
-      if current_card && current_card.id == item_id do
-        with {:ok, item} <- find_item(socket.assigns.cards, item_id),
-             rating <- parse_quality(quality),
-             {:ok, updated} <- Study.review_item(item, rating) do
-          # Update the card in the list
-          updated_cards = replace_item(socket.assigns.cards, updated)
+  def handle_event("rate_card", _params, socket), do: {:noreply, socket}
 
-          # Update ratings distribution
-          ratings = update_ratings(socket.assigns.ratings, rating)
-
-          # Advance to next card or complete
-          next_index = socket.assigns.current_index + 1
-          completed = next_index >= length(updated_cards)
-
-          {:noreply,
-           socket
-           |> assign(:cards, updated_cards)
-           |> assign(
-             :current_index,
-             if(completed, do: socket.assigns.current_index, else: next_index)
-           )
-           |> assign(:flipped, false)
-           |> assign(:reviewed_count, socket.assigns.reviewed_count + 1)
-           |> assign(:ratings, ratings)
-           |> assign(:completed, completed)}
-        else
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
-        end
-      else
-        {:noreply, socket}
-      end
+  defp process_rate_card(item_id_str, quality, socket) do
+    with {item_id, ""} <- Integer.parse(item_id_str),
+         current_card when not is_nil(current_card) <-
+           Enum.at(socket.assigns.cards, socket.assigns.current_index),
+         true <- current_card.id == item_id do
+      rate_card(socket, item_id, quality)
     else
-      {:noreply, socket}
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  defp rate_card(socket, item_id, quality) do
+    with {:ok, item} <- find_item(socket.assigns.cards, item_id),
+         rating <- parse_quality(quality),
+         {:ok, updated} <- Study.review_item(item, rating) do
+      updated_cards = replace_item(socket.assigns.cards, updated)
+      ratings = update_ratings(socket.assigns.ratings, rating)
+      next_index = socket.assigns.current_index + 1
+      completed = next_index >= length(updated_cards)
+
+      {:noreply,
+       socket
+       |> assign(:cards, updated_cards)
+       |> assign(
+         :current_index,
+         if(completed, do: socket.assigns.current_index, else: next_index)
+       )
+       |> assign(:flipped, false)
+       |> assign(:reviewed_count, socket.assigns.reviewed_count + 1)
+       |> assign(:ratings, ratings)
+       |> assign(:completed, completed)}
+    else
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
+
+      _ ->
+        {:noreply, socket}
     end
   end
 

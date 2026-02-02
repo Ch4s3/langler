@@ -135,138 +135,11 @@ defmodule LanglerWeb.ArticleLive.Show do
                   {@article_short_title}
                 </p>
 
-                <div class="flex flex-wrap items-center gap-2 article-meta__actions lg:flex-nowrap">
-                  <div class="tooltip tooltip-right" data-tip="Start a practice chat for this article">
-                    <button
-                      :if={@article_status in ["imported", "finished"]}
-                      type="button"
-                      class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
-                      aria-label="Practice with chat"
-                      phx-click="start_article_chat"
-                    >
-                      <.icon name="hero-chat-bubble-left-right" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Practice with chat</span>
-                    </button>
-                  </div>
-                  <div
-                    class="tooltip tooltip-right"
-                    data-tip="Launch the comprehension quiz for this article"
-                  >
-                    <button
-                      :if={@article_status in ["imported", "finished"]}
-                      type="button"
-                      class="article-meta__btn btn btn-secondary btn-sm gap-2 text-white"
-                      aria-label="Take quiz"
-                      phx-click="start_article_quiz"
-                    >
-                      <.icon name="hero-academic-cap" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Take quiz</span>
-                    </button>
-                  </div>
-                  <div
-                    :if={@article_status in ["imported", "finished"]}
-                    class="tooltip tooltip-right"
-                    data-tip={
-                      if @tts_enabled,
-                        do: "Listen to this article",
-                        else: "Configure TTS to listen to articles"
-                    }
-                  >
-                    <%= if @tts_enabled do %>
-                      <.link
-                        navigate={~p"/articles/#{@article.id}/listen"}
-                        class="article-meta__btn btn btn-primary btn-sm gap-2 text-white"
-                        aria-label="Listen to article"
-                      >
-                        <.icon name="hero-speaker-wave" class="h-4 w-4" />
-                        <span class="article-meta__button-label">Listen</span>
-                      </.link>
-                    <% else %>
-                      <button
-                        type="button"
-                        class="article-meta__btn btn btn-ghost btn-sm gap-2 opacity-60"
-                        aria-label="Listen to article"
-                        phx-click="navigate_tts_settings"
-                      >
-                        <.icon name="hero-speaker-wave" class="h-4 w-4" />
-                        <span class="article-meta__button-label">Listen</span>
-                      </button>
-                    <% end %>
-                  </div>
-                  <div
-                    :if={@article_status == "imported"}
-                    class="dropdown dropdown-bottom dropdown-start tooltip tooltip-right"
-                    data-tip="Mark this article as finished"
-                  >
-                    <button
-                      type="button"
-                      tabindex="0"
-                      class="article-meta__btn btn btn-ghost btn-sm gap-2"
-                      aria-label="Finish article"
-                    >
-                      <span class="flex items-center gap-2">
-                        <.icon name="hero-flag" class="h-4 w-4" />
-                        <span class="article-meta__button-label hidden sm:inline">Finish</span>
-                      </span>
-                    </button>
-                    <ul
-                      tabindex="0"
-                      class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 border border-base-300 p-2 shadow-lg right-0 left-auto mt-2"
-                    >
-                      <li>
-                        <button
-                          type="button"
-                          phx-click="finish_without_quiz"
-                          phx-confirm="Mark this article as finished without taking a quiz?"
-                        >
-                          <.icon name="hero-check" class="h-4 w-4" /> Finish without quiz
-                        </button>
-                      </li>
-                    </ul>
-                  </div>
-                  <div
-                    class="tooltip tooltip-right"
-                    data-tip="Archived articles can be deleted from settings."
-                  >
-                    <button
-                      type="button"
-                      class="article-meta__btn btn btn-ghost btn-sm gap-2 text-error"
-                      aria-label="Archive article"
-                      phx-click="archive_article"
-                      phx-disable-with="Archiving..."
-                      phx-confirm="Archive this article? Tracked words stay in your study deck."
-                    >
-                      <.icon name="hero-archive-box" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Archive</span>
-                    </button>
-                  </div>
-                  <div
-                    class="tooltip tooltip-right"
-                    data-tip="Re-import the article content and vocabulary"
-                  >
-                    <button
-                      type="button"
-                      class="article-meta__btn btn btn-ghost btn-sm gap-2"
-                      aria-label="Refresh article"
-                      phx-click="refresh_article"
-                      phx-disable-with="Refreshing..."
-                    >
-                      <.icon name="hero-arrow-path" class="h-4 w-4" />
-                      <span class="article-meta__button-label">Refresh article</span>
-                    </button>
-                  </div>
-                  <div class="tooltip tooltip-right" data-tip="Open the original article in a new tab">
-                    <.link
-                      href={@article.url}
-                      target="_blank"
-                      class="article-meta__btn btn btn-outline btn-sm gap-2"
-                      aria-label="View original article"
-                    >
-                      <span class="article-meta__button-label">View original</span>
-                      <.icon name="hero-arrow-top-right-on-square" class="h-4 w-4" />
-                    </.link>
-                  </div>
-                </div>
+                <.article_actions
+                  article={@article}
+                  article_status={@article_status}
+                  tts_enabled={@tts_enabled}
+                />
               </div>
             </div>
             <div class="article-meta__progress" aria-hidden="true">
@@ -289,7 +162,12 @@ defmodule LanglerWeb.ArticleLive.Show do
                 >
                   <.token_span
                     :for={
-                      token <- tokenize_sentence(sentence.content, sentence.word_occurrences || [])
+                      token <-
+                        tokenize_sentence(
+                          sentence.content,
+                          sentence.word_occurrences || [],
+                          @studied_phrases
+                        )
                     }
                     token={token}
                     sentence_id={sentence.id}
@@ -304,6 +182,170 @@ defmodule LanglerWeb.ArticleLive.Show do
         </div>
       </div>
     </Layouts.app>
+    """
+  end
+
+  attr :article, :map, required: true
+  attr :article_status, :string, required: true
+  attr :tts_enabled, :boolean, required: true
+
+  defp article_actions(assigns) do
+    ~H"""
+    <div class="flex flex-nowrap items-center gap-1 article-meta__actions">
+      <%!-- Primary actions group --%>
+      <div
+        :if={@article_status in ["imported", "finished"]}
+        class="flex items-center gap-1 border-r border-base-300 pr-2 mr-1"
+      >
+        <.action_button
+          tooltip="Start a practice chat"
+          icon="hero-chat-bubble-left-right"
+          label="Chat"
+          event="start_article_chat"
+          variant={:primary}
+        />
+        <.action_button
+          tooltip="Take comprehension quiz"
+          icon="hero-academic-cap"
+          label="Quiz"
+          event="start_article_quiz"
+          variant={:primary}
+        />
+        <.action_link
+          :if={@tts_enabled}
+          tooltip="Listen to this article"
+          icon="hero-speaker-wave"
+          label="Listen"
+          href={~p"/articles/#{@article.id}/listen"}
+          variant={:primary}
+        />
+        <.action_button
+          :if={!@tts_enabled}
+          tooltip="Configure TTS in settings"
+          icon="hero-speaker-wave"
+          label="Listen"
+          event="navigate_tts_settings"
+          variant={:ghost}
+          disabled={true}
+        />
+      </div>
+
+      <%!-- Secondary actions group --%>
+      <div class="flex items-center gap-1">
+        <div
+          :if={@article_status == "imported"}
+          class="dropdown dropdown-bottom dropdown-end"
+        >
+          <div class="tooltip tooltip-bottom" data-tip="Mark as finished">
+            <button
+              type="button"
+              tabindex="0"
+              class="article-meta__btn btn btn-ghost btn-sm btn-square"
+              aria-label="Finish article"
+            >
+              <.icon name="hero-flag" class="h-4 w-4" />
+            </button>
+          </div>
+          <ul
+            tabindex="0"
+            class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 border border-base-300 p-2 shadow-lg mt-2"
+          >
+            <li>
+              <button
+                type="button"
+                phx-click="finish_without_quiz"
+                phx-confirm="Mark this article as finished without taking a quiz?"
+              >
+                <.icon name="hero-check" class="h-4 w-4" /> Finish without quiz
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <.action_button
+          tooltip="Archive article"
+          icon="hero-archive-box"
+          event="archive_article"
+          variant={:error}
+          confirm="Archive this article? Tracked words stay in your study deck."
+        />
+
+        <.action_button
+          tooltip="Re-import content"
+          icon="hero-arrow-path"
+          event="refresh_article"
+          variant={:ghost}
+        />
+
+        <.action_link
+          tooltip="View original"
+          icon="hero-arrow-top-right-on-square"
+          href={@article.url}
+          variant={:ghost}
+          external={true}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr :tooltip, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, default: nil
+  attr :event, :string, required: true
+  attr :variant, :atom, default: :ghost
+  attr :disabled, :boolean, default: false
+  attr :confirm, :string, default: nil
+
+  defp action_button(assigns) do
+    ~H"""
+    <div class="tooltip tooltip-bottom" data-tip={@tooltip}>
+      <button
+        type="button"
+        class={[
+          "article-meta__btn btn btn-sm gap-2",
+          @variant == :primary && "btn-primary text-white",
+          @variant == :ghost && "btn-ghost",
+          @variant == :error && "btn-ghost text-error hover:bg-error/10",
+          @disabled && "opacity-50"
+        ]}
+        aria-label={@label || @tooltip}
+        phx-click={@event}
+        phx-disable-with={if @variant == :ghost, do: "...", else: nil}
+        phx-confirm={@confirm}
+      >
+        <.icon name={@icon} class="h-4 w-4" />
+        <span :if={@label} class="article-meta__button-label">{@label}</span>
+      </button>
+    </div>
+    """
+  end
+
+  attr :tooltip, :string, required: true
+  attr :icon, :string, required: true
+  attr :label, :string, default: nil
+  attr :href, :string, required: true
+  attr :variant, :atom, default: :ghost
+  attr :external, :boolean, default: false
+
+  defp action_link(assigns) do
+    ~H"""
+    <div class="tooltip tooltip-bottom" data-tip={@tooltip}>
+      <.link
+        navigate={if @external, do: nil, else: @href}
+        href={if @external, do: @href, else: nil}
+        target={if @external, do: "_blank", else: nil}
+        class={[
+          "article-meta__btn btn btn-sm gap-2",
+          @variant == :primary && "btn-primary text-white",
+          @variant == :ghost && "btn-ghost"
+        ]}
+        aria-label={@label || @tooltip}
+      >
+        <.icon name={@icon} class="h-4 w-4" />
+        <span :if={@label} class="article-meta__button-label">{@label}</span>
+      </.link>
+    </div>
     """
   end
 
@@ -327,6 +369,9 @@ defmodule LanglerWeb.ArticleLive.Show do
     {studied_word_ids, studied_forms, study_items_by_word} =
       seed_studied_words(user_id, sentences)
 
+    # Load studied phrases for highlighting
+    studied_phrases = load_studied_phrases(user_id)
+
     topics = Content.list_topics_for_article(article.id)
 
     sentence_lookup =
@@ -347,6 +392,7 @@ defmodule LanglerWeb.ArticleLive.Show do
     |> assign(:sentence_lookup, sentence_lookup)
     |> assign(:studied_word_ids, studied_word_ids)
     |> assign(:studied_forms, studied_forms)
+    |> assign(:studied_phrases, studied_phrases)
     |> assign(:study_items_by_word, study_items_by_word)
     |> assign(:article_topics, topics)
     |> assign(:reading_time_minutes, reading_time_minutes)
@@ -370,6 +416,19 @@ defmodule LanglerWeb.ArticleLive.Show do
     else
       nil
     end
+  end
+
+  defp load_studied_phrases(user_id) do
+    Study.list_phrase_words_for_user(user_id)
+    |> Enum.map(fn word ->
+      %{
+        word_id: word.id,
+        normalized_parts: word.normalized_form |> String.split(" ", trim: true),
+        original_form: word.normalized_form
+      }
+    end)
+    # Longest first for precedence
+    |> Enum.sort_by(fn p -> -length(p.normalized_parts) end)
   end
 
   def handle_event(
@@ -487,6 +546,7 @@ defmodule LanglerWeb.ArticleLive.Show do
         socket
       ) do
     word_id = Map.get(params, "word_id")
+    term_kind = Map.get(params, "term_kind", "word")
     trimmed_word = word |> to_string() |> String.trim()
     normalized = Vocabulary.normalize_form(trimmed_word)
     sentence_id = Map.get(params, "sentence_id")
@@ -509,7 +569,18 @@ defmodule LanglerWeb.ArticleLive.Show do
            user_id: user_id
          ) do
       {:ok, entry} ->
-        {resolved_word, studied?} = resolve_word(word_id, entry, normalized, language, socket)
+        word_type = if term_kind == "phrase", do: "phrase", else: "word"
+
+        {resolved_word, studied?} =
+          resolve_word(
+            word_id,
+            entry,
+            normalized,
+            language,
+            socket,
+            type: word_type,
+            translation: entry.translation
+          )
 
         handle_successful_lookup(socket, %{
           entry: entry,
@@ -519,7 +590,8 @@ defmodule LanglerWeb.ArticleLive.Show do
           normalized: normalized,
           language: language,
           context: context,
-          dom_id: dom_id
+          dom_id: dom_id,
+          word_type: word_type
         })
 
       {:error, _reason} ->
@@ -673,7 +745,8 @@ defmodule LanglerWeb.ArticleLive.Show do
          normalized: normalized,
          language: language,
          context: context,
-         dom_id: dom_id
+         dom_id: dom_id,
+         word_type: word_type
        }) do
     payload =
       entry
@@ -693,6 +766,7 @@ defmodule LanglerWeb.ArticleLive.Show do
         normalized_form: normalized,
         context: context,
         word_id: resolved_word && resolved_word.id,
+        word_type: word_type,
         studied: studied?,
         rating_required: studied?,
         study_item_id:
@@ -723,25 +797,141 @@ defmodule LanglerWeb.ArticleLive.Show do
     end
   end
 
-  defp tokenize_sentence(content, occurrences)
+  defp tokenize_sentence(content, occurrences, studied_phrases)
        when is_binary(content) and is_list(occurrences) do
     occurrence_map = build_occurrence_map(occurrences)
 
     # Ensure content is normalized before tokenization (safety check)
     normalized_content = ArticleImporter.normalize_punctuation_spacing(content)
 
-    normalized_content
-    |> extract_tokens()
-    |> normalize_tokens()
-    |> attach_spaces_to_tokens()
+    tokens =
+      normalized_content
+      |> extract_tokens()
+      |> normalize_tokens()
+      |> attach_spaces_to_tokens()
+
+    # Build indexed lexical tokens for phrase matching
+    lexical_tokens =
+      tokens
+      |> Enum.with_index()
+      |> Enum.filter(fn {text, _idx} -> lexical_token?(text) end)
+      |> Enum.map(fn {text, idx} -> {idx, Vocabulary.normalize_form(text)} end)
+
+    # Find phrase matches (longest-first, non-overlapping)
+    phrase_matches = find_phrase_matches(lexical_tokens, studied_phrases)
+
+    base_tokens =
+      tokens
+      |> Enum.with_index()
+      |> Enum.map(fn {text, idx} ->
+        # Map word occurrences - try to find matching word from original position
+        word = Map.get(occurrence_map, idx)
+        phrase_match = Map.get(phrase_matches, idx)
+        # Replace regular spaces with non-breaking spaces to prevent HEEx from collapsing them
+        display_text = if String.match?(text, ~r/^\s+$/), do: "\u00A0", else: text
+
+        %{
+          id: idx,
+          text: display_text,
+          lexical?: lexical_token?(text),
+          word: word,
+          phrase_word_id: phrase_match && phrase_match.word_id,
+          phrase_text: phrase_match && phrase_match.original_form
+        }
+      end)
+
+    # Add phrase position (start/middle/end) to each token for connected styling
+    add_phrase_positions(base_tokens)
+  end
+
+  defp add_phrase_positions(tokens) do
+    # First pass: fill in space tokens between phrase words with the same phrase ID
+    filled_tokens = fill_phrase_gaps(tokens)
+
+    # Second pass: compute positions for each token
+    filled_tokens
     |> Enum.with_index()
-    |> Enum.map(fn {text, idx} ->
-      # Map word occurrences - try to find matching word from original position
-      word = Map.get(occurrence_map, idx)
-      # Replace regular spaces with non-breaking spaces to prevent HEEx from collapsing them
-      display_text = if String.match?(text, ~r/^\s+$/), do: "\u00A0", else: text
-      %{id: idx, text: display_text, lexical?: lexical_token?(text), word: word}
+    |> Enum.map(fn {token, idx} ->
+      if token.phrase_word_id do
+        position = compute_phrase_position(filled_tokens, idx, token.phrase_word_id)
+        Map.put(token, :phrase_position, position)
+      else
+        Map.put(token, :phrase_position, nil)
+      end
     end)
+  end
+
+  defp fill_phrase_gaps(tokens) do
+    # For each non-lexical token (space), check if it's between two tokens
+    # with the same phrase_word_id. If so, inherit that phrase_word_id.
+    tokens
+    |> Enum.with_index()
+    |> Enum.map(fn {token, idx} ->
+      if token.phrase_word_id || token.lexical? do
+        # Already has phrase ID or is a word - keep as is
+        token
+      else
+        # This is a space/punctuation token - check neighbors
+        maybe_inherit_phrase_id(tokens, token, idx)
+      end
+    end)
+  end
+
+  defp maybe_inherit_phrase_id(tokens, token, idx) do
+    # Look for the nearest lexical tokens on each side
+    prev_phrase_id = find_prev_phrase_id(tokens, idx)
+    next_phrase_id = find_next_phrase_id(tokens, idx)
+
+    # If both sides have the same phrase ID, inherit it
+    if prev_phrase_id && prev_phrase_id == next_phrase_id do
+      token
+      |> Map.put(:phrase_word_id, prev_phrase_id)
+      |> Map.put(:phrase_text, find_phrase_text(tokens, prev_phrase_id))
+    else
+      token
+    end
+  end
+
+  defp find_prev_phrase_id(tokens, idx) do
+    tokens
+    |> Enum.take(idx)
+    |> Enum.reverse()
+    |> Enum.find(& &1.lexical?)
+    |> then(fn
+      nil -> nil
+      token -> token.phrase_word_id
+    end)
+  end
+
+  defp find_next_phrase_id(tokens, idx) do
+    tokens
+    |> Enum.drop(idx + 1)
+    |> Enum.find(& &1.lexical?)
+    |> then(fn
+      nil -> nil
+      token -> token.phrase_word_id
+    end)
+  end
+
+  defp find_phrase_text(tokens, phrase_id) do
+    Enum.find_value(tokens, fn token ->
+      if token.phrase_word_id == phrase_id, do: token.phrase_text
+    end)
+  end
+
+  defp compute_phrase_position(tokens, idx, phrase_id) do
+    prev_token = if idx > 0, do: Enum.at(tokens, idx - 1)
+    next_token = Enum.at(tokens, idx + 1)
+
+    prev_same = prev_token && prev_token.phrase_word_id == phrase_id
+    next_same = next_token && next_token.phrase_word_id == phrase_id
+
+    cond do
+      prev_same && next_same -> :middle
+      prev_same -> :end
+      next_same -> :start
+      true -> :only
+    end
   end
 
   defp build_occurrence_map(occurrences) do
@@ -751,6 +941,54 @@ defmodule LanglerWeb.ArticleLive.Show do
         word -> Map.put(acc, occurrence.position, word)
       end
     end)
+  end
+
+  @doc false
+  def find_phrase_matches(lexical_tokens, studied_phrases) do
+    # Returns %{token_idx => %{word_id, original_form}} for all matched token indices
+    {matches, _used} =
+      Enum.reduce(studied_phrases, {%{}, MapSet.new()}, fn phrase, {acc, used} ->
+        # Find all non-overlapping matches of this phrase in the tokens
+        phrase_matches =
+          find_all_phrase_occurrences(lexical_tokens, phrase.normalized_parts, used)
+
+        # Add all matches to the accumulator
+        accumulate_phrase_matches(phrase_matches, phrase, acc, used)
+      end)
+
+    matches
+  end
+
+  defp accumulate_phrase_matches(phrase_matches, phrase, acc, used) do
+    Enum.reduce(phrase_matches, {acc, used}, fn matched_indices, {a, u} ->
+      new_used = MapSet.union(u, MapSet.new(matched_indices))
+
+      new_acc =
+        Enum.reduce(matched_indices, a, fn idx, map ->
+          Map.put(map, idx, %{word_id: phrase.word_id, original_form: phrase.original_form})
+        end)
+
+      {new_acc, new_used}
+    end)
+  end
+
+  @doc false
+  def find_all_phrase_occurrences(lexical_tokens, phrase_parts, used) do
+    phrase_len = length(phrase_parts)
+
+    lexical_tokens
+    |> Enum.chunk_every(phrase_len, 1, :discard)
+    |> Enum.reduce([], fn chunk, acc ->
+      indices = Enum.map(chunk, fn {idx, _} -> idx end)
+      forms = Enum.map(chunk, fn {_, form} -> form end)
+
+      if forms == phrase_parts and Enum.all?(indices, &(!MapSet.member?(used, &1))) do
+        [indices | acc]
+      else
+        acc
+      end
+    end)
+    |> Enum.reverse()
   end
 
   defp extract_tokens(content) do
@@ -1032,6 +1270,20 @@ defmodule LanglerWeb.ArticleLive.Show do
     class =
       token_class(token, assigns.studied_word_ids, assigns.studied_forms) |> flatten_classes()
 
+    # All phrase tokens (including spaces) need data-phrase-id for hover handling
+    phrase_attrs =
+      if token.phrase_word_id do
+        [
+          ~s( data-phrase-id="#{token.phrase_word_id}"),
+          if(token.phrase_text,
+            do: ~s( data-phrase="#{escape_attr(token.phrase_text)}"),
+            else: ""
+          )
+        ]
+      else
+        []
+      end
+
     [
       ~s( id="token-#{assigns.sentence_id}-#{token.id}"),
       ~s( class="#{class}"),
@@ -1039,6 +1291,7 @@ defmodule LanglerWeb.ArticleLive.Show do
       ~s( data-language="#{assigns.language}"),
       if(token.lexical?, do: ~s( data-word="#{escape_attr(token.text)}"), else: ""),
       if(token.word, do: ~s( data-word-id="#{token.word.id}"), else: ""),
+      phrase_attrs,
       if(token.lexical?, do: ~s( phx-hook="WordTooltip"), else: "")
     ]
   end
@@ -1063,21 +1316,68 @@ defmodule LanglerWeb.ArticleLive.Show do
   end
 
   defp token_class(token, studied_word_ids, studied_forms) do
-    [
-      "inline align-baseline text-reading",
-      token.lexical? && lexical_token_class(token, studied_word_ids, studied_forms)
-    ]
+    cond do
+      # Lexical tokens get full styling
+      token.lexical? ->
+        [
+          "inline align-baseline text-reading",
+          lexical_token_class(token, studied_word_ids, studied_forms)
+        ]
+
+      # Non-lexical tokens (spaces) that are part of a phrase get connected styling
+      # Must match word tokens: same py-0.5, border styles for seamless connection
+      token.phrase_word_id ->
+        [
+          "inline align-baseline text-reading phrase-token py-0.5",
+          "bg-secondary/20 border-b-2 border-secondary/30",
+          phrase_position_classes(token.phrase_position)
+        ]
+
+      # Regular non-lexical tokens
+      true ->
+        ["inline align-baseline text-reading"]
+    end
   end
 
   defp lexical_token_class(token, studied_word_ids, studied_forms) do
-    [
-      "cursor-pointer rounded px-0.5 py-0.5 transition-all duration-200",
-      "hover:bg-primary/15 hover:text-primary/90 hover:shadow-[inset_0_-0.12em_0_0] hover:shadow-primary/20",
-      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2",
-      studied_token?(token, studied_word_ids, studied_forms) &&
-        "bg-primary/15 text-primary/90 shadow-[inset_0_-0.12em_0_0] shadow-primary/20"
+    base = [
+      "cursor-pointer py-0.5 transition-all duration-200",
+      "focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40 focus-visible:outline-offset-2"
     ]
+
+    cond do
+      # Phrase takes precedence over single words - use connected styling
+      token.phrase_word_id ->
+        phrase_base =
+          base ++
+            [
+              "phrase-token bg-secondary/20 text-secondary border-b-2 border-secondary/30"
+            ]
+
+        phrase_base ++ phrase_position_classes(token.phrase_position)
+
+      studied_token?(token, studied_word_ids, studied_forms) ->
+        base ++
+          [
+            "rounded px-0.5",
+            "bg-primary/15 text-primary/90 border-b-2 border-primary/30",
+            "hover:bg-primary/25 hover:border-primary/40"
+          ]
+
+      true ->
+        base ++
+          [
+            "rounded px-0.5",
+            "hover:bg-primary/15 hover:text-primary/90 hover:border-b-2 hover:border-primary/30"
+          ]
+    end
   end
+
+  defp phrase_position_classes(:start), do: ["rounded-l pl-0.5 pr-0"]
+  defp phrase_position_classes(:middle), do: ["rounded-none px-0"]
+  defp phrase_position_classes(:end), do: ["rounded-r pr-0.5 pl-0"]
+  defp phrase_position_classes(:only), do: ["rounded px-0.5"]
+  defp phrase_position_classes(_), do: ["rounded px-0.5"]
 
   defp studied_token?(token, studied_ids, studied_forms) do
     cond do
@@ -1112,8 +1412,8 @@ defmodule LanglerWeb.ArticleLive.Show do
     end
   end
 
-  defp resolve_word(word_id, entry, normalized, language, socket) do
-    case resolve_word_record(word_id, entry, normalized, language) do
+  defp resolve_word(word_id, entry, normalized, language, socket, opts) do
+    case resolve_word_record(word_id, entry, normalized, language, opts) do
       {:ok, word} ->
         studied? =
           MapSet.member?(socket.assigns.studied_word_ids, word.id) ||
@@ -1126,22 +1426,26 @@ defmodule LanglerWeb.ArticleLive.Show do
     end
   end
 
-  defp resolve_word_record(nil, entry, normalized, language) do
+  defp resolve_word_record(nil, entry, normalized, language, opts) do
     lemma =
       Map.get(entry, :lemma) || Map.get(entry, "lemma") || Map.get(entry, :word) || entry[:word]
 
     definitions = Map.get(entry, :definitions) || Map.get(entry, "definitions") || []
+    word_type = Keyword.get(opts, :type, "word")
+    translation = Keyword.get(opts, :translation)
 
     Vocabulary.get_or_create_word(%{
       normalized_form: normalized,
       language: language,
       lemma: lemma,
       part_of_speech: Map.get(entry, :part_of_speech) || Map.get(entry, "part_of_speech"),
-      definitions: definitions
+      definitions: definitions,
+      type: word_type,
+      translation: translation
     })
   end
 
-  defp resolve_word_record(word_id, _entry, _normalized, _language) do
+  defp resolve_word_record(word_id, _entry, _normalized, _language, _opts) do
     fetch_word(word_id)
   end
 

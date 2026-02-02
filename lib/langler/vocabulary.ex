@@ -37,18 +37,32 @@ defmodule Langler.Vocabulary do
 
     language = fetch_any(attrs, [:language, "language"])
     definitions = fetch_optional(attrs, [:definitions, "definitions"]) || []
+    word_type = fetch_optional(attrs, [:type, "type"]) || "word"
+    translation = fetch_optional(attrs, [:translation, "translation"])
 
     case get_word_by_normalized_form(normalized, language) do
       nil ->
-        attrs
-        |> Enum.into(%{})
-        |> Map.put(:normalized_form, normalized)
-        |> Map.put(:language, language)
-        |> Map.put_new(:definitions, definitions)
-        |> create_word()
+        create_attrs = %{
+          normalized_form: normalized,
+          language: language,
+          lemma: fetch_optional(attrs, [:lemma, "lemma"]),
+          part_of_speech: fetch_optional(attrs, [:part_of_speech, "part_of_speech"]),
+          definitions: definitions,
+          type: word_type,
+          translation: translation
+        }
+
+        create_word(create_attrs)
 
       word ->
-        maybe_update_definitions(word, definitions)
+        # If looking up as phrase but existing word is type "word", update the type
+        if word_type == "phrase" and word.type == "word" do
+          word
+          |> Word.changeset(%{type: "phrase", translation: translation})
+          |> Repo.update()
+        else
+          maybe_update_word_data(word, definitions, translation)
+        end
     end
   end
 
@@ -79,14 +93,28 @@ defmodule Langler.Vocabulary do
     |> Repo.update()
   end
 
-  defp maybe_update_definitions(word, definitions)
+  defp maybe_update_word_data(word, definitions, translation)
        when definitions in [nil, []] or definitions == word.definitions do
-    {:ok, word}
+    # If translation is provided and different, update it
+    if translation && translation != word.translation do
+      word
+      |> Word.changeset(%{translation: translation})
+      |> Repo.update()
+    else
+      {:ok, word}
+    end
   end
 
-  defp maybe_update_definitions(%Word{} = word, definitions) do
+  defp maybe_update_word_data(%Word{} = word, definitions, translation) do
+    updates = %{definitions: definitions}
+
+    updates =
+      if translation && translation != word.translation,
+        do: Map.put(updates, :translation, translation),
+        else: updates
+
     word
-    |> Word.changeset(%{definitions: definitions})
+    |> Word.changeset(updates)
     |> Repo.update()
   end
 

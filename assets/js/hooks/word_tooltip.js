@@ -2,6 +2,17 @@ const TOOLTIP_ID = "word-tooltip"
 
 let activeHook = null
 
+// Selection state (shared across all hook instances)
+let selectionState = null
+// { anchorEl, anchorHook, anchorSentenceId, currentEndEl, selectedEls: [], allSentenceTokens: [] }
+
+const LONG_PRESS_MS = 300
+const ACTIVE_SELECTION_CLASS = "phrase-selection-highlight"
+
+// Helper to add/remove selection class
+const addSelectionClasses = (el) => el.classList.add(ACTIVE_SELECTION_CLASS)
+const removeSelectionClasses = (el) => el.classList.remove(ACTIVE_SELECTION_CLASS)
+
 const ensureTooltipEl = () => {
   let existing = document.getElementById(TOOLTIP_ID)
   if (existing) {
@@ -233,25 +244,13 @@ const ratingButtons = [
 ]
 
 const renderCornerAction = entry => {
-  if (!entry.word_id && !entry.studied) {
+  // Only show the + button in the corner (not the Tracked indicator)
+  if (!entry.word_id || entry.studied) {
     return ""
   }
 
   const wrapperClasses =
     "absolute right-3 top-3 flex h-9 min-w-[2.75rem] items-center justify-center"
-
-  if (entry.studied) {
-    return `<div class="${wrapperClasses}">
-      <div class="flex w-full items-center justify-center gap-1 rounded-full bg-success/10 px-2 py-1 text-success shadow">
-        <span class="text-xs font-semibold">Tracked</span>
-        <span class="text-base leading-none">✓</span>
-      </div>
-    </div>`
-  }
-
-  if (!entry.word_id) {
-    return ""
-  }
 
   return `<div class="${wrapperClasses}">
     <button
@@ -325,8 +324,24 @@ const renderEntry = entry => {
       ? `<p class="text-xs uppercase tracking-wide text-base-content/60">${metaParts.join(" • ")}</p>`
       : ""
 
+  const phraseBadge = entry.word_type === "phrase"
+    ? `<span class="badge badge-secondary badge-sm">Phrase</span>`
+    : ""
+
+  // Tracked indicator as inline badge
+  const trackedBadge = entry.studied
+    ? `<span class="badge badge-success badge-sm gap-1">
+        <span class="text-xs">Tracked</span>
+        <span class="text-sm leading-none">✓</span>
+      </span>`
+    : ""
+
+  // For phrases, show translation prominently below the word
+  // For regular words, show it in a smaller pill
   const translation = entry.translation
-    ? `<p class="mt-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary/90 w-fit">${escapeHtml(entry.translation)}</p>`
+    ? entry.word_type === "phrase"
+      ? `<p class="text-sm text-base-content/80">${escapeHtml(entry.translation)}</p>`
+      : `<p class="mt-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary/90 w-fit">${escapeHtml(entry.translation)}</p>`
     : ""
 
   const sourceLink = entry.source_url
@@ -337,11 +352,18 @@ const renderEntry = entry => {
     ? `<p class="mt-3 text-xs italic text-base-content/60">&ldquo;${escapeHtml(entry.context)}&rdquo;</p>`
     : ""
 
+  // Use wider padding when there's a corner action (+ button) to prevent overlap
+  const rightPadding = (!entry.studied && entry.word_id) ? "pr-12" : ""
+
   return `
-    <div class="relative space-y-3 pr-6">
+    <div class="relative space-y-3 ${rightPadding}">
       ${renderCornerAction(entry)}
-      <div>
+      <div class="space-y-1.5">
         <p class="text-base font-semibold text-base-content">${escapeHtml(entry.word)}</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          ${phraseBadge}
+          ${trackedBadge}
+        </div>
         ${meta}
         ${translation}
       </div>
@@ -397,6 +419,85 @@ const hideTooltip = tooltip => {
   }, 150) // Match transition duration
 }
 
+// Selection mode helper functions
+function cancelSelection() {
+  if (!selectionState) return
+  
+  selectionState.selectedEls.forEach(el => removeSelectionClasses(el))
+  selectionState = null
+  
+  document.removeEventListener("mousemove", handleSelectionMouseMove)
+  document.removeEventListener("keydown", handleSelectionKeyDown)
+  document.removeEventListener("click", handleSelectionOutsideClick, true)
+  document.removeEventListener("pointermove", handleSelectionPointerMove)
+}
+
+function handleSelectionMouseMove(event) {
+  if (!selectionState) return
+  
+  const hoveredEl = document.elementFromPoint(event.clientX, event.clientY)
+  if (!hoveredEl) return
+  
+  const tokenEl = hoveredEl.closest("[data-sentence-id][data-word]")
+  if (!tokenEl) return
+  
+  // Must be same sentence
+  if (tokenEl.dataset.sentenceId !== selectionState.anchorSentenceId) return
+  
+  if (tokenEl === selectionState.currentEndEl) return
+  selectionState.currentEndEl = tokenEl
+  
+  updateSelectionHighlight()
+}
+
+function handleSelectionPointerMove(event) {
+  if (!selectionState) return
+  
+  const el = document.elementFromPoint(event.clientX, event.clientY)
+  if (!el) return
+  
+  const tokenEl = el.closest("[data-sentence-id][data-word]")
+  if (!tokenEl || tokenEl.dataset.sentenceId !== selectionState.anchorSentenceId) return
+  
+  selectionState.currentEndEl = tokenEl
+  updateSelectionHighlight()
+}
+
+function updateSelectionHighlight() {
+  // Clear old highlights
+  selectionState.selectedEls.forEach(el => removeSelectionClasses(el))
+  
+  // Use pre-cached token list for performance
+  const allTokens = selectionState.allSentenceTokens
+  
+  const anchorIdx = allTokens.indexOf(selectionState.anchorEl)
+  const endIdx = allTokens.indexOf(selectionState.currentEndEl)
+  
+  if (anchorIdx === -1 || endIdx === -1) {
+    return
+  }
+  
+  const [startIdx, stopIdx] = anchorIdx < endIdx ? [anchorIdx, endIdx] : [endIdx, anchorIdx]
+  
+  selectionState.selectedEls = allTokens.slice(startIdx, stopIdx + 1)
+  selectionState.selectedEls.forEach(el => addSelectionClasses(el))
+}
+
+function handleSelectionKeyDown(event) {
+  if (event.key === "Escape") {
+    cancelSelection()
+  }
+}
+
+function handleSelectionOutsideClick(event) {
+  if (!selectionState) return
+  const isTokenClick = event.target.closest("[data-sentence-id][data-word]")
+  if (!isTokenClick) {
+    cancelSelection()
+  }
+  // Don't stop propagation - let the element's handleClick run for finalization
+}
+
 const showTooltip = (tooltip, html, anchor) => {
   tooltip.innerHTML = html
   tooltip.dataset.active = "true"
@@ -426,11 +527,27 @@ const WordTooltip = {
     this.handleWordRated = this.handleWordRated.bind(this)
     this.handleWordRemoved = this.handleWordRemoved.bind(this)
     this.handleWordAdded = this.handleWordAdded.bind(this)
+    this.handlePointerDown = this.handlePointerDown.bind(this)
+    this.handlePointerUp = this.handlePointerUp.bind(this)
+    this.handlePointerCancel = this.handlePointerCancel.bind(this)
+    this.handlePhraseMouseEnter = this.handlePhraseMouseEnter.bind(this)
+    this.handlePhraseMouseLeave = this.handlePhraseMouseLeave.bind(this)
     this.pendingTimeout = null
     this.currentEntry = null
+    this.longPressTimer = null
 
     this.el.addEventListener("click", this.handleClick)
+    this.el.addEventListener("pointerdown", this.handlePointerDown)
+    this.el.addEventListener("pointerup", this.handlePointerUp)
+    this.el.addEventListener("pointercancel", this.handlePointerCancel)
     document.addEventListener("click", this.handleDocClick)
+    
+    // Add phrase hover handling
+    if (this.el.dataset.phraseId) {
+      this.el.addEventListener("mouseenter", this.handlePhraseMouseEnter)
+      this.el.addEventListener("mouseleave", this.handlePhraseMouseLeave)
+    }
+    
     this.handleEvent("word-data", this.handleWordData)
     this.handleEvent("word-rated", this.handleWordRated)
     this.handleEvent("word-removed", this.handleWordRemoved)
@@ -438,22 +555,206 @@ const WordTooltip = {
   },
   destroyed() {
     this.el.removeEventListener("click", this.handleClick)
+    this.el.removeEventListener("pointerdown", this.handlePointerDown)
+    this.el.removeEventListener("pointerup", this.handlePointerUp)
+    this.el.removeEventListener("pointercancel", this.handlePointerCancel)
     document.removeEventListener("click", this.handleDocClick)
+    
+    if (this.el.dataset.phraseId) {
+      this.el.removeEventListener("mouseenter", this.handlePhraseMouseEnter)
+      this.el.removeEventListener("mouseleave", this.handlePhraseMouseLeave)
+    }
+    
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer)
+    }
     if (activeHook === this) {
       activeHook = null
     }
   },
+  handlePhraseMouseEnter() {
+    const phraseId = this.el.dataset.phraseId
+    if (!phraseId) return
+    
+    // Add hover class to all tokens with the same phrase ID
+    document.querySelectorAll(`[data-phrase-id="${phraseId}"]`).forEach(el => {
+      el.classList.add("phrase-hover")
+    })
+  },
+  handlePhraseMouseLeave() {
+    const phraseId = this.el.dataset.phraseId
+    if (!phraseId) return
+    
+    // Remove hover class from all tokens with the same phrase ID
+    document.querySelectorAll(`[data-phrase-id="${phraseId}"]`).forEach(el => {
+      el.classList.remove("phrase-hover")
+    })
+  },
   handleClick(event) {
+    const isModifierClick = event.metaKey || event.ctrlKey
+
+    if (isModifierClick) {
+      // Start phrase selection
+      event.stopPropagation()
+      event.preventDefault()
+      this.startSelection()
+      return
+    }
+
+    if (selectionState && selectionState.anchorSentenceId === this.el.dataset.sentenceId) {
+      // Finalize selection on second click in same sentence
+      // If the user clicked directly without hovering, update the end element now
+      if (this.el !== selectionState.anchorEl) {
+        selectionState.currentEndEl = this.el
+        updateSelectionHighlight()
+      }
+      
+      event.stopPropagation()
+      event.preventDefault()
+      this.finalizeSelection()
+      return
+    }
+
+    // Normal single-word lookup
     event.stopPropagation()
     event.preventDefault()
     if (this.pendingTimeout) clearTimeout(this.pendingTimeout)
     this.pendingTimeout = setTimeout(() => this.pushLookup(), 50)
   },
+  startSelection() {
+    cancelSelection()  // Clear any prior selection
+    
+    // Pre-cache all lexical tokens in this sentence for performance
+    const sentenceId = this.el.dataset.sentenceId
+    const allSentenceTokens = Array.from(
+      document.querySelectorAll(`[data-sentence-id="${sentenceId}"][data-word]`)
+    )
+    
+    selectionState = {
+      anchorEl: this.el,
+      anchorHook: this,
+      anchorSentenceId: sentenceId,
+      currentEndEl: this.el,
+      selectedEls: [this.el],
+      allSentenceTokens: allSentenceTokens
+    }
+    
+    addSelectionClasses(this.el)
+    
+    // Add document-level listeners
+    document.addEventListener("mousemove", handleSelectionMouseMove)
+    document.addEventListener("keydown", handleSelectionKeyDown)
+    document.addEventListener("click", handleSelectionOutsideClick, true)
+  },
+  finalizeSelection() {
+    if (!selectionState || selectionState.selectedEls.length < 2) {
+      cancelSelection()
+      return
+    }
+    
+    // Build phrase text from selected tokens
+    const phraseText = selectionState.selectedEls
+      .map(el => el.dataset.word)
+      .join(" ")
+    
+    const eventData = {
+      word: phraseText,
+      language: selectionState.anchorEl.dataset.language,
+      sentence_id: selectionState.anchorSentenceId,
+      dom_id: selectionState.anchorEl.id,
+      term_kind: "phrase",
+    }
+    
+    const hook = selectionState.anchorHook
+    activeHook = hook
+    hook.currentEntry = null
+    showTooltip(hook.tooltipEl, renderLoadingSkeleton(), selectionState.anchorEl)
+    
+    // If component-id is set, target the component instead of parent LiveView
+    const componentId = selectionState.anchorEl.dataset.componentId
+    if (componentId) {
+      const drawerContainer = selectionState.anchorEl.closest("#chat-drawer-container")
+      let componentEl = null
+      if (drawerContainer) {
+        const containerComponentId = drawerContainer.getAttribute("phx-component")
+        if (containerComponentId === componentId) {
+          componentEl = drawerContainer
+        } else {
+          componentEl = drawerContainer.querySelector(`[phx-component="${componentId}"]`)
+        }
+      }
+      if (!componentEl) {
+        let current = selectionState.anchorEl.parentElement
+        while (current && !componentEl) {
+          if (current.id === "chat-drawer-container") break
+          if (current.getAttribute && current.getAttribute("phx-component") === componentId) {
+            componentEl = current
+            break
+          }
+          current = current.parentElement
+        }
+      }
+      if (!componentEl) {
+        componentEl = document.querySelector(`[phx-component="${componentId}"]`)
+      }
+      if (componentEl) {
+        hook.pushEventTo(componentEl, "fetch_word_data", eventData)
+      } else {
+        hook.pushEvent("fetch_word_data", eventData)
+      }
+    } else {
+      hook.pushEvent("fetch_word_data", eventData)
+    }
+  },
+  handlePointerDown(event) {
+    if (event.pointerType !== "touch") return
+    
+    this.longPressTimer = setTimeout(() => {
+      this.startSelection()
+      // Add pointermove for drag
+      document.addEventListener("pointermove", handleSelectionPointerMove)
+    }, LONG_PRESS_MS)
+  },
+  handlePointerUp(event) {
+    // Only handle touch for mobile long-press selection
+    if (event.pointerType !== "touch") return
+    
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer)
+      this.longPressTimer = null
+    }
+    
+    document.removeEventListener("pointermove", handleSelectionPointerMove)
+    
+    if (selectionState && selectionState.selectedEls.length >= 2) {
+      this.finalizeSelection()
+    } else if (selectionState) {
+      cancelSelection()
+    }
+  },
+  handlePointerCancel(event) {
+    // Only handle touch for mobile long-press selection
+    if (event.pointerType !== "touch") return
+    
+    if (this.longPressTimer) {
+      clearTimeout(this.longPressTimer)
+      this.longPressTimer = null
+    }
+    
+    document.removeEventListener("pointermove", handleSelectionPointerMove)
+    cancelSelection()
+  },
   handleWordData(payload) {
     if (payload.dom_id !== this.el.id) return
     if (this.pendingTimeout) clearTimeout(this.pendingTimeout)
+    
+    // Clear selection highlight when word data arrives
+    if (selectionState && selectionState.anchorEl === this.el) {
+      selectionState.selectedEls.forEach(el => removeSelectionClasses(el))
+      cancelSelection()
+    }
+    
     activeHook = this
-    console.log("word-data", payload)
     if (payload.word_id) {
       this.el.dataset.wordId = payload.word_id
     }
@@ -461,6 +762,10 @@ const WordTooltip = {
     showTooltip(this.tooltipEl, renderEntry(payload), this.el)
   },
   handleDocClick(event) {
+    // Don't interfere with phrase selection
+    if (selectionState) {
+      return
+    }
     // Don't hide if clicking on the word element or the tooltip itself
     if (this.el.contains(event.target) || this.tooltipEl.contains(event.target)) {
       return
@@ -512,12 +817,17 @@ const WordTooltip = {
     showTooltip(this.tooltipEl, renderEntry(this.currentEntry), this.el)
   },
   pushLookup() {
+    // Check if this token is part of a saved phrase
+    const phraseText = this.el.dataset.phrase
+    const phraseId = this.el.dataset.phraseId
+    
     const eventData = {
-      word: this.el.dataset.word,
+      word: phraseText || this.el.dataset.word,
       language: this.el.dataset.language,
       sentence_id: this.el.dataset.sentenceId,
       dom_id: this.el.id,
-      word_id: this.el.dataset.wordId,
+      word_id: phraseId || this.el.dataset.wordId,
+      term_kind: phraseText ? "phrase" : "word",
     }
 
     activeHook = this

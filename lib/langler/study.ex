@@ -85,6 +85,21 @@ defmodule Langler.Study do
     |> Repo.preload(:word)
   end
 
+  @doc """
+  Lists phrase words that are being studied by the user.
+  Returns word structs with type="phrase".
+  """
+  def list_phrase_words_for_user(user_id) do
+    from(i in FSRSItem,
+      where: i.user_id == ^user_id,
+      join: w in assoc(i, :word),
+      where: w.type == "phrase",
+      select: w,
+      distinct: true
+    )
+    |> Repo.all()
+  end
+
   def due_items(user_id, reference_datetime \\ DateTime.utc_now()) do
     FSRSItem
     |> where([i], i.user_id == ^user_id)

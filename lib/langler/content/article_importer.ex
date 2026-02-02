@@ -24,28 +24,7 @@ defmodule Langler.Content.ArticleImporter do
     with {:ok, normalized_url} <- normalize_url(url),
          {:ok, html} <- fetch_html(normalized_url),
          {:ok, parsed} <- parse_article_html(html, normalized_url) do
-      case Content.get_article_by_url(normalized_url) do
-        %Content.Article{} = article ->
-          case refresh_article(article, user, normalized_url, html, parsed) do
-            {:ok, refreshed} ->
-              enqueue_word_extraction(refreshed)
-              {:ok, refreshed, :existing}
-
-            {:error, reason} ->
-              Logger.warning("Article refresh failed: #{inspect(reason)}")
-              {:ok, ensure_association(article, user), :existing}
-          end
-
-        nil ->
-          case persist_article(user, normalized_url, html, parsed) do
-            {:ok, article} ->
-              enqueue_word_extraction(article)
-              {:ok, article, :new}
-
-            {:error, _} = error ->
-              error
-          end
-      end
+      handle_article(user, normalized_url, html, parsed)
     end
   end
 
@@ -111,6 +90,16 @@ defmodule Langler.Content.ArticleImporter do
   defp req_options do
     config = Application.get_env(:langler, __MODULE__, [])
     Keyword.get(config, :req_options, [])
+  end
+
+  defp handle_article(user, url, html, parsed) do
+    case Content.get_article_by_url(url) do
+      %Content.Article{} = article ->
+        refresh_existing_article(article, user, url, html, parsed)
+
+      nil ->
+        persist_new_article(user, url, html, parsed)
+    end
   end
 
   defp persist_article(user, url, html, parsed) do
@@ -190,6 +179,29 @@ defmodule Langler.Content.ArticleImporter do
 
   @dialyzer {:nowarn_function, html_title: 1}
   defp html_title(_), do: nil
+
+  defp persist_new_article(user, url, html, parsed) do
+    case persist_article(user, url, html, parsed) do
+      {:ok, article} ->
+        enqueue_word_extraction(article)
+        {:ok, article, :new}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp refresh_existing_article(article, user, url, html, parsed) do
+    case refresh_article(article, user, url, html, parsed) do
+      {:ok, refreshed} ->
+        enqueue_word_extraction(refreshed)
+        {:ok, refreshed, :existing}
+
+      {:error, reason} ->
+        Logger.warning("Article refresh failed: #{inspect(reason)}")
+        {:ok, ensure_association(article, user), :existing}
+    end
+  end
 
   defp create_article(parsed, html, url, user) do
     language = user_language(user)

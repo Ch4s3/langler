@@ -6,6 +6,20 @@
 @source "../js";
 @source "../../lib/langler_web";
 
+/* Phrase selection highlighting - used by word_tooltip.js for active selection */
+.phrase-selection-highlight {
+  background-color: oklch(70% 0.15 250 / 0.4) !important;
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 2px oklch(60% 0.18 250 / 0.6);
+  transition: background-color 0.1s ease;
+}
+
+/* Phrase hover state - applied via JS to all tokens in a phrase */
+.phrase-token.phrase-hover {
+  background-color: color-mix(in srgb, var(--color-secondary) 35%, transparent) !important;
+  border-bottom-color: color-mix(in srgb, var(--color-secondary) 50%, transparent) !important;
+}
+
 /* Quiz Results Animation */
 @keyframes fade-in {
   from {
@@ -523,7 +537,7 @@ body {
   transition: padding 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
   border-radius: 0;
   border: none;
-  overflow-x: hidden;
+  height: fit-content;
 }
 
 .article-meta__full {
@@ -538,7 +552,23 @@ body {
   flex: 1;
   justify-content: flex-end;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+/* Tooltip z-index: above trigger button and adjacent buttons when hovered */
+.article-meta__actions .tooltip {
+  position: relative;
+  z-index: 1;
+}
+
+.article-meta__actions .tooltip:hover {
+  z-index: 50;
+}
+
+.article-meta__actions .tooltip::before,
+.article-meta__actions .tooltip::after {
+  z-index: 10;
 }
 
 .article-meta__btn {

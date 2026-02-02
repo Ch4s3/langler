@@ -85,6 +85,7 @@ defmodule LanglerWeb.ArticleLive.ShowRenderTest do
       sentence_lookup: %{"1" => sentence},
       studied_word_ids: MapSet.new([word.id]),
       studied_forms: MapSet.new(["hola"]),
+      studied_phrases: [],
       study_items_by_word: %{word.id => %{id: 99, due_date: DateTime.utc_now()}},
       article_topics: [%{topic: "cultura"}],
       reading_time_minutes: 1.0,

@@ -63,34 +63,47 @@ defmodule LanglerWeb.Layouts do
           </.link>
 
           <nav class="flex min-w-0 justify-center">
-            <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-xs font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
+            <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-[0.72rem] font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
                   navigate={~p"/library"}
-                  class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
-                  <.icon name="hero-book-open" class="h-4 w-4" />
+                  <.icon name="hero-book-open" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span>Library</span>
                 </.link>
               </li>
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
                   navigate={~p"/study"}
-                  class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
-                  <.icon name="hero-academic-cap" class="h-4 w-4" />
+                  <.icon name="hero-academic-cap" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span>Study</span>
                 </.link>
+              </li>
+              <li
+                :if={@current_scope}
+                class="rounded-full border border-transparent transition hover:border-base-300"
+              >
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
+                  phx-click={JS.push("open_search", target: "#dictionary-search-modal-wrapper")}
+                  aria-label="Open dictionary search"
+                >
+                  <.icon name="hero-magnifying-glass" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                </button>
               </li>
               <li :if={@current_scope} class="ml-auto flex items-center">
                 <div class="dropdown dropdown-end">
                   <button
                     type="button"
                     tabindex="0"
-                    class="btn btn-ghost btn-sm rounded-full border border-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
+                    class="flex items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 leading-none text-base-content/80 transition hover:border-base-300 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                     aria-label={"Account menu for #{@current_scope.user.email}"}
                   >
-                    <.icon name="hero-user-circle" class="h-5 w-5" />
+                    <.icon name="hero-user-circle" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span class="sr-only">{@current_scope.user.email}</span>
                     <span aria-hidden="true">▾</span>
                   </button>
@@ -201,34 +214,49 @@ defmodule LanglerWeb.Layouts do
           </.link>
 
           <nav class="flex min-w-0 justify-center">
-            <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-xs font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
+            <ul class="flex w-full max-w-[26rem] items-center justify-center gap-1 rounded-full border border-base-200 bg-base-100/70 px-2 py-[0.35rem] text-[0.72rem] font-semibold text-base-content/80 shadow-sm shadow-slate-900/10 sm:text-sm">
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
                   navigate={~p"/library"}
-                  class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
-                  <.icon name="hero-book-open" class="h-4 w-4" />
+                  <.icon name="hero-book-open" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span>Library</span>
                 </.link>
               </li>
               <li class="rounded-full border border-transparent transition hover:border-base-300">
                 <.link
                   navigate={~p"/study"}
-                  class="flex items-center gap-2 rounded-full px-3 py-2 leading-none text-sm text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
-                  <.icon name="hero-academic-cap" class="h-4 w-4" />
+                  <.icon name="hero-academic-cap" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span>Study</span>
                 </.link>
+              </li>
+              <li
+                :if={@current_scope}
+                class="rounded-full border border-transparent transition hover:border-base-300"
+              >
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
+                  phx-click={JS.push("open_search", target: "#dictionary-search-modal-wrapper")}
+                  aria-label="Open dictionary search"
+                >
+                  <.icon name="hero-magnifying-glass" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <span class="sm:hidden">Dict</span>
+                  <span class="hidden sm:inline">Dictionary</span>
+                </button>
               </li>
               <li :if={@current_scope} class="ml-auto flex items-center">
                 <div class="dropdown dropdown-end">
                   <button
                     type="button"
                     tabindex="0"
-                    class="btn btn-ghost btn-sm rounded-full border border-base-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-base-content/70 flex items-center gap-2"
+                    class="flex items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 leading-none text-base-content/80 transition hover:border-base-300 hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                     aria-label={"Account menu for #{@current_scope.user.email}"}
                   >
-                    <.icon name="hero-user-circle" class="h-5 w-5" />
+                    <.icon name="hero-user-circle" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     <span class="sr-only">{@current_scope.user.email}</span>
                     <span aria-hidden="true">▾</span>
                   </button>
