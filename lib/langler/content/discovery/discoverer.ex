@@ -11,8 +11,7 @@ defmodule Langler.Content.Discovery.Discoverer do
 
   # Browser-like User-Agent to reduce 403s from sites that block bots (e.g. LanglerBot/0.1).
   @default_headers [
-    {"user-agent",
-     "Mozilla/5.0 (compatible; Langler/1.0; +https://github.com/langler)"}
+    {"user-agent", "Mozilla/5.0 (compatible; Langler/1.0; +https://github.com/langler)"}
   ]
 
   @doc """
