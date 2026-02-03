@@ -124,7 +124,7 @@ defmodule Langler.MixProject do
         "esbuild langler --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warning-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warning-as-errors", "deps.unlock --unused", "test --cover", "assay --format llm", "credo --strict", "format"]
     ]
   end
 end
