@@ -9,6 +9,12 @@ defmodule Langler.Content.Discovery.Discoverer do
   alias Langler.Content.Discovery.{RssParser, WebScraper}
   alias Langler.Content.SourceSite
 
+  # Browser-like User-Agent to reduce 403s from sites that block bots (e.g. LanglerBot/0.1).
+  @default_headers [
+    {"user-agent",
+     "Mozilla/5.0 (compatible; Langler/1.0; +https://github.com/langler)"}
+  ]
+
   @doc """
   Discovers articles from a source site.
   Returns `{:ok, count}` where count is the number of new articles discovered.
@@ -37,7 +43,7 @@ defmodule Langler.Content.Discovery.Discoverer do
         {:ok, 0}
 
       {:error, reason} ->
-        Langler.Content.mark_source_error(source_site, inspect(reason))
+        Langler.Content.mark_source_error(source_site, format_error(reason, rss_url))
         {:error, reason}
     end
   end
@@ -51,7 +57,7 @@ defmodule Langler.Content.Discovery.Discoverer do
       {:ok, length(entries)}
     else
       {:error, reason} ->
-        Langler.Content.mark_source_error(source_site, inspect(reason))
+        Langler.Content.mark_source_error(source_site, format_error(reason, source_site.url))
         {:error, reason}
     end
   end
@@ -69,7 +75,7 @@ defmodule Langler.Content.Discovery.Discoverer do
 
     case Req.get(
            url: url,
-           headers: headers,
+           headers: headers ++ @default_headers,
            redirect: :follow,
            receive_timeout: 10_000
          ) do
@@ -93,7 +99,7 @@ defmodule Langler.Content.Discovery.Discoverer do
   defp fetch_html(url) do
     case Req.get(
            url: url,
-           headers: [{"user-agent", "LanglerBot/0.1"}],
+           headers: @default_headers,
            redirect: :follow,
            receive_timeout: 10_000
          ) do
@@ -109,7 +115,7 @@ defmodule Langler.Content.Discovery.Discoverer do
   end
 
   defp build_conditional_headers(%SourceSite{} = source_site) do
-    headers = [{"user-agent", "LanglerBot/0.1"}]
+    headers = []
 
     headers =
       if source_site.etag do
@@ -124,6 +130,12 @@ defmodule Langler.Content.Discovery.Discoverer do
       headers
     end
   end
+
+  defp format_error({:http_error, status}, url) when is_binary(url) do
+    "HTTP #{status} for #{url}"
+  end
+
+  defp format_error(reason, _url), do: inspect(reason)
 
   defp get_header(headers, key) when is_map(headers) do
     # Req returns headers as a map
