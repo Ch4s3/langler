@@ -113,17 +113,17 @@ defmodule LanglerWeb.ChatLive.Drawer do
         |> assign(:quiz_result, result)
 
       :error ->
-        put_flash(socket, :error, "Quiz completed but result could not be displayed.")
+        put_flash(socket, :error, gettext("Quiz completed but result could not be displayed."))
     end
   end
 
   defp apply_quiz_result_action(socket, %{quiz_result_action: {:quiz_error, reason}})
        when is_binary(reason) do
-    put_flash(socket, :error, "Failed to save quiz result: #{reason}")
+    put_flash(socket, :error, gettext("Failed to save quiz result: %{reason}", reason: reason))
   end
 
   defp apply_quiz_result_action(socket, %{quiz_result_action: {:quiz_error, _reason}}) do
-    put_flash(socket, :error, "Failed to save quiz result. Please try again.")
+    put_flash(socket, :error, gettext("Failed to save quiz result. Please try again."))
   end
 
   defp apply_quiz_result_action(socket, %{quiz_result_action: :quiz_parse_error}) do
@@ -503,7 +503,9 @@ defmodule LanglerWeb.ChatLive.Drawer do
          put_flash(
            socket,
            :error,
-           "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+           gettext(
+             "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+           )
          )}
     end
   end
@@ -555,10 +557,18 @@ defmodule LanglerWeb.ChatLive.Drawer do
          fsrs_sleep_until: item.due_date,
          dom_id: Map.get(params, "dom_id")
        })
-       |> put_flash(:info, "#{word.lemma || word.normalized_form} added to study")}
+       |> put_flash(
+         :info,
+         gettext("%{word} added to study", word: word.lemma || word.normalized_form)
+       )}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to add word: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to add word: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -605,7 +615,12 @@ defmodule LanglerWeb.ChatLive.Drawer do
        |> push_event("word-removed", %{word_id: word.id, dom_id: Map.get(params, "dom_id")})}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to remove word: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to remove word: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -707,7 +722,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
             Logger.error("Failed to rename session: #{inspect(reason)}")
 
             socket
-            |> put_flash(:error, "Failed to rename chat")
+            |> put_flash(:error, gettext("Failed to rename chat"))
             |> assign(:open_menu_id, nil)
         end
       else
@@ -765,7 +780,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
             Logger.error("Failed to toggle pin: #{inspect(reason)}")
 
             socket
-            |> put_flash(:error, "Failed to pin/unpin chat")
+            |> put_flash(:error, gettext("Failed to pin/unpin chat"))
             |> assign(:open_menu_id, nil)
         end
       else
@@ -824,15 +839,20 @@ defmodule LanglerWeb.ChatLive.Drawer do
           {:ok, _} ->
             {:noreply,
              socket
-             |> put_flash(:info, "Article marked as finished and archived")
+             |> put_flash(:info, gettext("Article marked as finished and archived"))
              |> push_navigate(to: ~p"/articles")}
 
           {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Unable to finish article: #{inspect(reason)}")}
+            {:noreply,
+             put_flash(
+               socket,
+               :error,
+               gettext("Unable to finish article: %{reason}", reason: inspect(reason))
+             )}
         end
 
       _ ->
-        {:noreply, put_flash(socket, :error, "Not a quiz session")}
+        {:noreply, put_flash(socket, :error, gettext("Not a quiz session"))}
     end
   end
 
@@ -1233,6 +1253,7 @@ defmodule LanglerWeb.ChatLive.Drawer do
   defp refresh_chat_with_session(socket, session, opts) do
     messages = Session.get_decrypted_messages(session)
     total_tokens = Enum.reduce(messages, 0, fn msg, acc -> acc + (msg.token_count || 0) end)
+
     {studied_word_ids, studied_forms, studied_word_form_ids} =
       load_studied_words(socket.assigns.current_scope.user.id)
 
@@ -1726,7 +1747,14 @@ defmodule LanglerWeb.ChatLive.Drawer do
     |> Enum.map(&hd/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.map(fn token ->
-      wrap_token_if_lexical(token, language, studied_forms, studied_word_form_ids, message_id, component_id)
+      wrap_token_if_lexical(
+        token,
+        language,
+        studied_forms,
+        studied_word_form_ids,
+        message_id,
+        component_id
+      )
     end)
   end
 
@@ -1769,7 +1797,17 @@ defmodule LanglerWeb.ChatLive.Drawer do
     token_id = "chat-word-#{message_id}-#{System.unique_integer([:positive])}"
     component_attr = build_component_attr(component_id)
     word_id = normalized && Map.get(studied_word_form_ids, normalized)
-    attrs = build_token_attrs(trimmed, language, component_attr, token_id, studied?, message_id, word_id)
+
+    attrs =
+      build_token_attrs(
+        trimmed,
+        language,
+        component_attr,
+        token_id,
+        studied?,
+        message_id,
+        word_id
+      )
 
     {"span", attrs, [token]}
   end
@@ -1777,7 +1815,15 @@ defmodule LanglerWeb.ChatLive.Drawer do
   defp build_component_attr(nil), do: nil
   defp build_component_attr(component_id), do: {"data-component-id", to_string(component_id)}
 
-  defp build_token_attrs(trimmed, language, component_attr, token_id, studied?, message_id, word_id) do
+  defp build_token_attrs(
+         trimmed,
+         language,
+         component_attr,
+         token_id,
+         studied?,
+         message_id,
+         word_id
+       ) do
     class_base =
       "cursor-pointer rounded transition hover:bg-primary/10 hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary/40"
 

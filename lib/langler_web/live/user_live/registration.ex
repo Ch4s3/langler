@@ -107,7 +107,7 @@ defmodule LanglerWeb.UserLive.Registration do
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Invalid invitation. Please use a valid invite link.")
+       |> put_flash(:error, gettext("Invalid invitation. Please use a valid invite link."))
        |> assign_form(Accounts.change_user_email(%User{}, user_params, validate_unique: false))}
     end
   end
@@ -151,7 +151,7 @@ defmodule LanglerWeb.UserLive.Registration do
       {:error, _} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to process invitation. Please try again.")
+         |> put_flash(:error, gettext("Failed to process invitation. Please try again."))
          |> assign_form(
            Accounts.change_user_email(%User{}, %{email: email}, validate_unique: false)
          )}

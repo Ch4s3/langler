@@ -17,7 +17,8 @@ defmodule LanglerWeb.UserAuthTest do
       |> Map.replace!(:secret_key_base, LanglerWeb.Endpoint.config(:secret_key_base))
       |> init_test_session(%{})
 
-    %{user: %{user_fixture() | authenticated_at: DateTime.utc_now(:second)}, conn: conn}
+    user = onboarded_user_fixture()
+    %{user: %{user | authenticated_at: DateTime.utc_now(:second)}, conn: conn}
   end
 
   describe "log_in_user/3" do
@@ -101,13 +102,13 @@ defmodule LanglerWeb.UserAuthTest do
       assert max_age == @remember_me_cookie_max_age
     end
 
-    test "redirects to settings when user is already logged in", %{conn: conn, user: user} do
+    test "redirects to library when user has completed onboarding", %{conn: conn, user: user} do
       conn =
         conn
         |> assign(:current_scope, Scope.for_user(user))
         |> UserAuth.log_in_user(user)
 
-      assert redirected_to(conn) == ~p"/users/settings"
+      assert redirected_to(conn) == ~p"/library"
     end
 
     test "writes a cookie if remember_me was set in previous session", %{conn: conn, user: user} do
@@ -273,14 +274,16 @@ defmodule LanglerWeb.UserAuthTest do
   end
 
   describe "on_mount :require_authenticated" do
-    test "authenticates current_scope based on a valid user_token", %{conn: conn, user: user} do
-      user_token = Accounts.generate_user_session_token(user)
+    test "authenticates current_scope based on a valid user_token", %{conn: conn, user: _user} do
+      # Use onboarded user for this test since :require_authenticated now checks onboarding
+      onboarded_user = Langler.AccountsFixtures.onboarded_user_fixture()
+      user_token = Accounts.generate_user_session_token(onboarded_user)
       session = conn |> put_session(:user_token, user_token) |> get_session()
 
       {:cont, updated_socket} =
         UserAuth.on_mount(:require_authenticated, %{}, session, %LiveView.Socket{})
 
-      assert updated_socket.assigns.current_scope.user.id == user.id
+      assert updated_socket.assigns.current_scope.user.id == onboarded_user.id
     end
 
     test "redirects to login page if there isn't a valid user_token", %{conn: conn} do

@@ -444,7 +444,9 @@ defmodule LanglerWeb.DictionarySearchLive.Modal do
         put_flash(
           socket,
           :error,
-          "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+          gettext(
+            "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+          )
         )
     end
   end

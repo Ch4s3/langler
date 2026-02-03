@@ -51,12 +51,16 @@ defmodule Langler.LLM.Adapters.ChatGPT do
       # Validate and correct model name
       validated_model = validate_model(model)
 
+      # Optional: request timeout in ms (passed as receive_timeout to Finch). Default 60s.
+      timeout = Map.get(config, :timeout, 60_000)
+
       validated = %{
         api_key: String.trim(config.api_key),
         model: validated_model,
         temperature: Map.get(config, :temperature, @default_temperature),
         max_tokens: Map.get(config, :max_tokens, @default_max_tokens),
-        base_url: Map.get(config, :base_url, @default_base_url)
+        base_url: Map.get(config, :base_url, @default_base_url),
+        timeout: timeout
       }
 
       {:ok, validated}
@@ -106,7 +110,8 @@ defmodule Langler.LLM.Adapters.ChatGPT do
       model: config.model,
       messages: messages,
       temperature: config.temperature,
-      max_tokens: config.max_tokens
+      # Newer models (e.g. gpt-4o) require max_completion_tokens instead of max_tokens
+      max_completion_tokens: config.max_tokens
     }
 
     api_key = config.api_key
@@ -122,7 +127,15 @@ defmodule Langler.LLM.Adapters.ChatGPT do
 
     Logger.debug("ChatGPT: Sending request to #{url} with model #{config.model}")
 
-    case Req.post(url: url, json: body, headers: headers, retry: false) do
+    req_opts = [
+      url: url,
+      json: body,
+      headers: headers,
+      retry: false,
+      receive_timeout: config.timeout
+    ]
+
+    case Req.post(req_opts) do
       {:ok, %{status: 200, body: response_body}} ->
         {:ok, response_body}
 

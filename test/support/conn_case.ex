@@ -49,7 +49,7 @@ defmodule LanglerWeb.ConnCase do
   test context.
   """
   def register_and_log_in_user(%{conn: conn} = context) do
-    user = AccountsFixtures.user_fixture()
+    user = AccountsFixtures.onboarded_user_fixture()
     scope = Scope.for_user(user)
 
     opts =

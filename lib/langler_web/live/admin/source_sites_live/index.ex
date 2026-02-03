@@ -134,7 +134,7 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
 
     {:noreply,
      socket
-     |> put_flash(:info, "Discovery queued for #{source_site.name}")}
+     |> put_flash(:info, gettext("Discovery queued for %{name}", name: source_site.name))}
   end
 
   def handle_event("toggle_active", %{"id" => id}, socket) do
@@ -147,11 +147,14 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Index do
          |> stream_insert(:source_sites, updated)
          |> put_flash(
            :info,
-           "Source site #{if updated.is_active, do: "activated", else: "deactivated"}"
+           if(updated.is_active,
+             do: gettext("Source site activated"),
+             else: gettext("Source site deactivated")
+           )
          )}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to update source site")}
+        {:noreply, put_flash(socket, :error, gettext("Failed to update source site"))}
     end
   end
 end

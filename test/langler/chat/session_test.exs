@@ -16,13 +16,13 @@ defmodule Langler.Chat.SessionTest do
   end
 
   test "create_session/2 fails without a default LLM config" do
-    user = user_fixture()
+    user = onboarded_user_fixture()
 
     assert {:error, :no_default_llm_config} = Session.create_session(user, %{})
   end
 
   test "create_session/2 uses default config and preferences" do
-    user = user_fixture()
+    user = onboarded_user_fixture()
     assert {:ok, _config} = create_default_config(user)
 
     assert {:ok, session} = Session.create_session(user, %{title: "Hello"})
@@ -30,12 +30,12 @@ defmodule Langler.Chat.SessionTest do
     assert session.user_id == user.id
     assert session.llm_provider == "openai"
     assert session.llm_model == "gpt-4o-mini"
-    assert session.target_language == "spanish"
+    assert session.target_language == "es"
     assert session.native_language == "en"
   end
 
   test "create_session/2 respects provided language overrides" do
-    user = user_fixture()
+    user = onboarded_user_fixture()
     assert {:ok, _config} = create_default_config(user)
 
     assert {:ok, session} =

@@ -28,7 +28,7 @@ defmodule LanglerWeb.ArticleLive.Show do
       nil ->
         socket =
           socket
-          |> put_flash(:error, "Article not found")
+          |> put_flash(:error, gettext("Article not found"))
           |> push_navigate(to: ~p"/articles")
 
         {:ok, socket}
@@ -99,7 +99,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                       class="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-widest text-primary/80"
                     >
                       <.icon name="hero-clock" class="h-4 w-4" />
-                      {@reading_time_minutes} min read
+                      {@reading_time_minutes} {gettext("min read")}
                     </span>
                   </p>
                   <div
@@ -128,7 +128,7 @@ defmodule LanglerWeb.ArticleLive.Show do
                   class="btn btn-ghost btn-sm gap-2 text-base-content/80 article-meta__back"
                 >
                   <.icon name="hero-arrow-left" class="h-4 w-4" />
-                  <span class="article-meta__button-label">Back to library</span>
+                  <span class="article-meta__button-label">{gettext("Back to library")}</span>
                 </.link>
 
                 <p class="article-meta__sticky-title text-base font-semibold text-base-content">
@@ -440,11 +440,19 @@ defmodule LanglerWeb.ArticleLive.Show do
       {:ok, updated, _status} ->
         # Reload article with fresh sentences
         refreshed = Content.get_article_for_user!(scope.user.id, updated.id)
-        {:noreply, socket |> assign_article(refreshed) |> put_flash(:info, "Article refreshed")}
+
+        {:noreply,
+         socket |> assign_article(refreshed) |> put_flash(:info, gettext("Article refreshed"))}
 
       {:error, reason} ->
         Logger.error("Article refresh failed: #{inspect(reason)}")
-        {:noreply, put_flash(socket, :error, "Unable to refresh article: #{inspect(reason)}")}
+
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to refresh article: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -457,11 +465,16 @@ defmodule LanglerWeb.ArticleLive.Show do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Article archived")
+         |> put_flash(:info, gettext("Article archived"))
          |> push_navigate(to: ~p"/articles")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to archive: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to archive: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -485,7 +498,7 @@ defmodule LanglerWeb.ArticleLive.Show do
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Add an LLM provider in settings before starting a chat")}
+       |> put_flash(:error, gettext("Add an LLM provider in settings before starting a chat"))}
     end
   end
 
@@ -509,14 +522,14 @@ defmodule LanglerWeb.ArticleLive.Show do
     else
       {:noreply,
        socket
-       |> put_flash(:error, "Add an LLM provider in settings before starting a quiz")}
+       |> put_flash(:error, gettext("Add an LLM provider in settings before starting a quiz"))}
     end
   end
 
   def handle_event("navigate_tts_settings", _, socket) do
     {:noreply,
      socket
-     |> put_flash(:info, "Configure a Text-to-Speech provider to listen to articles")
+     |> put_flash(:info, gettext("Configure a Text-to-Speech provider to listen to articles"))
      |> push_navigate(to: ~p"/users/settings/tts")}
   end
 
@@ -532,11 +545,16 @@ defmodule LanglerWeb.ArticleLive.Show do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Article marked as finished")
+         |> put_flash(:info, gettext("Article marked as finished"))
          |> push_navigate(to: ~p"/articles")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to finish article: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to finish article: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -599,7 +617,9 @@ defmodule LanglerWeb.ArticleLive.Show do
          put_flash(
            socket,
            :error,
-           "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+           gettext(
+             "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+           )
          )}
     end
   end
@@ -630,7 +650,12 @@ defmodule LanglerWeb.ArticleLive.Show do
        })}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to rate word: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to rate word: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -660,10 +685,15 @@ defmodule LanglerWeb.ArticleLive.Show do
        })}
     else
       nil ->
-        {:noreply, put_flash(socket, :error, "Word is not currently in your study list")}
+        {:noreply, put_flash(socket, :error, gettext("Word is not currently in your study list"))}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to rate card: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -693,7 +723,12 @@ defmodule LanglerWeb.ArticleLive.Show do
        |> push_event("word-removed", %{word_id: word.id, dom_id: Map.get(params, "dom_id")})}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to remove word: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to remove word: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -730,10 +765,18 @@ defmodule LanglerWeb.ArticleLive.Show do
          fsrs_sleep_until: item.due_date,
          dom_id: Map.get(params, "dom_id")
        })
-       |> put_flash(:info, "#{word.lemma || word.normalized_form} added to study")}
+       |> put_flash(
+         :info,
+         gettext("%{word} added to study", word: word.lemma || word.normalized_form)
+       )}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to add word: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to add word: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 

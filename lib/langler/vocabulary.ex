@@ -399,10 +399,12 @@ defmodule Langler.Vocabulary do
   - Single column: word
   - Two columns: word, language
 
-  Uses user's target_language if not specified in CSV.
+  Uses user's active language if not specified in CSV.
   """
   def import_words_from_csv(csv_content, deck_id, user_id, opts \\ []) do
-    default_language = Keyword.get(opts, :default_language, "spanish")
+    # Get active language, fallback to "es" if not set
+    active_language = Langler.Accounts.get_active_language(user_id) || "es"
+    default_language = Keyword.get(opts, :default_language, active_language)
 
     {:ok, rows} = parse_csv(csv_content)
     import_words_from_rows(rows, deck_id, user_id, default_language)

@@ -23,16 +23,16 @@ defmodule LanglerWeb.StudyLive.Index do
   require Logger
 
   @filters [
-    %{id: :now, label: "Due now"},
-    %{id: :today, label: "Due today"},
-    %{id: :all, label: "All words"}
+    %{id: :now, label: "due_now"},
+    %{id: :today, label: "due_today"},
+    %{id: :all, label: "all_words"}
   ]
 
   @quality_buttons [
-    %{score: 0, label: "Again", class: "btn-error"},
-    %{score: 2, label: "Hard", class: "btn-warning"},
-    %{score: 3, label: "Good", class: "btn-primary"},
-    %{score: 4, label: "Easy", class: "btn-success"}
+    %{score: 0, label: "again", class: "btn-error"},
+    %{score: 2, label: "hard", class: "btn-warning"},
+    %{score: 3, label: "good", class: "btn-primary"},
+    %{score: 4, label: "easy", class: "btn-success"}
   ]
 
   @impl true
@@ -69,13 +69,13 @@ defmodule LanglerWeb.StudyLive.Index do
      |> assign(:all_items, [])
      |> assign(:visible_count, 0)
      |> assign(:flipped_cards, MapSet.new())
-    |> assign(:expanded_conjugations, MapSet.new())
-    |> assign(:conjugations_loading, MapSet.new())
-    |> assign(:definitions_loading, MapSet.new())
-    |> assign(:user_level, %{cefr_level: "A1", numeric_level: 1.0})
-    |> assign(:decks, decks)
-    |> assign(:deck_words_by_word_id, %{})
-    |> assign(:current_deck, current_deck)
+     |> assign(:expanded_conjugations, MapSet.new())
+     |> assign(:conjugations_loading, MapSet.new())
+     |> assign(:definitions_loading, MapSet.new())
+     |> assign(:user_level, %{cefr_level: "A1", numeric_level: 1.0})
+     |> assign(:decks, decks)
+     |> assign(:deck_words_by_word_id, %{})
+     |> assign(:current_deck, current_deck)
      |> assign(:filter_deck_id, nil)
      |> assign(:show_deck_modal, false)
      |> assign(:editing_deck, nil)
@@ -200,33 +200,37 @@ defmodule LanglerWeb.StudyLive.Index do
         <div class="surface-panel card section-card bg-base-100/95">
           <div class="card-body gap-6">
             <div class="section-header">
-              <p class="section-header__eyebrow">Study overview</p>
-              <h1 class="section-header__title">Stay consistent with your deck</h1>
+              <p class="section-header__eyebrow">{gettext("Study overview")}</p>
+              <h1 class="section-header__title">{gettext("Stay consistent with your deck")}</h1>
               <p class="section-header__lede">
-                Track upcoming reviews and keep tabs on due cards with quick filters.
+                {gettext("Track upcoming reviews and keep tabs on due cards with quick filters.")}
               </p>
             </div>
 
             <.kpi_cards cards={[
               %{
-                title: "Due now",
+                title: gettext("Due now"),
                 value: @stats.due_now,
-                meta: "Ready for immediate review",
+                meta: gettext("Ready for immediate review"),
                 value_class: "text-primary"
               },
               %{
-                title: "Due today",
+                title: gettext("Due today"),
                 value: @stats.due_today,
-                meta: "Includes overdue & later today",
+                meta: gettext("Includes overdue & later today"),
                 value_class: "text-secondary"
               },
-              %{title: "Total tracked", value: @stats.total, meta: "Words in your study bank"}
+              %{
+                title: gettext("Total tracked"),
+                value: @stats.total,
+                meta: gettext("Words in your study bank")
+              }
             ]} />
 
             <div class="space-y-1">
               <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-widest text-base-content/60">
-                <span>Daily progress</span>
-                <span>{@stats.completion}% caught up</span>
+                <span>{gettext("Daily progress")}</span>
+                <span>{@stats.completion}% {gettext("caught up")}</span>
               </div>
               <progress
                 value={@stats.completion}
@@ -245,27 +249,29 @@ defmodule LanglerWeb.StudyLive.Index do
                 }
                 class="btn btn-sm btn-primary text-white shadow transition duration-200 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
-                <.icon name="hero-play" class="h-4 w-4" /> Start Study Session
+                <.icon name="hero-play" class="h-4 w-4" /> {gettext("Start Study Session")}
               </.link>
               <.link
                 navigate={~p"/articles"}
                 class="btn btn-sm btn-ghost border border-dashed border-base-300 transition duration-200 hover:bg-base-200/70 active:scale-[0.99] focus-visible:ring focus-visible:ring-primary/40"
               >
-                Go to library
+                {gettext("Go to library")}
               </.link>
             </div>
 
             <div class="flex flex-col gap-3 rounded-2xl border border-base-200 bg-base-200/30 p-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
               <div class="space-y-1">
-                <p class="text-sm font-semibold text-base-content/80">Search your deck</p>
+                <p class="text-sm font-semibold text-base-content/80">
+                  {gettext("Search your deck")}
+                </p>
                 <p class="text-xs text-base-content/60">
-                  Type a word to narrow results across filters.
+                  {gettext("Type a word to narrow results across filters.")}
                 </p>
               </div>
               <.search_input
                 id="study-search-input"
                 value={@search_query}
-                placeholder="Search words…"
+                placeholder={gettext("Search words…")}
                 event="search_items"
                 clear_event="clear_search"
                 debounce={300}
@@ -275,12 +281,12 @@ defmodule LanglerWeb.StudyLive.Index do
 
             <div class="flex flex-col gap-4 rounded-2xl border border-base-200 bg-base-200/30 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div class="space-y-1">
-                <p class="text-sm font-semibold text-base-content/80">Filter by deck</p>
+                <p class="text-sm font-semibold text-base-content/80">{gettext("Filter by deck")}</p>
                 <p class="text-xs text-base-content/60">
                   {if @filter_deck_id do
-                    "Showing words from selected deck only"
+                    gettext("Showing words from selected deck only")
                   else
-                    "Showing words from all decks"
+                    gettext("Showing words from all decks")
                   end}
                 </p>
               </div>
@@ -310,7 +316,7 @@ defmodule LanglerWeb.StudyLive.Index do
                   class="btn btn-sm btn-primary text-white"
                 >
                   <.icon name="hero-plus" class="h-4 w-4" />
-                  <span class="hidden sm:inline">New deck</span>
+                  <span class="hidden sm:inline">{gettext("New deck")}</span>
                 </button>
               </div>
             </div>
@@ -327,7 +333,12 @@ defmodule LanglerWeb.StudyLive.Index do
                   phx-click="set_filter"
                   phx-value-filter={filter.id}
                 >
-                  {filter.label}
+                  {case filter.label do
+                    "due_now" -> gettext("Due now")
+                    "due_today" -> gettext("Due today")
+                    "all_words" -> gettext("All words")
+                    _ -> filter.label
+                  end}
                 </button>
               </div>
             </div>
@@ -483,8 +494,7 @@ defmodule LanglerWeb.StudyLive.Index do
                             role="button"
                             class="btn btn-sm btn-ghost border border-base-200/80"
                           >
-                            <.icon name="hero-rectangle-stack" class="h-4 w-4" />
-                            Decks
+                            <.icon name="hero-rectangle-stack" class="h-4 w-4" /> Decks
                           </div>
                           <ul
                             tabindex="0"
@@ -493,14 +503,12 @@ defmodule LanglerWeb.StudyLive.Index do
                             <li class="menu-title">
                               <span>Add to deck</span>
                             </li>
-                            <li
-                              :for={
-                                deck <-
-                                  Enum.filter(@decks, fn deck ->
-                                    not MapSet.member?(deck_ids, deck.id)
-                                  end)
-                              }
-                            >
+                            <li :for={
+                              deck <-
+                                Enum.filter(@decks, fn deck ->
+                                  not MapSet.member?(deck_ids, deck.id)
+                                end)
+                            }>
                               <button
                                 type="button"
                                 phx-click="add_word_to_deck"
@@ -517,14 +525,12 @@ defmodule LanglerWeb.StudyLive.Index do
                             <li class="menu-title">
                               <span>Remove from deck</span>
                             </li>
-                            <li
-                              :for={
-                                deck <-
-                                  Enum.filter(@decks, fn deck ->
-                                    MapSet.member?(deck_ids, deck.id)
-                                  end)
-                              }
-                            >
+                            <li :for={
+                              deck <-
+                                Enum.filter(@decks, fn deck ->
+                                  MapSet.member?(deck_ids, deck.id)
+                                end)
+                            }>
                               <button
                                 type="button"
                                 class="text-error"
@@ -611,11 +617,18 @@ defmodule LanglerWeb.StudyLive.Index do
        |> stream(:items, visible, reset: true)
        |> put_flash(
          :info,
-         "Logged review for #{item.word && (item.word.lemma || item.word.normalized_form)}"
+         gettext("Logged review for %{word}",
+           word: item.word && (item.word.lemma || item.word.normalized_form)
+         )
        )}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to rate card: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -680,10 +693,10 @@ defmodule LanglerWeb.StudyLive.Index do
        |> assign_async(:recommended_articles, fn ->
          {:ok, %{recommended_articles: Content.get_recommended_articles_for_user(user_id, 5)}}
        end)
-       |> put_flash(:info, "Article imported successfully")}
+       |> put_flash(:info, gettext("Article imported successfully"))}
     else
       _ ->
-        {:noreply, put_flash(socket, :error, "Failed to import article")}
+        {:noreply, put_flash(socket, :error, gettext("Failed to import article"))}
     end
   end
 
@@ -750,10 +763,15 @@ defmodule LanglerWeb.StudyLive.Index do
            |> assign(:decks, decks)
            |> assign(:filter_deck_id, deck_id)
            |> refresh_visible_items()
-           |> put_flash(:info, "Current deck updated")}
+           |> put_flash(:info, gettext("Current deck updated"))}
 
         {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Unable to set current deck: #{inspect(reason)}")}
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             gettext("Unable to set current deck: %{reason}", reason: inspect(reason))
+           )}
       end
     end)
   end
@@ -779,30 +797,7 @@ defmodule LanglerWeb.StudyLive.Index do
         %{"deck_id" => deck_id_str, "word_id" => word_id_str},
         socket
       ) do
-    user_id = socket.assigns.current_scope.user.id
-
-    with {:ok, deck_id} <- parse_deck_id(deck_id_str),
-         {:ok, word_id} <- parse_word_id(word_id_str) do
-      case Vocabulary.add_word_to_deck(deck_id, word_id, user_id) do
-        {:ok, _deck_word} ->
-          deck_words =
-            add_word_to_deck_map(socket.assigns.deck_words_by_word_id, word_id, deck_id)
-
-          {:noreply,
-           socket
-           |> assign(:deck_words_by_word_id, deck_words)
-           |> put_flash(:info, "Added to deck")}
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Unable to add to deck: #{inspect(reason)}")}
-      end
-    else
-      {:error, :invalid_deck_id} ->
-        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
-
-      {:error, :invalid_word_id} ->
-        {:noreply, put_flash(socket, :error, "Invalid word ID")}
-    end
+    handle_deck_word_action(socket, deck_id_str, word_id_str, :add)
   end
 
   def handle_event(
@@ -810,30 +805,7 @@ defmodule LanglerWeb.StudyLive.Index do
         %{"deck_id" => deck_id_str, "word_id" => word_id_str},
         socket
       ) do
-    user_id = socket.assigns.current_scope.user.id
-
-    with {:ok, deck_id} <- parse_deck_id(deck_id_str),
-         {:ok, word_id} <- parse_word_id(word_id_str) do
-      case Vocabulary.remove_word_from_deck(deck_id, word_id, user_id) do
-        {:ok, _deck_word} ->
-          deck_words =
-            remove_word_from_deck_map(socket.assigns.deck_words_by_word_id, word_id, deck_id)
-
-          {:noreply,
-           socket
-           |> assign(:deck_words_by_word_id, deck_words)
-           |> put_flash(:info, "Removed from deck")}
-
-        {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Unable to remove from deck: #{inspect(reason)}")}
-      end
-    else
-      {:error, :invalid_deck_id} ->
-        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
-
-      {:error, :invalid_word_id} ->
-        {:noreply, put_flash(socket, :error, "Invalid word ID")}
-    end
+    handle_deck_word_action(socket, deck_id_str, word_id_str, :remove)
   end
 
   def handle_event("set_default_deck", %{"deck_id" => deck_id_str}, socket) do
@@ -851,10 +823,15 @@ defmodule LanglerWeb.StudyLive.Index do
            |> assign(:decks, decks)
            |> assign(:current_deck, current_deck)
            |> assign(:csv_import_deck_id, current_deck && current_deck.id)
-           |> put_flash(:info, "\"#{deck.name}\" is now your default deck")}
+           |> put_flash(:info, gettext("\"%{name}\" is now your default deck", name: deck.name))}
 
         {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Unable to set default deck: #{inspect(reason)}")}
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             gettext("Unable to set default deck: %{reason}", reason: inspect(reason))
+           )}
       end
     end)
   end
@@ -889,7 +866,7 @@ defmodule LanglerWeb.StudyLive.Index do
     name = String.trim(name)
 
     if name == "" do
-      {:noreply, put_flash(socket, :error, "Deck name cannot be empty")}
+      {:noreply, put_flash(socket, :error, gettext("Deck name cannot be empty"))}
     else
       case Vocabulary.create_deck(user_id, %{name: name}) do
         {:ok, _deck} ->
@@ -900,14 +877,14 @@ defmodule LanglerWeb.StudyLive.Index do
            |> assign(:decks, decks)
            |> assign(:show_deck_modal, false)
            |> assign(:deck_form, to_form(%{"name" => ""}))
-           |> put_flash(:info, "Deck created successfully")}
+           |> put_flash(:info, gettext("Deck created successfully"))}
 
         {:error, changeset} ->
           errors = translate_errors(changeset)
 
           {:noreply,
            socket
-           |> put_flash(:error, "Unable to create deck: #{errors}")}
+           |> put_flash(:error, gettext("Unable to create deck: %{errors}", errors: errors))}
       end
     end
   end
@@ -937,13 +914,13 @@ defmodule LanglerWeb.StudyLive.Index do
     case Integer.parse(deck_id_str) do
       {deck_id, ""} ->
         if name == "" do
-          {:noreply, put_flash(socket, :error, "Deck name cannot be empty")}
+          {:noreply, put_flash(socket, :error, gettext("Deck name cannot be empty"))}
         else
           handle_deck_update(socket, deck_id, user_id, name)
         end
 
       _ ->
-        {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+        {:noreply, put_flash(socket, :error, gettext("Invalid deck ID"))}
     end
   end
 
@@ -960,13 +937,18 @@ defmodule LanglerWeb.StudyLive.Index do
            socket
            |> assign(:decks, decks)
            |> assign(:current_deck, current_deck)
-           |> put_flash(:info, "Deck deleted successfully")}
+           |> put_flash(:info, gettext("Deck deleted successfully"))}
 
         {:error, :cannot_delete_default} ->
-          {:noreply, put_flash(socket, :error, "Cannot delete the default deck")}
+          {:noreply, put_flash(socket, :error, gettext("Cannot delete the default deck"))}
 
         {:error, reason} ->
-          {:noreply, put_flash(socket, :error, "Unable to delete deck: #{inspect(reason)}")}
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             gettext("Unable to delete deck: %{reason}", reason: inspect(reason))
+           )}
       end
     end)
   end
@@ -1018,7 +1000,7 @@ defmodule LanglerWeb.StudyLive.Index do
         handle_csv_preview(socket, content)
 
       [] ->
-        {:noreply, put_flash(socket, :error, "Please select a CSV file")}
+        {:noreply, put_flash(socket, :error, gettext("Please select a CSV file"))}
 
       results when is_list(results) and results != [] ->
         # Handle any list format - extract content from first result
@@ -1028,7 +1010,9 @@ defmodule LanglerWeb.StudyLive.Index do
       other ->
         # Catch-all for unexpected formats
         Logger.error("Unexpected upload format in parse_csv: #{inspect(other)}")
-        {:noreply, put_flash(socket, :error, "Unexpected upload format. Please try again.")}
+
+        {:noreply,
+         put_flash(socket, :error, gettext("Unexpected upload format. Please try again."))}
     end
   end
 
@@ -1041,7 +1025,7 @@ defmodule LanglerWeb.StudyLive.Index do
 
       if is_nil(content) do
         {:noreply,
-         put_flash(socket, :error, "No CSV file to import. Please upload a file first.")}
+         put_flash(socket, :error, gettext("No CSV file to import. Please upload a file first."))}
       else
         handle_csv_import_with_content(socket, deck_id, user_id, default_language, content)
       end
@@ -1117,7 +1101,10 @@ defmodule LanglerWeb.StudyLive.Index do
       {:error, reason} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to start import: #{inspect(reason)}")}
+         |> put_flash(
+           :error,
+           gettext("Failed to start import: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -1135,14 +1122,14 @@ defmodule LanglerWeb.StudyLive.Index do
          |> assign(:show_deck_modal, false)
          |> assign(:editing_deck, nil)
          |> assign(:deck_form, to_form(%{"name" => ""}))
-         |> put_flash(:info, "Deck updated successfully")}
+         |> put_flash(:info, gettext("Deck updated successfully"))}
 
       {:error, changeset} ->
         errors = translate_errors(changeset)
 
         {:noreply,
          socket
-         |> put_flash(:error, "Unable to update deck: #{errors}")}
+         |> put_flash(:error, gettext("Unable to update deck: %{errors}", errors: errors))}
     end
   end
 
@@ -1194,7 +1181,8 @@ defmodule LanglerWeb.StudyLive.Index do
   end
 
   defp handle_csv_preview(socket, {:error, reason}) do
-    {:noreply, put_flash(socket, :error, "Failed to read file: #{inspect(reason)}")}
+    {:noreply,
+     put_flash(socket, :error, gettext("Failed to read file: %{reason}", reason: inspect(reason)))}
   end
 
   defp parse_csv_preview(content) do
@@ -1233,6 +1221,54 @@ defmodule LanglerWeb.StudyLive.Index do
     end)
   end
 
+  defp handle_deck_word_action(socket, deck_id_str, word_id_str, action) do
+    user_id = socket.assigns.current_scope.user.id
+
+    with {:ok, deck_id} <- parse_deck_id(deck_id_str),
+         {:ok, word_id} <- parse_word_id(word_id_str) do
+      {context_fn, map_fn, success_msg, error_msg} = deck_word_action_opts(action)
+
+      case context_fn.(deck_id, word_id, user_id) do
+        {:ok, _} ->
+          deck_words = map_fn.(socket.assigns.deck_words_by_word_id, word_id, deck_id)
+
+          {:noreply,
+           socket
+           |> assign(:deck_words_by_word_id, deck_words)
+           |> put_flash(:info, success_msg)}
+
+        {:error, reason} ->
+          {:noreply, put_flash(socket, :error, error_msg.(reason))}
+      end
+    else
+      {:error, :invalid_deck_id} ->
+        {:noreply, put_flash(socket, :error, gettext("Invalid deck ID"))}
+
+      {:error, :invalid_word_id} ->
+        {:noreply, put_flash(socket, :error, gettext("Invalid word ID"))}
+    end
+  end
+
+  defp deck_word_action_opts(:add) do
+    success_msg = gettext("Added to deck")
+
+    error_msg = fn reason ->
+      gettext("Unable to add to deck: %{reason}", reason: inspect(reason))
+    end
+
+    {&Vocabulary.add_word_to_deck/3, &add_word_to_deck_map/3, success_msg, error_msg}
+  end
+
+  defp deck_word_action_opts(:remove) do
+    success_msg = gettext("Removed from deck")
+
+    error_msg = fn reason ->
+      gettext("Unable to remove from deck: %{reason}", reason: inspect(reason))
+    end
+
+    {&Vocabulary.remove_word_from_deck/3, &remove_word_from_deck_map/3, success_msg, error_msg}
+  end
+
   defp parse_deck_id(deck_id_str) do
     case Integer.parse(to_string(deck_id_str)) do
       {deck_id, ""} -> {:ok, deck_id}
@@ -1250,7 +1286,7 @@ defmodule LanglerWeb.StudyLive.Index do
   defp with_deck_id(deck_id_str, socket, fun) do
     case parse_deck_id(deck_id_str) do
       {:ok, deck_id} -> fun.(deck_id)
-      {:error, _} -> {:noreply, put_flash(socket, :error, "Invalid deck ID")}
+      {:error, _} -> {:noreply, put_flash(socket, :error, gettext("Invalid deck ID"))}
     end
   end
 
@@ -1304,7 +1340,9 @@ defmodule LanglerWeb.StudyLive.Index do
      )
      |> put_flash(
        :error,
-       "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+       gettext(
+         "Please configure Google Translate or an LLM in settings to use dictionary lookups."
+       )
      )}
   end
 
@@ -1387,7 +1425,10 @@ defmodule LanglerWeb.StudyLive.Index do
     {:noreply,
      socket
      |> assign(:items_loading, false)
-     |> put_flash(:error, "Failed to load study items: #{inspect(reason)}")}
+     |> put_flash(
+       :error,
+       gettext("Failed to load study items: %{reason}", reason: inspect(reason))
+     )}
   end
 
   def handle_async({:fetch_conjugations, word_id}, {:exit, reason}, socket) do

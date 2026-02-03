@@ -14,9 +14,11 @@ defmodule Langler.Accounts.User do
     field :authenticated_at, :utc_datetime, virtual: true
     field :is_admin, :boolean, default: false
     field :invites_remaining, :integer, default: 3
+    field :onboarding_completed_at, :utc_datetime
 
     has_many :sent_invites, Langler.Accounts.UserInvite, foreign_key: :inviter_id
     has_many :received_invites, Langler.Accounts.UserInvite, foreign_key: :invitee_id
+    has_many :user_languages, Langler.Accounts.UserLanguage
 
     timestamps(type: :utc_datetime)
   end

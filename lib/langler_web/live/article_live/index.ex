@@ -85,11 +85,13 @@ defmodule LanglerWeb.ArticleLive.Index do
           <div class="card-body space-y-6">
             <div>
               <p class="text-sm font-semibold uppercase tracking-widest text-base-content/60">
-                Import an article
+                {gettext("Import an article")}
               </p>
-              <h1 class="text-3xl font-semibold text-base-content">Build your reading queue</h1>
+              <h1 class="text-3xl font-semibold text-base-content">
+                {gettext("Build your reading queue")}
+              </h1>
               <p class="mt-2 text-sm text-base-content/70">
-                Paste a URL to extract the readable content and queue vocabulary analysis.
+                {gettext("Paste a URL to extract the readable content and queue vocabulary analysis.")}
               </p>
             </div>
 
@@ -98,8 +100,8 @@ defmodule LanglerWeb.ArticleLive.Index do
               class="alert alert-info border border-base-200 bg-base-100/70 text-base-content/70"
             >
               <span class="loading loading-spinner loading-sm"></span>
-              <span class="text-sm font-semibold">Importing…</span>
-              <span class="text-sm">This usually takes a few seconds.</span>
+              <span class="text-sm font-semibold">{gettext("Importing…")}</span>
+              <span class="text-sm">{gettext("This usually takes a few seconds.")}</span>
             </div>
 
             <.form
@@ -113,7 +115,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                 <.input
                   field={@form[:url]}
                   type="url"
-                  label="Article URL"
+                  label={gettext("Article URL")}
                   placeholder="https://elpais.com/cultura/..."
                   required
                   disabled={@importing}
@@ -123,7 +125,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                 <div :if={@selected_source} class="flex flex-wrap items-center justify-between gap-3">
                   <div class="flex flex-wrap items-center gap-2 text-xs font-semibold text-base-content/60">
                     <span class="badge badge-sm badge-outline uppercase tracking-widest">
-                      Source detected
+                      {gettext("Source detected")}
                     </span>
                     <span class="text-base-content">{@selected_source.label}</span>
                   </div>
@@ -136,12 +138,12 @@ defmodule LanglerWeb.ArticleLive.Index do
                     disabled={@importing}
                   >
                     <.icon name="hero-sparkles" class="h-4 w-4" />
-                    Random from {@selected_source.label}
+                    {gettext("Random from %{source}", source: @selected_source.label)}
                   </button>
                 </div>
               </div>
               <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-base-content/70">
-                <p>Need inspiration?</p>
+                <p>{gettext("Need inspiration?")}</p>
                 <div class="chip-group">
                   <button
                     :for={sample <- sample_links()}
@@ -162,7 +164,9 @@ defmodule LanglerWeb.ArticleLive.Index do
                   disabled={@importing}
                   class="btn btn-primary gap-2 phx-submit-loading:loading"
                 >
-                  <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> Import Article
+                  <.icon name="hero-arrow-down-on-square" class="h-4 w-4" /> {gettext(
+                    "Import Article"
+                  )}
                 </.button>
               </div>
             </.form>
@@ -170,16 +174,16 @@ defmodule LanglerWeb.ArticleLive.Index do
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p class="text-sm font-semibold uppercase tracking-wide text-base-content/60">
-                    Library
+                    {gettext("Library")}
                   </p>
                   <h2 class="flex flex-wrap items-center gap-3 text-2xl font-semibold text-base-content">
-                    Your articles
+                    {gettext("Your articles")}
                     <span class="badge badge-lg badge-outline font-semibold text-base-content/80">
                       {@articles_count}
                     </span>
                   </h2>
                   <p class="mt-1 text-sm text-base-content/65">
-                    Search, filter by topic, then continue reading where you left off.
+                    {gettext("Search, filter by topic, then continue reading where you left off.")}
                   </p>
                 </div>
                 <div class="flex flex-col items-stretch gap-3 sm:items-end">
@@ -188,7 +192,7 @@ defmodule LanglerWeb.ArticleLive.Index do
                       navigate={~p"/articles/recommendations"}
                       class="btn btn-sm btn-ghost gap-2"
                     >
-                      <.icon name="hero-sparkles" class="h-4 w-4" /> Recommendations
+                      <.icon name="hero-sparkles" class="h-4 w-4" /> {gettext("Recommendations")}
                     </.link>
                     <.async_result :let={count} assign={@recommended_count}>
                       <:loading>
@@ -450,7 +454,7 @@ defmodule LanglerWeb.ArticleLive.Index do
 
   def handle_event("random_from_source", %{"source" => source_id}, socket) do
     case find_source_by_id(source_id) do
-      nil -> {:noreply, put_flash(socket, :error, "Unknown source")}
+      nil -> {:noreply, put_flash(socket, :error, gettext("Unknown source"))}
       source -> handle_random_article_import(socket, source)
     end
   end
@@ -483,13 +487,18 @@ defmodule LanglerWeb.ArticleLive.Index do
          {:ok,
           %{recommended_count: Content.get_recommended_count(user_id, @recommendations_limit)}}
        end)
-       |> put_flash(:info, "Article removed")}
+       |> put_flash(:info, gettext("Article removed"))}
     else
       {:error, :not_found} ->
-        {:noreply, put_flash(socket, :error, "Article not found")}
+        {:noreply, put_flash(socket, :error, gettext("Article not found"))}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to delete: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to delete: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -503,7 +512,7 @@ defmodule LanglerWeb.ArticleLive.Index do
   end
 
   defp import_random_article(socket, source, url) do
-    flash = "Imported a #{source.label} article from the front page."
+    flash = gettext("Imported a %{label} article from the front page.", label: source.label)
 
     case import_article(socket, url, flash: flash) do
       {:ok, new_socket} -> {:noreply, new_socket}
@@ -557,7 +566,7 @@ defmodule LanglerWeb.ArticleLive.Index do
     trimmed = String.trim(to_string(url || ""))
 
     if trimmed == "" do
-      {:error, put_flash(socket, :error, "Please provide a URL.")}
+      {:error, put_flash(socket, :error, gettext("Please provide a URL."))}
     else
       process_article_import(socket, trimmed, opts)
     end
@@ -578,7 +587,9 @@ defmodule LanglerWeb.ArticleLive.Index do
     keep_url? = opts[:keep_url]
     form_payload = if keep_url?, do: %{"url" => trimmed}, else: %{"url" => ""}
     selected_source = if keep_url?, do: socket.assigns.selected_source, else: nil
-    flash_message = opts[:flash] || "Imported #{article.title || article.url}"
+
+    flash_message =
+      opts[:flash] || gettext("Imported %{title}", title: article.title || article.url)
 
     socket =
       socket
@@ -643,7 +654,7 @@ defmodule LanglerWeb.ArticleLive.Index do
     {:noreply,
      socket
      |> assign(:articles_loading, false)
-     |> put_flash(:error, "Failed to load articles: #{inspect(reason)}")}
+     |> put_flash(:error, gettext("Failed to load articles: %{reason}", reason: inspect(reason)))}
   end
 
   defp top_topics(article) do
@@ -721,19 +732,25 @@ defmodule LanglerWeb.ArticleLive.Index do
   defp find_source_for_url(_), do: nil
 
   defp random_error_message(source, {:http_error, status}) do
-    "Unable to reach #{source.label} (status #{status}). Try again in a bit."
+    gettext("Unable to reach %{label} (status %{status}). Try again in a bit.",
+      label: source.label,
+      status: status
+    )
   end
 
   @dialyzer {:nowarn_function, random_error_message: 2}
   defp random_error_message(source, :no_matches) do
-    "No article links found on #{source.label}'s front page."
+    gettext("No article links found on %{label}'s front page.", label: source.label)
   end
 
   defp random_error_message(source, :no_links) do
-    "No article links found on #{source.label}'s front page."
+    gettext("No article links found on %{label}'s front page.", label: source.label)
   end
 
   defp random_error_message(source, reason) do
-    "Something went wrong fetching #{source.label}: #{inspect(reason)}"
+    gettext("Something went wrong fetching %{label}: %{reason}",
+      label: source.label,
+      reason: inspect(reason)
+    )
   end
 end

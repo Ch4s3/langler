@@ -4,7 +4,16 @@ defmodule Langler.Accounts do
   """
 
   import Ecto.Query, warn: false
-  alias Langler.Accounts.{User, UserNotifier, UserPreference, UserToken, UserTopicPreference}
+
+  alias Langler.Accounts.{
+    User,
+    UserLanguage,
+    UserNotifier,
+    UserPreference,
+    UserToken,
+    UserTopicPreference
+  }
+
   alias Langler.Repo
   alias Langler.Vocabulary
 
@@ -103,6 +112,210 @@ defmodule Langler.Accounts do
         |> Repo.update()
     end
   end
+
+  ## User Language Management
+
+  @doc """
+  Enables a language for a user. Creates a new user_languages row, or returns
+  the existing one if already enabled (idempotent for onboarding / existing users).
+  """
+  def enable_language(%User{id: user_id}, language_code) do
+    enable_language(user_id, language_code)
+  end
+
+  def enable_language(user_id, language_code) when is_integer(user_id) do
+    case Langler.Languages.normalize(language_code) do
+      nil ->
+        {:error, invalid_language_changeset(user_id, language_code)}
+
+      normalized_code ->
+        enable_language_for_normalized(user_id, normalized_code, language_code)
+    end
+  end
+
+  defp invalid_language_changeset(user_id, language_code) do
+    %UserLanguage{user_id: user_id}
+    |> UserLanguage.changeset(%{user_id: user_id, language_code: language_code})
+  end
+
+  defp enable_language_for_normalized(user_id, normalized_code, raw_code) do
+    if Langler.Languages.supported?(normalized_code) do
+      case Repo.get_by(UserLanguage, user_id: user_id, language_code: normalized_code) do
+        nil ->
+          %UserLanguage{user_id: user_id}
+          |> UserLanguage.changeset(%{user_id: user_id, language_code: normalized_code})
+          |> Repo.insert()
+
+        existing ->
+          {:ok, existing}
+      end
+    else
+      {:error, invalid_language_changeset(user_id, raw_code)}
+    end
+  end
+
+  @doc """
+  Disables a language for a user (soft-disable - preserves all data).
+  Prevents removing the last enabled language.
+  """
+  def disable_language(%User{id: user_id}, language_code) do
+    disable_language(user_id, language_code)
+  end
+
+  def disable_language(user_id, language_code) when is_integer(user_id) do
+    language_code = Langler.Languages.normalize!(language_code)
+
+    # Check if this is the last enabled language
+    enabled_count =
+      UserLanguage
+      |> where(user_id: ^user_id)
+      |> Repo.aggregate(:count)
+
+    if enabled_count <= 1 do
+      {:error, :cannot_disable_last_language}
+    else
+      case Repo.get_by(UserLanguage, user_id: user_id, language_code: language_code) do
+        nil ->
+          {:error, :language_not_found}
+
+        user_language ->
+          Repo.delete(user_language)
+      end
+    end
+  end
+
+  @doc """
+  Sets the active language for a user. The language must be enabled first.
+  """
+  def set_active_language(%User{id: user_id}, language_code) do
+    set_active_language(user_id, language_code)
+  end
+
+  def set_active_language(user_id, language_code) when is_integer(user_id) do
+    language_code = Langler.Languages.normalize!(language_code)
+
+    # Verify the language is enabled for this user
+    case Repo.get_by(UserLanguage, user_id: user_id, language_code: language_code) do
+      nil ->
+        {:error, :language_not_enabled}
+
+      target_language ->
+        Repo.transaction(fn ->
+          # Deactivate all languages for this user
+          UserLanguage
+          |> where(user_id: ^user_id, is_active: true)
+          |> Repo.update_all(set: [is_active: false])
+
+          # Activate the target language
+          target_language
+          |> UserLanguage.changeset(%{is_active: true})
+          |> Repo.update!()
+        end)
+    end
+  end
+
+  @doc """
+  Lists all enabled languages for a user.
+  """
+  def list_enabled_languages(%User{id: user_id}) do
+    list_enabled_languages(user_id)
+  end
+
+  def list_enabled_languages(user_id) when is_integer(user_id) do
+    UserLanguage
+    |> where(user_id: ^user_id)
+    |> order_by([ul], desc: ul.is_active, asc: ul.language_code)
+    |> Repo.all()
+  end
+
+  @doc """
+  Gets the active language for a user.
+  During rollout, falls back to user_preferences.target_language if user_languages is empty.
+  """
+  def get_active_language(%User{id: user_id}) do
+    get_active_language(user_id)
+  end
+
+  def get_active_language(user_id) when is_integer(user_id) do
+    case Repo.get_by(UserLanguage, user_id: user_id, is_active: true) do
+      nil ->
+        # Fallback for gradual deployment
+        case get_user_preference(user_id) do
+          %UserPreference{target_language: target_lang} when not is_nil(target_lang) ->
+            # Convert to code if needed
+            Langler.Languages.normalize(target_lang)
+
+          _ ->
+            nil
+        end
+
+      user_language ->
+        user_language.language_code
+    end
+  end
+
+  @doc """
+  Gets the active UserLanguage record for a user (includes current_deck_id).
+  """
+  def get_active_user_language(%User{id: user_id}) do
+    get_active_user_language(user_id)
+  end
+
+  def get_active_user_language(user_id) when is_integer(user_id) do
+    Repo.get_by(UserLanguage, user_id: user_id, is_active: true)
+  end
+
+  @doc """
+  Gets or creates a default deck for a specific language.
+  """
+  def get_or_create_deck_for_language(user_id, language_code) when is_integer(user_id) do
+    _language_code = Langler.Languages.normalize!(language_code)
+
+    case Vocabulary.get_or_create_default_deck(user_id) do
+      {:ok, deck} -> {:ok, deck}
+      error -> error
+    end
+  end
+
+  @doc """
+  Sets the current deck for a specific language.
+  """
+  def set_current_deck_for_language(user_id, language_code, deck_id)
+      when is_integer(user_id) and is_integer(deck_id) do
+    language_code = Langler.Languages.normalize!(language_code)
+
+    # Verify deck belongs to user
+    case Vocabulary.get_deck_for_user(deck_id, user_id) do
+      nil ->
+        {:error, :deck_not_found}
+
+      _deck ->
+        case Repo.get_by(UserLanguage, user_id: user_id, language_code: language_code) do
+          nil ->
+            {:error, :language_not_enabled}
+
+          user_language ->
+            user_language
+            |> UserLanguage.changeset(%{current_deck_id: deck_id})
+            |> Repo.update()
+        end
+    end
+  end
+
+  @doc """
+  Marks onboarding as complete for a user.
+  """
+  def complete_onboarding(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(onboarding_completed_at: DateTime.utc_now(:second))
+    |> Repo.update()
+  end
+
+  @doc """
+  Checks if a user has completed onboarding.
+  """
+  def onboarding_completed?(%User{onboarding_completed_at: nil}), do: false
+  def onboarding_completed?(%User{onboarding_completed_at: _}), do: true
 
   @doc """
   Gets user topic preferences as a map of topic => weight.

@@ -59,6 +59,12 @@ defmodule LanglerWeb.Router do
   scope "/", LanglerWeb do
     pipe_through [:browser, :require_authenticated_user]
 
+    # Onboarding route - requires authentication but not onboarding completion
+    live_session :onboarding,
+      on_mount: [{LanglerWeb.UserAuth, :require_authenticated_skip_onboarding}] do
+      live "/onboarding", OnboardingLive, :index
+    end
+
     live_session :require_authenticated_user,
       on_mount: [{LanglerWeb.UserAuth, :require_authenticated}] do
       live "/users/settings", UserLive.Settings, :edit

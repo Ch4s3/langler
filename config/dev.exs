@@ -90,3 +90,8 @@ config :swoosh, :api_client, false
 config :langler, Langler.Mailer, adapter: Swoosh.Adapters.Local
 
 config :appsignal, :config, active: false
+
+# Optional: copy dev.secrets.exs.example to dev.secrets.exs and set your API key for mix langler.gettext.seed
+if File.exists?(Path.expand("dev.secrets.exs", __DIR__)) do
+  import_config "dev.secrets.exs"
+end
