@@ -253,12 +253,42 @@ defmodule LanglerWeb.UserAuth do
   def on_mount(:require_authenticated, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 
+    cond do
+      !socket.assigns.current_scope || !socket.assigns.current_scope.user ->
+        socket =
+          socket
+          |> Phoenix.LiveView.put_flash(
+            :error,
+            Gettext.gettext(LanglerWeb.Gettext, "You must log in to access this page.")
+          )
+          |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
+
+        {:halt, socket}
+
+      !Accounts.onboarding_completed?(socket.assigns.current_scope.user) ->
+        socket =
+          socket
+          |> Phoenix.LiveView.redirect(to: ~p"/onboarding")
+
+        {:halt, socket}
+
+      true ->
+        {:cont, socket}
+    end
+  end
+
+  def on_mount(:require_authenticated_skip_onboarding, _params, session, socket) do
+    socket = mount_current_scope(socket, session)
+
     if socket.assigns.current_scope && socket.assigns.current_scope.user do
       {:cont, socket}
     else
       socket =
         socket
-        |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
+        |> Phoenix.LiveView.put_flash(
+          :error,
+          Gettext.gettext(LanglerWeb.Gettext, "You must log in to access this page.")
+        )
         |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
 
       {:halt, socket}
@@ -273,7 +303,10 @@ defmodule LanglerWeb.UserAuth do
     else
       socket =
         socket
-        |> Phoenix.LiveView.put_flash(:error, "You must re-authenticate to access this page.")
+        |> Phoenix.LiveView.put_flash(
+          :error,
+          Gettext.gettext(LanglerWeb.Gettext, "You must re-authenticate to access this page.")
+        )
         |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
 
       {:halt, socket}
@@ -281,20 +314,41 @@ defmodule LanglerWeb.UserAuth do
   end
 
   defp mount_current_scope(socket, session) do
-    Phoenix.Component.assign_new(socket, :current_scope, fn ->
-      {user, _} =
-        if user_token = session["user_token"] do
-          Accounts.get_user_by_session_token(user_token)
-        end || {nil, nil}
+    socket =
+      Phoenix.Component.assign_new(socket, :current_scope, fn ->
+        {user, _} =
+          if user_token = session["user_token"] do
+            Accounts.get_user_by_session_token(user_token)
+          end || {nil, nil}
 
-      Scope.for_user(user)
-    end)
+        Scope.for_user(user)
+      end)
+
+    # Set Gettext locale based on user preferences
+    if socket.assigns.current_scope && socket.assigns.current_scope.user do
+      user = socket.assigns.current_scope.user
+
+      case Accounts.get_user_preference(user.id) do
+        %{ui_locale: ui_locale} when not is_nil(ui_locale) ->
+          Gettext.put_locale(LanglerWeb.Gettext, ui_locale)
+
+        _ ->
+          :ok
+      end
+    end
+
+    socket
   end
 
   @doc "Returns the path to redirect to after log in."
-  # the user was already logged in, redirect to settings
-  def signed_in_path(%Plug.Conn{assigns: %{current_scope: %Scope{user: %Accounts.User{}}}}) do
-    ~p"/users/settings"
+  # Check onboarding first
+  def signed_in_path(%Plug.Conn{assigns: %{current_scope: %Scope{user: user}}} = _conn)
+      when not is_nil(user) do
+    if Accounts.onboarding_completed?(user) do
+      ~p"/library"
+    else
+      ~p"/onboarding"
+    end
   end
 
   def signed_in_path(_), do: ~p"/library"
@@ -307,7 +361,10 @@ defmodule LanglerWeb.UserAuth do
       conn
     else
       conn
-      |> put_flash(:error, "You must log in to access this page.")
+      |> put_flash(
+        :error,
+        Gettext.gettext(LanglerWeb.Gettext, "You must log in to access this page.")
+      )
       |> maybe_store_return_to()
       |> redirect(to: ~p"/users/log-in")
       |> halt()

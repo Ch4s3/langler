@@ -23,94 +23,70 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-4xl space-y-8 py-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-base-content">Google Translate Settings</h1>
-            <p class="mt-2 text-sm text-base-content/70">
-              Configure your Google Translate API key for dictionary lookups and translations.
-            </p>
-          </div>
-          <.link
-            navigate={~p"/users/settings"}
-            class="btn btn-ghost btn-sm"
-          >
-            <.icon name="hero-arrow-left" class="h-4 w-4" /> Back to Settings
-          </.link>
-        </div>
-
-        <%!-- List of existing configs --%>
-        <div class="card border border-base-200 bg-base-100 shadow-xl">
-          <div class="card-body">
-            <h2 class="card-title">Your Google Translate Configuration</h2>
-
-            <div :if={@configs == []} class="py-8 text-center">
-              <.icon
-                name="hero-language"
-                class="mx-auto h-12 w-12 text-base-content/30"
-              />
-              <p class="mt-4 text-base-content/70">No Google Translate configuration yet.</p>
-              <p class="text-sm text-base-content/50">Add your API key below to get started.</p>
-            </div>
-
-            <div :if={@configs != []} class="space-y-4">
-              <div
-                :for={config <- @configs}
-                class="rounded-lg border border-base-200 bg-base-50 p-4"
-              >
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <h3 class="font-semibold text-base-content">Google Translate API</h3>
-                      <span :if={config.is_default} class="badge badge-primary badge-sm">
-                        Default
-                      </span>
-                      <span
-                        :if={config.enabled}
-                        class="badge badge-success badge-sm"
-                      >
-                        Enabled
-                      </span>
-                      <span :if={!config.enabled} class="badge badge-warning badge-sm">
-                        Disabled
-                      </span>
-                    </div>
-                    <dl class="mt-2 space-y-1 text-sm">
-                      <div class="flex gap-2">
-                        <dt class="font-medium text-base-content/70">API Key:</dt>
-                        <dd class="font-mono text-base-content/60">
-                          {GoogleTranslateConfig.decrypt_api_key_masked(
-                            @current_scope.user.id,
-                            config.encrypted_api_key
-                          )}
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm"
-                      phx-click="edit_config"
-                      phx-value-id={config.id}
-                    >
-                      <.icon name="hero-pencil" class="h-4 w-4" /> Edit
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-error btn-sm"
-                      phx-click="delete_config"
-                      phx-value-id={config.id}
-                      data-confirm="Are you sure you want to delete this configuration?"
-                    >
-                      <.icon name="hero-trash" class="h-4 w-4" /> Delete
-                    </button>
-                  </div>
+      <.settings_page
+        title="Google Translate Settings"
+        subtitle="Configure your Google Translate API key for dictionary lookups and translations."
+        back_path={~p"/users/settings"}
+      >
+        <.config_list_card
+          title="Your Google Translate Configuration"
+          empty_icon="hero-language"
+          empty_title="No Google Translate configuration yet."
+          empty_hint="Add your API key below to get started."
+          configs={@configs}
+        >
+          <:item :let={config}>
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-semibold text-base-content">Google Translate API</h3>
+                  <span :if={config.is_default} class="badge badge-primary badge-sm">
+                    Default
+                  </span>
+                  <span
+                    :if={config.enabled}
+                    class="badge badge-success badge-sm"
+                  >
+                    Enabled
+                  </span>
+                  <span :if={!config.enabled} class="badge badge-warning badge-sm">
+                    Disabled
+                  </span>
                 </div>
+                <dl class="mt-2 space-y-1 text-sm">
+                  <div class="flex gap-2">
+                    <dt class="font-medium text-base-content/70">API Key:</dt>
+                    <dd class="font-mono text-base-content/60">
+                      {GoogleTranslateConfig.decrypt_api_key_masked(
+                        @current_scope.user.id,
+                        config.encrypted_api_key
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  phx-click="edit_config"
+                  phx-value-id={config.id}
+                >
+                  <.icon name="hero-pencil" class="h-4 w-4" /> Edit
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-error btn-sm"
+                  phx-click="delete_config"
+                  phx-value-id={config.id}
+                  data-confirm="Are you sure you want to delete this configuration?"
+                >
+                  <.icon name="hero-trash" class="h-4 w-4" /> Delete
+                </button>
               </div>
             </div>
-          </div>
-        </div>
+          </:item>
+        </.config_list_card>
 
         <%!-- Add/Edit config form --%>
         <div class="card border border-base-200 bg-base-100 shadow-xl">
@@ -212,7 +188,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
             </.form>
           </div>
         </div>
-      </div>
+      </.settings_page>
     </Layouts.app>
     """
   end
@@ -253,12 +229,12 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
          |> assign(:configs, configs)
          |> assign(:editing_config, nil)
          |> assign(:form, to_form(%{}, as: :google_translate_config))
-         |> put_flash(:info, "Configuration saved successfully")}
+         |> put_flash(:info, gettext("Configuration saved successfully"))}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to save configuration")
+         |> put_flash(:error, gettext("Failed to save configuration"))
          |> assign(:form, to_form(changeset, as: :google_translate_config))}
     end
   end
@@ -303,10 +279,10 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
         {:noreply,
          socket
          |> assign(:configs, configs)
-         |> put_flash(:info, "Configuration deleted")}
+         |> put_flash(:info, gettext("Configuration deleted"))}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete configuration")}
+        {:noreply, put_flash(socket, :error, gettext("Failed to delete configuration"))}
     end
   end
 
@@ -328,7 +304,7 @@ defmodule LanglerWeb.UserLive.GoogleTranslateSettings do
           {:noreply, put_flash(socket, :error, message)}
       end
     else
-      {:noreply, put_flash(socket, :error, "Please fill in the form first")}
+      {:noreply, put_flash(socket, :error, gettext("Please fill in the form first"))}
     end
   end
 

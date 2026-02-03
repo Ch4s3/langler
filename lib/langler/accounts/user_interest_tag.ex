@@ -8,7 +8,7 @@ defmodule Langler.Accounts.UserInterestTag do
 
   schema "user_interest_tags" do
     field :tag, :string
-    field :language, :string, default: "spanish"
+    field :language, :string, default: "es"
     belongs_to :user, Langler.Accounts.User
 
     timestamps(type: :utc_datetime)

@@ -426,7 +426,12 @@ defmodule LanglerWeb.StudyLive.Session do
        |> assign(:completed, completed)}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to rate card: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to rate card: %{reason}", reason: inspect(reason))
+         )}
 
       _ ->
         {:noreply, socket}

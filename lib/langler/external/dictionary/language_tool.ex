@@ -221,17 +221,36 @@ defmodule Langler.External.Dictionary.LanguageTool do
     Map.get(pos_map, tag_lower)
   end
 
-  defp language_to_code("spanish"), do: "es"
-  defp language_to_code("english"), do: "en"
-  defp language_to_code("french"), do: "fr"
-  defp language_to_code("portuguese"), do: "pt"
-  defp language_to_code("german"), do: "de"
-  defp language_to_code("italian"), do: "it"
-
-  defp language_to_code(code) when is_binary(code) and byte_size(code) == 2,
-    do: String.downcase(code)
+  defp language_to_code(language) when is_binary(language) do
+    language
+    |> Langler.Languages.normalize()
+    |> try_language_tool_code()
+    |> fallback_to_legacy(language)
+  end
 
   defp language_to_code(_), do: "es"
+
+  defp try_language_tool_code(nil), do: nil
+
+  defp try_language_tool_code(normalized) do
+    if Langler.Languages.supported?(normalized) do
+      Langler.Languages.to_language_tool_code(normalized)
+    end
+  end
+
+  defp fallback_to_legacy(nil, language), do: legacy_language_to_code(language)
+  defp fallback_to_legacy(code, _language), do: code
+
+  defp legacy_language_to_code("spanish"), do: "es"
+  defp legacy_language_to_code("english"), do: "en"
+  defp legacy_language_to_code("french"), do: "fr"
+  defp legacy_language_to_code("italian"), do: "it"
+  defp legacy_language_to_code("portuguese"), do: "pt"
+  defp legacy_language_to_code("german"), do: "de"
+  defp legacy_language_to_code("romanian"), do: "ro"
+  defp legacy_language_to_code("catalan"), do: "ca"
+  defp legacy_language_to_code(code) when byte_size(code) == 2, do: String.downcase(code)
+  defp legacy_language_to_code(_), do: "es"
 
   defp req_options do
     config = Application.get_env(:langler, __MODULE__, [])

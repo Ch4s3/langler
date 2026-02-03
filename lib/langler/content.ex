@@ -720,7 +720,7 @@ defmodule Langler.Content do
       title: title || da.url,
       url: da.url,
       source: da.source_site && da.source_site.name,
-      language: da.language || "spanish",
+      language: da.language || "es",
       content: da.summary || "",
       inserted_at: da.published_at || da.discovered_at || DateTime.utc_now(),
       published_at: da.published_at || da.discovered_at,
@@ -1150,9 +1150,12 @@ defmodule Langler.Content do
     user_level = RecommendationScorer.calculate_user_level(user_id)
     numeric_level = user_level.numeric_level
 
+    # Get active language for user
+    active_language = Langler.Accounts.get_active_language(user_id) || "es"
+
     # Get discovered articles user hasn't imported yet
     DiscoveredArticle
-    |> where([da], da.language == "spanish")
+    |> where([da], da.language == ^active_language)
     |> where([da], not is_nil(da.difficulty_score))
     |> join(:left, [da], dau in DiscoveredArticleUser,
       on: dau.discovered_article_id == da.id and dau.user_id == ^user_id

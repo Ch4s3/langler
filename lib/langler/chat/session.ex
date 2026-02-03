@@ -21,18 +21,20 @@ defmodule Langler.Chat.Session do
     if is_nil(default_config) do
       {:error, :no_default_llm_config}
     else
-      # Fetch user preference separately
+      # Fetch active language and user preferences
       alias Langler.Accounts.UserPreference
+
+      active_language = Langler.Accounts.get_active_language(user.id) || "es"
 
       user_pref =
         Repo.one(from p in UserPreference, where: p.user_id == ^user.id) ||
-          %UserPreference{target_language: "spanish", native_language: "en"}
+          %UserPreference{native_language: "en"}
 
       attrs =
         attrs
         |> Map.put_new(:llm_provider, default_config.provider_name)
         |> Map.put_new(:llm_model, default_config.model)
-        |> Map.put_new(:target_language, user_pref.target_language)
+        |> Map.put_new(:target_language, active_language)
         |> Map.put_new(:native_language, user_pref.native_language)
         |> Map.put(:user_id, user.id)
 

@@ -148,7 +148,7 @@ defmodule LanglerWeb.UserLive.Invites do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Invite sent to #{email}!")
+         |> put_flash(:info, gettext("Invite sent to %{email}!", email: email))
          |> assign(:invites, invites)
          |> assign(:invites_remaining, updated_user.invites_remaining)
          |> assign(:can_send, Invites.can_send_invite?(updated_user))
@@ -157,7 +157,7 @@ defmodule LanglerWeb.UserLive.Invites do
       {:error, :no_invites_remaining} ->
         {:noreply,
          socket
-         |> put_flash(:error, "You don't have any invites remaining.")
+         |> put_flash(:error, gettext("You don't have any invites remaining."))
          |> assign(:can_send, false)}
 
       {:error, changeset} ->

@@ -162,7 +162,7 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Imported #{article.title}")
+         |> put_flash(:info, gettext("Imported %{title}", title: article.title))
          |> assign(:importing, false)
          |> assign_async(:recommended_articles, fn ->
            articles = Content.get_recommended_articles(user_id, 10)
@@ -172,7 +172,10 @@ defmodule LanglerWeb.ArticleLive.Recommendations do
       {:error, reason} ->
         {:noreply,
          socket
-         |> put_flash(:error, humanize_error(reason))
+         |> put_flash(
+           :error,
+           gettext("Import failed: %{details}", details: humanize_error(reason))
+         )
          |> assign(:importing, false)}
     end
   end

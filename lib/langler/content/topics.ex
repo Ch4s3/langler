@@ -510,14 +510,18 @@ defmodule Langler.Content.Topics do
   end
 
   def topics_for_language(language) when is_binary(language) do
-    language_atom =
-      case language do
-        "spanish" -> :spanish
-        "english" -> :english
-        _ -> :spanish
-      end
-
+    language_atom = map_language_to_atom(language)
     Map.get(@topics, language_atom, %{})
+  end
+
+  defp map_language_to_atom(language) do
+    case language do
+      code when code in ["es", "fr", "it", "ro", "ca", "pt-BR", "pt-PT"] -> :spanish
+      "en" -> :english
+      "spanish" -> :spanish
+      "english" -> :english
+      _ -> :spanish
+    end
   end
 
   def topic_ids_for_language(language) do

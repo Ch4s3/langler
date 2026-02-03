@@ -43,8 +43,8 @@ defmodule Langler.TTS.Service do
   end
 
   defp do_generate_audio(user_id, article_id, _audio_file) do
-    with {:ok, config} <- get_tts_config(user_id),
-         {:ok, article} <- get_article(article_id),
+    with {:ok, article} <- get_article(article_id),
+         {:ok, config} <- get_tts_config(user_id, article.language),
          {:ok, audio_binary} <- generate_audio_chunked(article.content, config),
          {:ok, file_path} <- store_audio(user_id, article_id, audio_binary),
          {:ok, _} <-
@@ -406,7 +406,7 @@ defmodule Langler.TTS.Service do
     header <> pcm_data
   end
 
-  defp get_tts_config(user_id) do
+  defp get_tts_config(user_id, article_language) do
     case TtsConfig.get_default_config(user_id) do
       nil ->
         {:error, :no_tts_config}
@@ -414,10 +414,13 @@ defmodule Langler.TTS.Service do
       config ->
         case Encryption.decrypt_message(user_id, config.encrypted_api_key) do
           {:ok, api_key} ->
+            # Auto-select voice based on article language if not configured
+            voice_name = config.voice_name || Langler.Languages.tts_voice(article_language)
+
             {:ok,
              %{
                api_key: api_key,
-               voice_name: config.voice_name
+               voice_name: voice_name
              }}
 
           error ->

@@ -54,3 +54,5 @@ fly.secrets.local
 .kamal/secrets
 
 /scripts/
+
+config/dev.secrets.exs

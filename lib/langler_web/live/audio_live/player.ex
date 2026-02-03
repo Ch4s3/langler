@@ -28,14 +28,17 @@ defmodule LanglerWeb.AudioLive.Player do
         else
           {:ok,
            socket
-           |> put_flash(:info, "Configure a Text-to-Speech provider to listen to articles")
+           |> put_flash(
+             :info,
+             gettext("Configure a Text-to-Speech provider to listen to articles")
+           )
            |> push_navigate(to: ~p"/users/settings/tts")}
         end
 
       :error ->
         {:ok,
          socket
-         |> put_flash(:error, "Invalid article ID")
+         |> put_flash(:error, gettext("Invalid article ID"))
          |> push_navigate(to: ~p"/articles")}
     end
   end
@@ -185,7 +188,7 @@ defmodule LanglerWeb.AudioLive.Player do
                       aria-label="Skip forward 10 seconds"
                     >
                       <.icon name="hero-arrow-uturn-right" class="h-5 w-5" />
-                      </button>
+                    </button>
                   </div>
 
                   <div class="flex flex-wrap items-center justify-center gap-3 lg:col-start-8 lg:col-span-3 lg:justify-end">
@@ -345,7 +348,7 @@ defmodule LanglerWeb.AudioLive.Player do
 
     {:noreply,
      socket
-     |> put_flash(:error, "Failed to load audio file. Please try refreshing the page.")
+     |> put_flash(:error, gettext("Failed to load audio file. Please try refreshing the page."))
      |> assign(:audio_loading, false)}
   end
 
@@ -398,7 +401,7 @@ defmodule LanglerWeb.AudioLive.Player do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Audio generation restarted. Please wait a moment.")
+         |> put_flash(:info, gettext("Audio generation restarted. Please wait a moment."))
          |> assign(:audio_loading, true)
          |> assign(:audio_file, nil)
          |> assign(:audio_url, nil)
@@ -406,7 +409,11 @@ defmodule LanglerWeb.AudioLive.Player do
 
       {:error, reason} ->
         {:noreply,
-         put_flash(socket, :error, "Failed to restart audio generation: #{inspect(reason)}")}
+         put_flash(
+           socket,
+           :error,
+           gettext("Failed to restart audio generation: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -439,7 +446,12 @@ defmodule LanglerWeb.AudioLive.Player do
         {:noreply, socket}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to start quiz: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Failed to start quiz: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 

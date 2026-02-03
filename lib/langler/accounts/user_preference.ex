@@ -9,8 +9,9 @@ defmodule Langler.Accounts.UserPreference do
   alias Langler.Vocabulary.Deck
 
   schema "user_preferences" do
-    field :target_language, :string, default: "spanish"
+    field :target_language, :string, default: "es"
     field :native_language, :string, default: "en"
+    field :ui_locale, :string, default: "en"
     field :use_llm_for_definitions, :boolean, default: false
 
     belongs_to :user, Langler.Accounts.User
@@ -25,6 +26,7 @@ defmodule Langler.Accounts.UserPreference do
     |> cast(attrs, [
       :target_language,
       :native_language,
+      :ui_locale,
       :user_id,
       :current_deck_id,
       :use_llm_for_definitions

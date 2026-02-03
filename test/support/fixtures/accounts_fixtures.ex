@@ -24,7 +24,7 @@ defmodule Langler.AccountsFixtures do
     user
   end
 
-  def user_fixture(attrs \\ %{}) do
+  def unonboarded_user_fixture(attrs \\ %{}) do
     user = unconfirmed_user_fixture(attrs)
 
     token =
@@ -36,6 +36,22 @@ defmodule Langler.AccountsFixtures do
       Accounts.login_user_by_magic_link(token)
 
     user
+  end
+
+  def user_fixture(attrs \\ %{}) do
+    user = unonboarded_user_fixture(attrs)
+
+    # Complete onboarding and set up default language for tests
+    {:ok, user} = Accounts.complete_onboarding(user)
+    {:ok, _} = Accounts.enable_language(user.id, "es")
+    {:ok, _} = Accounts.set_active_language(user.id, "es")
+
+    user
+  end
+
+  def onboarded_user_fixture(attrs \\ %{}) do
+    # Alias for clarity
+    user_fixture(attrs)
   end
 
   def user_scope_fixture do

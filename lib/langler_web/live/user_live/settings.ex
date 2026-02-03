@@ -16,8 +16,10 @@ defmodule LanglerWeb.UserLive.Settings do
       <div class="mx-auto max-w-5xl space-y-8">
         <div class="text-center">
           <.header>
-            Account Settings
-            <:subtitle>Manage your account email address and password settings</:subtitle>
+            {gettext("Account Settings")}
+            <:subtitle>
+              {gettext("Manage your account email address and password settings")}
+            </:subtitle>
           </.header>
         </div>
 
@@ -32,9 +34,9 @@ defmodule LanglerWeb.UserLive.Settings do
                 <.icon name="hero-chat-bubble-left-right" class="h-6 w-6 text-primary" />
               </div>
               <div class="flex-1 min-w-0">
-                <h2 class="font-semibold text-base-content">AI Chat Settings</h2>
+                <h2 class="font-semibold text-base-content">{gettext("AI Chat Settings")}</h2>
                 <p class="text-sm text-base-content/60 truncate">
-                  Configure LLM provider and API keys
+                  {gettext("Configure LLM provider and API keys")}
                 </p>
               </div>
               <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
@@ -50,9 +52,9 @@ defmodule LanglerWeb.UserLive.Settings do
                 <.icon name="hero-speaker-wave" class="h-6 w-6 text-accent" />
               </div>
               <div class="flex-1 min-w-0">
-                <h2 class="font-semibold text-base-content">TTS Settings</h2>
+                <h2 class="font-semibold text-base-content">{gettext("TTS Settings")}</h2>
                 <p class="text-sm text-base-content/60 truncate">
-                  Configure Text-to-Speech provider for listening
+                  {gettext("Configure Text-to-Speech provider for listening")}
                 </p>
               </div>
               <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
@@ -68,14 +70,84 @@ defmodule LanglerWeb.UserLive.Settings do
                 <.icon name="hero-language" class="h-6 w-6 text-secondary" />
               </div>
               <div class="flex-1 min-w-0">
-                <h2 class="font-semibold text-base-content">Google Translate Settings</h2>
+                <h2 class="font-semibold text-base-content">
+                  {gettext("Google Translate Settings")}
+                </h2>
                 <p class="text-sm text-base-content/60 truncate">
-                  Configure Google Translate API key for dictionary lookups
+                  {gettext("Configure Google Translate API key for dictionary lookups")}
                 </p>
               </div>
               <.icon name="hero-chevron-right" class="h-5 w-5 flex-shrink-0 text-base-content/40" />
             </div>
           </.link>
+        </div>
+
+        <%!-- Languages Section --%>
+        <div class="rounded-3xl border border-base-200 bg-base-100/90 p-6 space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary/10">
+              <.icon name="hero-language" class="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-base-content">{gettext("Your Languages")}</h2>
+              <p class="text-sm text-base-content/60">
+                {gettext("Manage the languages you're learning")}
+              </p>
+            </div>
+          </div>
+
+          <div class="divider my-2"></div>
+
+          <div class="space-y-3">
+            <%= for user_lang <- @user_languages do %>
+              <div class="flex items-center justify-between p-4 rounded-lg border border-base-200 bg-base-100">
+                <div class="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="active_language"
+                    checked={user_lang.language_code == @active_language}
+                    phx-click="set_active_language"
+                    phx-value-code={user_lang.language_code}
+                    class="radio radio-primary"
+                  />
+                  <div>
+                    <div class="font-medium">
+                      {Langler.Languages.native_name(user_lang.language_code)}
+                    </div>
+                    <div class="text-sm text-base-content/60">
+                      {Langler.Languages.display_name(user_lang.language_code)}
+                      {if user_lang.language_code == @active_language, do: "(Active)"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            <% end %>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">{gettext("UI Language")}</span>
+            </label>
+            <select
+              phx-change="set_ui_locale"
+              name="locale"
+              class="select select-bordered w-full max-w-xs"
+            >
+              <%= for code <- Langler.Languages.supported_codes() do %>
+                <option
+                  value={Langler.Languages.gettext_locale(code)}
+                  selected={Langler.Languages.gettext_locale(code) == @ui_locale}
+                >
+                  {Langler.Languages.native_name(code)}
+                </option>
+              <% end %>
+            </select>
+            <label class="label">
+              <span class="label-text-alt">
+                {gettext("The language used for app menus and messages")}
+              </span>
+            </label>
+          </div>
         </div>
 
         <%!-- Dictionary Preferences --%>
@@ -319,10 +391,10 @@ defmodule LanglerWeb.UserLive.Settings do
     socket =
       case Accounts.update_user_email(socket.assigns.current_scope.user, token) do
         {:ok, _user} ->
-          put_flash(socket, :info, "Email changed successfully.")
+          put_flash(socket, :info, gettext("Email changed successfully."))
 
         {:error, _} ->
-          put_flash(socket, :error, "Email change link is invalid or it has expired.")
+          put_flash(socket, :error, gettext("Email change link is invalid or it has expired."))
       end
 
     {:ok, push_navigate(socket, to: ~p"/users/settings")}
@@ -341,6 +413,10 @@ defmodule LanglerWeb.UserLive.Settings do
     use_llm_for_definitions = user_pref && user_pref.use_llm_for_definitions
     has_llm_config = Accounts.LlmConfig.get_default_config(user.id) != nil
 
+    # Load user languages
+    user_languages = Accounts.list_enabled_languages(user.id)
+    active_language = Accounts.get_active_language(user.id)
+
     socket =
       socket
       |> assign(:current_email, user.email)
@@ -349,6 +425,9 @@ defmodule LanglerWeb.UserLive.Settings do
       |> assign(:trigger_submit, false)
       |> assign(:archived_articles, archived)
       |> assign(:finished_articles, finished)
+      |> assign(:user_languages, user_languages)
+      |> assign(:active_language, active_language)
+      |> assign(:ui_locale, (user_pref && user_pref.ui_locale) || "en")
       |> assign(:use_llm_for_definitions, use_llm_for_definitions || false)
       |> assign(:has_llm_config, has_llm_config)
 
@@ -381,7 +460,7 @@ defmodule LanglerWeb.UserLive.Settings do
           &url(~p"/users/settings/confirm-email/#{&1}")
         )
 
-        info = "A link to confirm your email change has been sent to the new address."
+        info = gettext("A link to confirm your email change has been sent to the new address.")
         {:noreply, socket |> put_flash(:info, info)}
 
       changeset ->
@@ -409,7 +488,12 @@ defmodule LanglerWeb.UserLive.Settings do
        assign(socket, :archived_articles, fetch_archived(socket.assigns.current_scope.user.id))}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to restore: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to restore: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -420,10 +504,15 @@ defmodule LanglerWeb.UserLive.Settings do
       {:noreply,
        socket
        |> assign(:archived_articles, fetch_archived(socket.assigns.current_scope.user.id))
-       |> put_flash(:info, "Article permanently removed")}
+       |> put_flash(:info, gettext("Article permanently removed"))}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to delete: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to delete: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -435,10 +524,15 @@ defmodule LanglerWeb.UserLive.Settings do
       {:noreply,
        socket
        |> assign(:finished_articles, load_finished_articles_with_scores(user_id))
-       |> put_flash(:info, "Article restored")}
+       |> put_flash(:info, gettext("Article restored"))}
     else
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Unable to restore: #{inspect(reason)}")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("Unable to restore: %{reason}", reason: inspect(reason))
+         )}
     end
   end
 
@@ -465,10 +559,40 @@ defmodule LanglerWeb.UserLive.Settings do
         {:noreply,
          socket
          |> assign(:use_llm_for_definitions, new_value)
-         |> put_flash(:info, "Dictionary preference updated")}
+         |> put_flash(:info, gettext("Dictionary preference updated"))}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to update preference")}
+        {:noreply, put_flash(socket, :error, gettext("Failed to update preference"))}
+    end
+  end
+
+  def handle_event("set_active_language", %{"code" => code}, socket) do
+    user = socket.assigns.current_scope.user
+
+    case Accounts.set_active_language(user.id, code) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> assign(:active_language, code)
+         |> put_flash(:info, gettext("Active language updated"))}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, gettext("Failed to update active language"))}
+    end
+  end
+
+  def handle_event("set_ui_locale", %{"locale" => locale}, socket) do
+    user = socket.assigns.current_scope.user
+
+    case Accounts.upsert_user_preference(user, %{ui_locale: locale}) do
+      {:ok, _pref} ->
+        {:noreply,
+         socket
+         |> assign(:ui_locale, locale)
+         |> put_flash(:info, gettext("UI language updated. Refresh to see changes."))}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, gettext("Failed to update UI language"))}
     end
   end
 

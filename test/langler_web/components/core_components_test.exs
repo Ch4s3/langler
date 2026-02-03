@@ -281,4 +281,91 @@ defmodule LanglerWeb.CoreComponentsTest do
       assert html =~ "loading-lg"
     end
   end
+
+  describe "settings_page/1" do
+    test "renders title, subtitle, back link, and inner content" do
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <.settings_page
+              title="Test Settings"
+              subtitle="Configure something."
+              back_path={~p"/users/settings"}
+            >
+              <div id="settings-content">Inner content</div>
+            </.settings_page>
+            """
+          end,
+          %{}
+        )
+
+      assert html =~ "Test Settings"
+      assert html =~ "Configure something."
+      assert html =~ "Back to Settings"
+      assert html =~ ~r/href="[^"]*\/users\/settings"/
+      assert html =~ "hero-arrow-left"
+      assert html =~ "Inner content"
+      assert html =~ ~r/id="settings-content"/
+    end
+  end
+
+  describe "config_list_card/1" do
+    test "renders empty state when configs is empty" do
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <.config_list_card
+              title="Your Configurations"
+              empty_icon="hero-cog"
+              empty_title="No configurations yet."
+              empty_hint="Add one below."
+              configs={[]}
+            >
+              <:item>never shown</:item>
+            </.config_list_card>
+            """
+          end,
+          %{}
+        )
+
+      assert html =~ "Your Configurations"
+      assert html =~ "No configurations yet."
+      assert html =~ "Add one below."
+      assert html =~ "hero-cog"
+      refute html =~ "never shown"
+    end
+
+    test "renders list of configs and passes each to item slot" do
+      configs = [%{id: 1, name: "First"}, %{id: 2, name: "Second"}]
+
+      html =
+        render_component(
+          fn assigns ->
+            ~H"""
+            <.config_list_card
+              title="Your Configurations"
+              empty_icon="hero-cog"
+              empty_title="Empty"
+              empty_hint="Hint"
+              configs={@configs}
+            >
+              <:item :let={config}>
+                <span id={"config-#{config.id}"}>{config.name}</span>
+              </:item>
+            </.config_list_card>
+            """
+          end,
+          %{configs: configs}
+        )
+
+      assert html =~ "Your Configurations"
+      refute html =~ "Empty"
+      assert html =~ "First"
+      assert html =~ "Second"
+      assert html =~ ~r/id="config-1"/
+      assert html =~ ~r/id="config-2"/
+    end
+  end
 end

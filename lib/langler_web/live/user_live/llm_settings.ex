@@ -25,99 +25,75 @@ defmodule LanglerWeb.UserLive.LlmSettings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="mx-auto max-w-4xl space-y-8 py-8">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-3xl font-bold text-base-content">LLM Settings</h1>
-            <p class="mt-2 text-sm text-base-content/70">
-              Configure your AI provider API keys for the chat feature.
-            </p>
-          </div>
-          <.link
-            navigate={~p"/users/settings"}
-            class="btn btn-ghost btn-sm"
-          >
-            <.icon name="hero-arrow-left" class="h-4 w-4" /> Back to Settings
-          </.link>
-        </div>
-
-        <%!-- List of existing configs --%>
-        <div class="card border border-base-200 bg-base-100 shadow-xl">
-          <div class="card-body">
-            <h2 class="card-title">Your LLM Configurations</h2>
-
-            <div :if={@configs == []} class="py-8 text-center">
-              <.icon
-                name="hero-chat-bubble-left-right"
-                class="mx-auto h-12 w-12 text-base-content/30"
-              />
-              <p class="mt-4 text-base-content/70">No LLM configurations yet.</p>
-              <p class="text-sm text-base-content/50">Add your first API key below to get started.</p>
-            </div>
-
-            <div :if={@configs != []} class="space-y-4">
-              <div
-                :for={config <- @configs}
-                class="rounded-lg border border-base-200 bg-base-50 p-4"
-              >
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <h3 class="font-semibold text-base-content">
-                        {provider_display_name(config.provider_name, @providers)}
-                      </h3>
-                      <span :if={config.is_default} class="badge badge-primary badge-sm">
-                        Default
-                      </span>
-                    </div>
-                    <dl class="mt-2 space-y-1 text-sm">
-                      <div class="flex gap-2">
-                        <dt class="font-medium text-base-content/70">Model:</dt>
-                        <dd class="text-base-content">{config.model || "default"}</dd>
-                      </div>
-                      <div class="flex gap-2">
-                        <dt class="font-medium text-base-content/70">API Key:</dt>
-                        <dd class="font-mono text-base-content/60">
-                          {LlmConfig.decrypt_api_key_masked(
-                            @current_scope.user.id,
-                            config.encrypted_api_key
-                          )}
-                        </dd>
-                      </div>
-                      <div class="flex gap-2">
-                        <dt class="font-medium text-base-content/70">Temperature:</dt>
-                        <dd class="text-base-content">{config.temperature}</dd>
-                      </div>
-                      <div class="flex gap-2">
-                        <dt class="font-medium text-base-content/70">Max Tokens:</dt>
-                        <dd class="text-base-content">{config.max_tokens}</dd>
-                      </div>
-                    </dl>
+      <.settings_page
+        title="LLM Settings"
+        subtitle="Configure your AI provider API keys for the chat feature."
+        back_path={~p"/users/settings"}
+      >
+        <.config_list_card
+          title="Your LLM Configurations"
+          empty_icon="hero-chat-bubble-left-right"
+          empty_title="No LLM configurations yet."
+          empty_hint="Add your first API key below to get started."
+          configs={@configs}
+        >
+          <:item :let={config}>
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-semibold text-base-content">
+                    {provider_display_name(config.provider_name, @providers)}
+                  </h3>
+                  <span :if={config.is_default} class="badge badge-primary badge-sm">
+                    Default
+                  </span>
+                </div>
+                <dl class="mt-2 space-y-1 text-sm">
+                  <div class="flex gap-2">
+                    <dt class="font-medium text-base-content/70">Model:</dt>
+                    <dd class="text-base-content">{config.model || "default"}</dd>
                   </div>
                   <div class="flex gap-2">
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm"
-                      phx-click="edit_config"
-                      phx-value-id={config.id}
-                    >
-                      <.icon name="hero-pencil" class="h-4 w-4" /> Edit
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-error btn-sm"
-                      phx-click="delete_config"
-                      phx-value-id={config.id}
-                      data-confirm="Are you sure you want to delete this configuration?"
-                    >
-                      <.icon name="hero-trash" class="h-4 w-4" /> Delete
-                    </button>
+                    <dt class="font-medium text-base-content/70">API Key:</dt>
+                    <dd class="font-mono text-base-content/60">
+                      {LlmConfig.decrypt_api_key_masked(
+                        @current_scope.user.id,
+                        config.encrypted_api_key
+                      )}
+                    </dd>
                   </div>
-                </div>
+                  <div class="flex gap-2">
+                    <dt class="font-medium text-base-content/70">Temperature:</dt>
+                    <dd class="text-base-content">{config.temperature}</dd>
+                  </div>
+                  <div class="flex gap-2">
+                    <dt class="font-medium text-base-content/70">Max Tokens:</dt>
+                    <dd class="text-base-content">{config.max_tokens}</dd>
+                  </div>
+                </dl>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  phx-click="edit_config"
+                  phx-value-id={config.id}
+                >
+                  <.icon name="hero-pencil" class="h-4 w-4" /> Edit
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-error btn-sm"
+                  phx-click="delete_config"
+                  phx-value-id={config.id}
+                  data-confirm="Are you sure you want to delete this configuration?"
+                >
+                  <.icon name="hero-trash" class="h-4 w-4" /> Delete
+                </button>
               </div>
             </div>
-          </div>
-        </div>
+          </:item>
+        </.config_list_card>
 
         <%!-- Add/Edit config form --%>
         <div class="card border border-base-200 bg-base-100 shadow-xl">
@@ -215,7 +191,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
             </.form>
           </div>
         </div>
-      </div>
+      </.settings_page>
     </Layouts.app>
     """
   end
@@ -262,12 +238,12 @@ defmodule LanglerWeb.UserLive.LlmSettings do
          |> assign(:configs, configs)
          |> assign(:editing_config, nil)
          |> assign(:form, nil)
-         |> put_flash(:info, "Configuration saved successfully")}
+         |> put_flash(:info, gettext("Configuration saved successfully"))}
 
       {:error, changeset} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Failed to save configuration")
+         |> put_flash(:error, gettext("Failed to save configuration"))
          |> assign(:form, to_form(changeset))}
     end
   end
@@ -312,10 +288,10 @@ defmodule LanglerWeb.UserLive.LlmSettings do
         {:noreply,
          socket
          |> assign(:configs, configs)
-         |> put_flash(:info, "Configuration deleted")}
+         |> put_flash(:info, gettext("Configuration deleted"))}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete configuration")}
+        {:noreply, put_flash(socket, :error, gettext("Failed to delete configuration"))}
     end
   end
 
@@ -340,7 +316,7 @@ defmodule LanglerWeb.UserLive.LlmSettings do
           {:noreply, put_flash(socket, :error, message)}
       end
     else
-      {:noreply, put_flash(socket, :error, "Please fill in the form first")}
+      {:noreply, put_flash(socket, :error, gettext("Please fill in the form first"))}
     end
   end
 

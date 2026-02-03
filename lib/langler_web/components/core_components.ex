@@ -1117,4 +1117,94 @@ defmodule LanglerWeb.CoreComponents do
     </div>
     """
   end
+
+  @doc """
+  Renders a settings page layout with title, subtitle, and back link.
+
+  ## Examples
+
+      <.settings_page title="LLM Settings" subtitle="Configure your AI provider." back_path={~p"/users/settings"}>
+        <div>Settings content...</div>
+      </.settings_page>
+  """
+  attr :title, :string, required: true, doc: "Page title"
+  attr :subtitle, :string, required: true, doc: "Short description below the title"
+  attr :back_path, :any, required: true, doc: "Path or navigate target for the back link"
+  attr :class, :string, default: "", doc: "Additional CSS classes for the outer wrapper"
+  slot :inner_block, required: true, doc: "Main content below the header"
+
+  def settings_page(assigns) do
+    ~H"""
+    <div class={["mx-auto max-w-4xl space-y-8 py-8", @class]}>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-base-content">{@title}</h1>
+          <p class="mt-2 text-sm text-base-content/70">{@subtitle}</p>
+        </div>
+        <.link navigate={@back_path} class="btn btn-ghost btn-sm">
+          <.icon name="hero-arrow-left" class="h-4 w-4" /> Back to Settings
+        </.link>
+      </div>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a card listing configurations with an empty state when the list is empty.
+
+  Use the `:item` slot with `:let={config}` to render each config.
+
+  ## Examples
+
+      <.config_list_card
+        title="Your LLM Configurations"
+        empty_icon="hero-chat-bubble-left-right"
+        empty_title="No LLM configurations yet."
+        empty_hint="Add your first API key below to get started."
+        configs={@configs}
+      >
+        <:item :let={config}>
+          <div>{config.name}</div>
+        </:item>
+      </.config_list_card>
+  """
+  attr :title, :string, required: true, doc: "Card title"
+
+  attr :empty_icon, :string,
+    required: true,
+    doc: "Heroicon name for empty state (e.g. hero-chat-bubble-left-right)"
+
+  attr :empty_title, :string, required: true, doc: "Message when configs list is empty"
+  attr :empty_hint, :string, required: true, doc: "Hint text below empty title"
+  attr :configs, :list, default: [], doc: "List of config structs"
+
+  slot :item,
+    required: true,
+    doc: "Renders one config item; use :let={config} to receive each item"
+
+  def config_list_card(assigns) do
+    ~H"""
+    <div class="card border border-base-200 bg-base-100 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">{@title}</h2>
+
+        <div :if={@configs == []} class="py-8 text-center">
+          <.icon name={@empty_icon} class="mx-auto h-12 w-12 text-base-content/30" />
+          <p class="mt-4 text-base-content/70">{@empty_title}</p>
+          <p class="text-sm text-base-content/50">{@empty_hint}</p>
+        </div>
+
+        <div :if={@configs != []} class="space-y-4">
+          <div
+            :for={config <- @configs}
+            class="rounded-lg border border-base-200 bg-base-50 p-4"
+          >
+            {render_slot(@item, config)}
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
 end

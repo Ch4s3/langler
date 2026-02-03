@@ -169,7 +169,7 @@ defmodule LanglerWeb.Admin.SourceSitesLive.Form do
       {:ok, _source_site} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Source site saved successfully")
+         |> put_flash(:info, gettext("Source site saved successfully"))
          |> push_navigate(to: ~p"/admin/source-sites")}
 
       {:error, changeset} ->

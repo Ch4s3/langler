@@ -70,7 +70,7 @@ defmodule LanglerWeb.Layouts do
                   class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
                   <.icon name="hero-book-open" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span>Library</span>
+                  <span>{gettext("Library")}</span>
                 </.link>
               </li>
               <li class="rounded-full border border-transparent transition hover:border-base-300">
@@ -79,7 +79,7 @@ defmodule LanglerWeb.Layouts do
                   class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
                   <.icon name="hero-academic-cap" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span>Study</span>
+                  <span>{gettext("Study")}</span>
                 </.link>
               </li>
               <li
@@ -117,7 +117,7 @@ defmodule LanglerWeb.Layouts do
                         class="text-base text-base-content/80 w-full px-4 py-2"
                         role="menuitem"
                       >
-                        Settings
+                        {gettext("Settings")}
                       </.link>
                     </li>
                     <li role="none">
@@ -127,11 +127,11 @@ defmodule LanglerWeb.Layouts do
                         class="text-base text-base-content/80 w-full px-4 py-2"
                         role="menuitem"
                       >
-                        Log out
+                        {gettext("Log out")}
                       </.link>
                     </li>
                     <li class="px-4 pt-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-base-content/60">
-                      Theme
+                      {gettext("Theme")}
                     </li>
                     <li class="px-4 pb-3">
                       <div class="flex flex-wrap items-center justify-center gap-2 lg:flex-col">
@@ -147,7 +147,7 @@ defmodule LanglerWeb.Layouts do
                             </span>
                             <span class="hidden lg:inline text-[0.65rem]">{option.label}</span>
                             <span class="hidden lg:inline text-[0.5rem] text-base-content/50">
-                              Apply
+                              {gettext("Apply")}
                             </span>
                           </button>
                         <% end %>
@@ -162,10 +162,10 @@ defmodule LanglerWeb.Layouts do
           <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
             <.theme_toggle />
             <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
-              Log in
+              {gettext("Log in")}
             </.link>
             <.link navigate="/users/register" class="btn btn-sm btn-primary text-white">
-              Create account
+              {gettext("Create account")}
             </.link>
           </div>
         </div>
@@ -221,7 +221,7 @@ defmodule LanglerWeb.Layouts do
                   class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
                   <.icon name="hero-book-open" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span>Library</span>
+                  <span>{gettext("Library")}</span>
                 </.link>
               </li>
               <li class="rounded-full border border-transparent transition hover:border-base-300">
@@ -230,7 +230,7 @@ defmodule LanglerWeb.Layouts do
                   class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 leading-none text-base-content/80 transition hover:text-base-content focus-visible:ring focus-visible:ring-primary/40 sm:gap-2 sm:px-3 sm:py-2"
                 >
                   <.icon name="hero-academic-cap" class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                  <span>Study</span>
+                  <span>{gettext("Study")}</span>
                 </.link>
               </li>
               <li
@@ -270,7 +270,7 @@ defmodule LanglerWeb.Layouts do
                         class="text-base text-base-content/80 w-full px-4 py-2"
                         role="menuitem"
                       >
-                        Settings
+                        {gettext("Settings")}
                       </.link>
                     </li>
                     <li role="none">
@@ -280,11 +280,11 @@ defmodule LanglerWeb.Layouts do
                         class="text-base text-base-content/80 w-full px-4 py-2"
                         role="menuitem"
                       >
-                        Log out
+                        {gettext("Log out")}
                       </.link>
                     </li>
                     <li class="px-4 pt-3 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-base-content/60">
-                      Theme
+                      {gettext("Theme")}
                     </li>
                     <li class="px-4 pb-3">
                       <div class="flex flex-wrap items-center justify-center gap-2 lg:flex-col">
@@ -300,7 +300,7 @@ defmodule LanglerWeb.Layouts do
                             </span>
                             <span class="hidden lg:inline text-[0.65rem]">{option.label}</span>
                             <span class="hidden lg:inline text-[0.5rem] text-base-content/50">
-                              Apply
+                              {gettext("Apply")}
                             </span>
                           </button>
                         <% end %>
@@ -315,7 +315,7 @@ defmodule LanglerWeb.Layouts do
           <div :if={is_nil(@current_scope)} class="flex items-center gap-2">
             <.theme_toggle />
             <.link navigate={~p"/users/log-in"} class="btn btn-ghost btn-sm">
-              Log in
+              {gettext("Log in")}
             </.link>
           </div>
         </div>
