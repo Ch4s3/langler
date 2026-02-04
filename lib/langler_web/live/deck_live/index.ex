@@ -6,8 +6,8 @@ defmodule LanglerWeb.DeckLive.Index do
   use LanglerWeb, :live_view
 
   alias Langler.Vocabulary
-  alias Langler.Vocabulary.DeckSuggester
   alias Langler.Vocabulary.Decks
+  alias Langler.Vocabulary.DeckSuggester
   alias LanglerWeb.DeckComponents
 
   import LanglerWeb.DeckComponents
@@ -303,10 +303,10 @@ defmodule LanglerWeb.DeckLive.Index do
       socket
       |> assign(:expanded_deck_ids, new_expanded)
       |> then(fn s ->
-        if not expanded do
-          load_deck_contents(s, deck_id, user_id)
-        else
+        if expanded do
           s
+        else
+          load_deck_contents(s, deck_id, user_id)
         end
       end)
 
@@ -533,36 +533,9 @@ defmodule LanglerWeb.DeckLive.Index do
       {:noreply, put_flash(socket, :error, "Missing deck.")}
     else
       deck_id = String.to_integer(deck_id_str)
-
-      attrs = %{
-        "name" => (p["name"] || "") |> String.trim(),
-        "description" =>
-          (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
-        "visibility" => p["visibility"] || "private"
-      }
-
-      case Vocabulary.update_deck(deck_id, user_id, attrs) do
-        {:ok, _deck} ->
-          deck_data = load_deck_data(user_id)
-
-          {:noreply,
-           socket
-           |> assign(:show_deck_modal, false)
-           |> assign(:editing_deck_id, nil)
-           |> assign(:editing_deck, nil)
-           |> assign(:my_decks, deck_data.my_decks)
-           |> put_flash(:info, "Deck updated.")}
-
-        {:error, :not_found} ->
-          {:noreply,
-           socket
-           |> assign(:show_deck_modal, false)
-           |> put_flash(:error, "Deck not found.")}
-
-        {:error, changeset} ->
-          form = to_form(changeset)
-          {:noreply, assign(socket, :deck_form, form)}
-      end
+      attrs = build_deck_attrs_from_params(p)
+      result = Vocabulary.update_deck(deck_id, user_id, attrs)
+      {:noreply, apply_update_deck_result(socket, result)}
     end
   end
 
@@ -650,6 +623,36 @@ defmodule LanglerWeb.DeckLive.Index do
   defp blank?(""), do: true
   defp blank?(s) when is_binary(s), do: String.trim(s) == ""
   defp blank?(_), do: false
+
+  defp build_deck_attrs_from_params(p) do
+    %{
+      "name" => (p["name"] || "") |> String.trim(),
+      "description" =>
+        (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
+      "visibility" => p["visibility"] || "private"
+    }
+  end
+
+  defp apply_update_deck_result(socket, {:ok, _deck}) do
+    deck_data = load_deck_data(socket.assigns.current_scope.user.id)
+
+    socket
+    |> assign(:show_deck_modal, false)
+    |> assign(:editing_deck_id, nil)
+    |> assign(:editing_deck, nil)
+    |> assign(:my_decks, deck_data.my_decks)
+    |> put_flash(:info, "Deck updated.")
+  end
+
+  defp apply_update_deck_result(socket, {:error, :not_found}) do
+    socket
+    |> assign(:show_deck_modal, false)
+    |> put_flash(:error, "Deck not found.")
+  end
+
+  defp apply_update_deck_result(socket, {:error, changeset}) do
+    assign(socket, :deck_form, to_form(changeset))
+  end
 
   defp find_deck_in_assigns(my_decks, deck_id) when is_list(my_decks) do
     Enum.find(my_decks, fn d -> d.id == deck_id end)

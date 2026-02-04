@@ -40,9 +40,8 @@ defmodule Langler.Vocabulary.DeckSuggester do
     if content = opts[:inject_response] do
       {:ok, content}
     else
-      with {:ok, chat_config} <- build_chat_config(user_id),
-           result <- call_llm(words, chat_config, opts) do
-        result
+      with {:ok, chat_config} <- build_chat_config(user_id) do
+        call_llm(words, chat_config, opts)
       end
     end
   end

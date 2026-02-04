@@ -407,45 +407,49 @@ defmodule Langler.Vocabulary do
   def backfill_default_deck_for_user(user_id) do
     case get_or_create_default_deck(user_id) do
       {:ok, default_deck} ->
-        word_ids =
-          from(f in FSRSItem,
-            where: f.user_id == ^user_id and not is_nil(f.word_id),
-            select: f.word_id,
-            distinct: true
-          )
-          |> Repo.all()
-
-        existing =
-          from(dw in DeckWord,
-            where: dw.deck_id == ^default_deck.id and dw.word_id in ^word_ids,
-            select: dw.word_id
-          )
-          |> Repo.all()
-          |> MapSet.new()
-
-        to_insert = Enum.reject(word_ids, &MapSet.member?(existing, &1))
-
-        if to_insert == [] do
-          {:ok, 0}
-        else
-          now = DateTime.utc_now() |> DateTime.truncate(:second)
-
-          rows =
-            Enum.map(to_insert, fn word_id ->
-              %{deck_id: default_deck.id, word_id: word_id, inserted_at: now, updated_at: now}
-            end)
-
-          {count, _} =
-            Repo.insert_all(DeckWord, rows,
-              conflict_target: [:deck_id, :word_id],
-              on_conflict: :nothing
-            )
-
-          {:ok, count}
-        end
+        backfill_insert_missing_deck_words(default_deck, user_id)
 
       {:error, _} = err ->
         err
+    end
+  end
+
+  defp backfill_insert_missing_deck_words(default_deck, user_id) do
+    word_ids =
+      from(f in FSRSItem,
+        where: f.user_id == ^user_id and not is_nil(f.word_id),
+        select: f.word_id,
+        distinct: true
+      )
+      |> Repo.all()
+
+    existing =
+      from(dw in DeckWord,
+        where: dw.deck_id == ^default_deck.id and dw.word_id in ^word_ids,
+        select: dw.word_id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    to_insert = Enum.reject(word_ids, &MapSet.member?(existing, &1))
+
+    if to_insert == [] do
+      {:ok, 0}
+    else
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      rows =
+        Enum.map(to_insert, fn word_id ->
+          %{deck_id: default_deck.id, word_id: word_id, inserted_at: now, updated_at: now}
+        end)
+
+      {count, _} =
+        Repo.insert_all(DeckWord, rows,
+          conflict_target: [:deck_id, :word_id],
+          on_conflict: :nothing
+        )
+
+      {:ok, count}
     end
   end
 
