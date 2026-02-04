@@ -80,6 +80,8 @@ defmodule LanglerWeb.Router do
       live "/articles/:id/listen", AudioLive.Player, :show
       live "/study", StudyLive.Index, :index
       live "/study/session", StudyLive.Session, :index
+      # Decks: requires authentication (inside require_authenticated_user live_session)
+      live "/decks", DeckLive.Index, :index
 
       # Admin routes
       live "/admin/source-sites", Admin.SourceSitesLive.Index, :index

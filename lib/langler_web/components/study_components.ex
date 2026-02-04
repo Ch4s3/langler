@@ -232,6 +232,13 @@ defmodule LanglerWeb.StudyComponents do
             <.icon name="hero-folder" class="h-6 w-6 text-primary" /> Your decks
           </h2>
           <div class="flex gap-2">
+            <.link
+              navigate={~p"/decks"}
+              class="btn btn-sm btn-ghost border border-dashed border-base-300"
+            >
+              <.icon name="hero-rectangle-stack" class="h-4 w-4" />
+              <span class="hidden sm:inline">Manage Decks</span>
+            </.link>
             <button
               type="button"
               phx-click="show_csv_import"

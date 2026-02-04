@@ -21,6 +21,7 @@ defmodule Langler.Study.FSRSItem do
 
     belongs_to :user, Langler.Accounts.User
     belongs_to :word, Langler.Vocabulary.Word
+    belongs_to :custom_card, Langler.Vocabulary.CustomCard
 
     timestamps(type: :utc_datetime)
   end
@@ -41,11 +42,29 @@ defmodule Langler.Study.FSRSItem do
       :state,
       :step,
       :user_id,
-      :word_id
+      :word_id,
+      :custom_card_id
     ])
-    |> validate_required([:user_id, :word_id])
+    |> validate_required([:user_id])
+    |> validate_word_or_custom_card()
     |> unique_constraint([:user_id, :word_id])
+    |> unique_constraint([:user_id, :custom_card_id])
     |> assoc_constraint(:user)
-    |> assoc_constraint(:word)
+  end
+
+  defp validate_word_or_custom_card(changeset) do
+    word_id = Ecto.Changeset.get_field(changeset, :word_id)
+    custom_card_id = Ecto.Changeset.get_field(changeset, :custom_card_id)
+
+    cond do
+      word_id && custom_card_id ->
+        add_error(changeset, :base, "Cannot set both word_id and custom_card_id")
+
+      is_nil(word_id) && is_nil(custom_card_id) ->
+        add_error(changeset, :base, "Must set either word_id or custom_card_id")
+
+      true ->
+        changeset
+    end
   end
 end

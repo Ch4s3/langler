@@ -11,6 +11,7 @@ defmodule Langler.Vocabulary do
   alias Langler.External.Dictionary
   alias Langler.Repo
   alias Langler.Study
+  alias Langler.Study.FSRSItem
   alias Langler.Vocabulary.{Deck, DeckWord, Word, WordOccurrence}
 
   def normalize_form(nil), do: nil
@@ -198,7 +199,8 @@ defmodule Langler.Vocabulary do
   Creates a new deck for a user.
   """
   def create_deck(user_id, attrs) do
-    attrs = Map.put(attrs, :user_id, user_id)
+    key = if Map.has_key?(attrs, "name"), do: "user_id", else: :user_id
+    attrs = Map.put(attrs, key, user_id)
 
     %Deck{}
     |> Deck.changeset(attrs)
@@ -390,6 +392,103 @@ defmodule Langler.Vocabulary do
       :count,
       :id
     )
+  end
+
+  @doc """
+  Ensures all words the user has in study (fsrs_items) are in their default deck.
+
+  Inserts missing DeckWord rows so that every word_id from the user's fsrs_items
+  (word-backed cards) is linked to their default deck. Idempotent; safe to run
+  multiple times.
+
+  Returns `{:ok, count}` where count is the number of new deck_word rows inserted,
+  or `{:error, reason}` if the user has no default deck.
+  """
+  def backfill_default_deck_for_user(user_id) do
+    case get_or_create_default_deck(user_id) do
+      {:ok, default_deck} ->
+        word_ids =
+          from(f in FSRSItem,
+            where: f.user_id == ^user_id and not is_nil(f.word_id),
+            select: f.word_id,
+            distinct: true
+          )
+          |> Repo.all()
+
+        existing =
+          from(dw in DeckWord,
+            where: dw.deck_id == ^default_deck.id and dw.word_id in ^word_ids,
+            select: dw.word_id
+          )
+          |> Repo.all()
+          |> MapSet.new()
+
+        to_insert = Enum.reject(word_ids, &MapSet.member?(existing, &1))
+
+        if to_insert == [] do
+          {:ok, 0}
+        else
+          now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+          rows =
+            Enum.map(to_insert, fn word_id ->
+              %{deck_id: default_deck.id, word_id: word_id, inserted_at: now, updated_at: now}
+            end)
+
+          {count, _} =
+            Repo.insert_all(DeckWord, rows,
+              conflict_target: [:deck_id, :word_id],
+              on_conflict: :nothing
+            )
+
+          {:ok, count}
+        end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  @doc """
+  Returns words that are ONLY in the default deck (not in any custom deck).
+  These are candidates for LLM grouping suggestions.
+  """
+  def list_ungrouped_words(user_id) do
+    # Get default deck (get_or_create_default_deck returns {:ok, deck} or {:error, _})
+    default_deck =
+      case get_or_create_default_deck(user_id) do
+        {:ok, deck} -> deck
+        {:error, _} -> nil
+      end
+
+    if is_nil(default_deck) do
+      []
+    else
+      list_ungrouped_words_for_deck(user_id, default_deck)
+    end
+  end
+
+  defp list_ungrouped_words_for_deck(user_id, default_deck) do
+    # Get all word IDs that are in custom (non-default) decks
+    custom_deck_word_ids =
+      from(dw in DeckWord,
+        join: d in Deck,
+        on: dw.deck_id == d.id,
+        where: d.user_id == ^user_id and d.is_default == false,
+        select: dw.word_id
+      )
+      |> Repo.all()
+      |> MapSet.new()
+
+    # Get words from default deck that aren't in any custom deck
+    from(dw in DeckWord,
+      join: w in assoc(dw, :word),
+      where: dw.deck_id == ^default_deck.id,
+      where: dw.word_id not in ^MapSet.to_list(custom_deck_word_ids),
+      select: w
+    )
+    |> Repo.all()
+    |> Repo.preload(:fsrs_items)
   end
 
   @doc """

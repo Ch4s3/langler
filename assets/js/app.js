@@ -34,6 +34,7 @@ import ChatInput from "./hooks/chat_input"
 import TextDownloader from "./hooks/text_downloader"
 import DictionarySearch from "./hooks/dictionary_search"
 import AudioPlayer from "./hooks/audio_player"
+import {DraggableWord, DeckDropZone} from "./hooks/drag_drop_deck"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -93,6 +94,8 @@ const hooks = {
   TextDownloader,
   DictionarySearch,
   AudioPlayer,
+  DraggableWord,
+  DeckDropZone,
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
