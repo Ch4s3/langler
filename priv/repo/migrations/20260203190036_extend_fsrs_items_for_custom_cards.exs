@@ -24,14 +24,14 @@ defmodule Langler.Repo.Migrations.ExtendFsrsItemsForCustomCards do
 
     # Create partial unique indexes
     create_if_not_exists unique_index(:fsrs_items, [:user_id, :word_id],
-             where: "word_id IS NOT NULL",
-             name: :fsrs_items_user_id_word_id_index
-           )
+                           where: "word_id IS NOT NULL",
+                           name: :fsrs_items_user_id_word_id_index
+                         )
 
     create_if_not_exists unique_index(:fsrs_items, [:user_id, :custom_card_id],
-             where: "custom_card_id IS NOT NULL",
-             name: :fsrs_items_user_id_custom_card_id_index
-           )
+                           where: "custom_card_id IS NOT NULL",
+                           name: :fsrs_items_user_id_custom_card_id_index
+                         )
 
     # Add check constraint to ensure exactly one of word_id or custom_card_id is set
     execute(

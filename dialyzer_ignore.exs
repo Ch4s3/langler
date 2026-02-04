@@ -1,6 +1,7 @@
 # dialyzer_ignore.exs
 [
   ~r/^test\/.*/,
-  # Mix task: Mix.Task/Mix.shell not in PLT
-  %{file: "lib/mix/tasks/langler.gettext.seed.ex"}
+  # Mix tasks: Mix.Task/Mix.shell not in PLT
+  %{file: "lib/mix/tasks/langler.gettext.seed.ex"},
+  %{file: "lib/mix/tasks/langler.backfill_default_deck.ex"}
 ]

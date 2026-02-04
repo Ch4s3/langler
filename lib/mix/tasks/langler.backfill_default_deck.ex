@@ -83,6 +83,7 @@ defmodule Mix.Tasks.Langler.BackfillDefaultDeck do
 
     if errs != [] do
       Mix.shell().error("  Errors:")
+
       Enum.each(errs, fn {:error, email, reason} ->
         Mix.shell().error("    #{email}: #{inspect(reason)}")
       end)

@@ -66,7 +66,13 @@ defmodule LanglerWeb.DeckComponentsTest do
     end
 
     test "renders discover variant with Follow and Copy buttons" do
-      deck = %{id: 1, name: "Public Deck", description: nil, visibility: "public", is_default: false}
+      deck = %{
+        id: 1,
+        name: "Public Deck",
+        description: nil,
+        visibility: "public",
+        is_default: false
+      }
 
       html =
         render_component(&deck_card/1,
@@ -163,7 +169,9 @@ defmodule LanglerWeb.DeckComponentsTest do
     end
 
     test "renders edit deck form when editing_deck is set" do
-      form = Component.to_form(%{"name" => "My Deck", "description" => "", "visibility" => "private"})
+      form =
+        Component.to_form(%{"name" => "My Deck", "description" => "", "visibility" => "private"})
+
       deck = %{id: 123, name: "My Deck"}
 
       html =

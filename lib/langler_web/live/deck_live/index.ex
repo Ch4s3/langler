@@ -38,7 +38,10 @@ defmodule LanglerWeb.DeckLive.Index do
      |> assign(:show_deck_modal, false)
      |> assign(:editing_deck_id, nil)
      |> assign(:editing_deck, nil)
-     |> assign(:deck_form, to_form(%{"name" => "", "description" => "", "visibility" => "private"}))
+     |> assign(
+       :deck_form,
+       to_form(%{"name" => "", "description" => "", "visibility" => "private"})
+     )
      |> assign(:show_suggestions_panel, false)
      |> assign(:suggestions, [])
      |> assign(:suggestions_loading, false)
@@ -142,8 +145,7 @@ defmodule LanglerWeb.DeckLive.Index do
             disabled={@suggestions_loading}
           >
             <%= if @suggestions_loading do %>
-              <span class="loading loading-spinner loading-sm"></span>
-              Analyzing…
+              <span class="loading loading-spinner loading-sm"></span> Analyzing…
             <% else %>
               Get AI Suggestions
             <% end %>
@@ -152,7 +154,10 @@ defmodule LanglerWeb.DeckLive.Index do
       </div>
 
       <%!-- AI Suggestions panel --%>
-      <div :if={@show_suggestions_panel and @suggestions != []} class="card border border-primary/30 bg-base-100">
+      <div
+        :if={@show_suggestions_panel and @suggestions != []}
+        class="card border border-primary/30 bg-base-100"
+      >
         <div class="card-body">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold">AI Deck Suggestions</h3>
@@ -286,6 +291,7 @@ defmodule LanglerWeb.DeckLive.Index do
     deck_id = String.to_integer(deck_id_str)
     user_id = socket.assigns.current_scope.user.id
     expanded = MapSet.member?(socket.assigns.expanded_deck_ids, deck_id)
+
     new_expanded =
       if expanded do
         MapSet.delete(socket.assigns.expanded_deck_ids, deck_id)
@@ -315,6 +321,7 @@ defmodule LanglerWeb.DeckLive.Index do
     case Vocabulary.set_default_deck(user_id, deck_id) do
       {:ok, _} ->
         deck_data = load_deck_data(user_id)
+
         {:noreply,
          socket
          |> assign(:my_decks, deck_data.my_decks)
@@ -362,6 +369,7 @@ defmodule LanglerWeb.DeckLive.Index do
     case Vocabulary.delete_deck(deck_id, user_id) do
       {:ok, _deck} ->
         deck_data = load_deck_data(user_id)
+
         {:noreply,
          socket
          |> assign(:my_decks, deck_data.my_decks)
@@ -452,7 +460,10 @@ defmodule LanglerWeb.DeckLive.Index do
      |> assign(:show_deck_modal, true)
      |> assign(:editing_deck_id, nil)
      |> assign(:editing_deck, nil)
-     |> assign(:deck_form, to_form(%{"name" => "", "description" => "", "visibility" => "private"}))}
+     |> assign(
+       :deck_form,
+       to_form(%{"name" => "", "description" => "", "visibility" => "private"})
+     )}
   end
 
   @impl true
@@ -468,11 +479,13 @@ defmodule LanglerWeb.DeckLive.Index do
   def handle_event("validate_deck", params, socket) do
     # Params may be flat or under "deck" from the form
     p = params["deck"] || params
+
     attrs = %{
       "name" => p["name"] || "",
       "description" => p["description"] || "",
       "visibility" => p["visibility"] || "private"
     }
+
     form = to_form(attrs)
 
     {:noreply, assign(socket, :deck_form, form)}
@@ -483,9 +496,11 @@ defmodule LanglerWeb.DeckLive.Index do
     user_id = socket.assigns.current_scope.user.id
     p = params["deck"] || params
     name = (p["name"] || "") |> String.trim()
+
     attrs = %{
       "name" => name,
-      "description" => (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
+      "description" =>
+        (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
       "visibility" => p["visibility"] || "private"
     }
 
@@ -513,13 +528,16 @@ defmodule LanglerWeb.DeckLive.Index do
     user_id = socket.assigns.current_scope.user.id
     p = params["deck"] || params
     deck_id_str = p["deck_id"] || params["deck_id"]
+
     if blank?(deck_id_str) do
       {:noreply, put_flash(socket, :error, "Missing deck.")}
     else
       deck_id = String.to_integer(deck_id_str)
+
       attrs = %{
         "name" => (p["name"] || "") |> String.trim(),
-        "description" => (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
+        "description" =>
+          (p["description"] || "") |> String.trim() |> then(&if(&1 == "", do: nil, else: &1)),
         "visibility" => p["visibility"] || "private"
       }
 
@@ -614,10 +632,17 @@ defmodule LanglerWeb.DeckLive.Index do
     assign(socket, :deck_contents_by_id, new_contents)
   end
 
-  defp format_suggestion_error(:no_llm_config), do: "Configure an LLM in settings to use suggestions."
+  defp format_suggestion_error(:no_llm_config),
+    do: "Configure an LLM in settings to use suggestions."
+
   defp format_suggestion_error(:no_ungrouped_words), do: "No ungrouped words to suggest from."
-  defp format_suggestion_error({:too_few_words, n}), do: "Add at least 10 ungrouped words (you have #{n})."
-  defp format_suggestion_error(:invalid_format), do: "AI returned an unexpected format. Try again."
+
+  defp format_suggestion_error({:too_few_words, n}),
+    do: "Add at least 10 ungrouped words (you have #{n})."
+
+  defp format_suggestion_error(:invalid_format),
+    do: "AI returned an unexpected format. Try again."
+
   defp format_suggestion_error(:invalid_json), do: "Could not read AI response. Try again."
   defp format_suggestion_error(other), do: "Suggestions failed: #{inspect(other)}"
 

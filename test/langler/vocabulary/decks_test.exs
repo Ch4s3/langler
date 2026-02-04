@@ -299,7 +299,9 @@ defmodule Langler.Vocabulary.DecksTest do
   describe "list_public_decks/1" do
     test "returns public decks with optional search and language" do
       owner = user_fixture()
-      deck = deck_fixture(%{user: owner, visibility: "public", name: "Spanish Verbs", language: "es"})
+
+      deck =
+        deck_fixture(%{user: owner, visibility: "public", name: "Spanish Verbs", language: "es"})
 
       results = Decks.list_public_decks(limit: 10)
       assert Enum.any?(results, &(&1.deck.id == deck.id))
@@ -403,7 +405,9 @@ defmodule Langler.Vocabulary.DecksTest do
     test "returns error when custom card not found" do
       user = user_fixture()
       deck = deck_fixture(%{user: user})
-      assert {:error, :custom_card_not_found} = Decks.add_custom_card_to_deck(deck.id, -1, user.id)
+
+      assert {:error, :custom_card_not_found} =
+               Decks.add_custom_card_to_deck(deck.id, -1, user.id)
     end
 
     test "returns error when card belongs to another user" do
@@ -422,7 +426,11 @@ defmodule Langler.Vocabulary.DecksTest do
       user = user_fixture()
       _default = deck_fixture(%{user: user, is_default: true})
       deck = deck_fixture(%{user: user})
-      {:ok, card} = Decks.add_new_custom_card_to_decks(user.id, %{front: "F", back: "B", language: "es"}, [deck.id])
+
+      {:ok, card} =
+        Decks.add_new_custom_card_to_decks(user.id, %{front: "F", back: "B", language: "es"}, [
+          deck.id
+        ])
 
       assert {:ok, :removed} = Decks.remove_custom_card_from_deck(deck.id, card.id, user.id)
       assert [] == Decks.list_deck_custom_cards(deck.id, user.id)
@@ -439,7 +447,8 @@ defmodule Langler.Vocabulary.DecksTest do
       deck = deck_fixture(%{user: user})
       {:ok, card} = Decks.create_custom_card(user.id, %{front: "F", back: "B", language: "es"})
 
-      assert {:error, :not_in_deck} = Decks.remove_custom_card_from_deck(deck.id, card.id, user.id)
+      assert {:error, :not_in_deck} =
+               Decks.remove_custom_card_from_deck(deck.id, card.id, user.id)
     end
   end
 
@@ -467,12 +476,15 @@ defmodule Langler.Vocabulary.DecksTest do
       word2 = word_fixture(%{normalized_form: "dos"})
 
       assert {:ok, deck} =
-               Decks.create_deck_with_words(user.id, %{name: "New Deck", language: "es", visibility: "private"}, [word1.id, word2.id])
+               Decks.create_deck_with_words(
+                 user.id,
+                 %{name: "New Deck", language: "es", visibility: "private"},
+                 [word1.id, word2.id]
+               )
 
       assert deck.name == "New Deck"
       words = Decks.list_deck_words(deck.id, user.id)
       assert length(words) == 2
     end
   end
-
 end

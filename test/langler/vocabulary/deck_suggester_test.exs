@@ -98,7 +98,9 @@ defmodule Langler.Vocabulary.DeckSuggesterTest do
       ```
       """
 
-      assert {:ok, [s]} = DeckSuggester.suggest_groupings(user.id, inject_response: json_with_fence)
+      assert {:ok, [s]} =
+               DeckSuggester.suggest_groupings(user.id, inject_response: json_with_fence)
+
       assert s.name == "A"
     end
 

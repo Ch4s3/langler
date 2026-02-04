@@ -18,11 +18,17 @@ defmodule LanglerWeb.DeckLive.IndexTest do
       %{conn: conn, user: user, other_deck: other_deck}
     end
 
-    test "set_default_deck updates default and refreshes list", %{conn: conn, user: user, other_deck: other_deck} do
+    test "set_default_deck updates default and refreshes list", %{
+      conn: conn,
+      user: user,
+      other_deck: other_deck
+    } do
       {:ok, view, _html} = live(conn, ~p"/decks")
 
       view
-      |> element("#deck-card-#{other_deck.id} button[phx-click='set_default_deck'][phx-value-deck-id='#{other_deck.id}']")
+      |> element(
+        "#deck-card-#{other_deck.id} button[phx-click='set_default_deck'][phx-value-deck-id='#{other_deck.id}']"
+      )
       |> render_click()
 
       assert render(view) =~ "Default deck updated"
@@ -33,18 +39,30 @@ defmodule LanglerWeb.DeckLive.IndexTest do
       assert default_deck.id == other_deck.id
     end
 
-    test "edit_deck opens modal with deck data and update_deck saves", %{conn: conn, other_deck: other_deck} do
+    test "edit_deck opens modal with deck data and update_deck saves", %{
+      conn: conn,
+      other_deck: other_deck
+    } do
       {:ok, view, _html} = live(conn, ~p"/decks")
 
       view
-      |> element("#deck-card-#{other_deck.id} button[phx-click='edit_deck'][phx-value-deck-id='#{other_deck.id}']")
+      |> element(
+        "#deck-card-#{other_deck.id} button[phx-click='edit_deck'][phx-value-deck-id='#{other_deck.id}']"
+      )
       |> render_click()
 
       assert has_element?(view, "#deck-modal-form")
-      assert view |> element("#deck-modal-form input[name='name']") |> render() =~ "To Edit or Delete"
+
+      assert view |> element("#deck-modal-form input[name='name']") |> render() =~
+               "To Edit or Delete"
 
       view
-      |> form("#deck-modal-form", %{"name" => "Updated Name", "description" => "New desc", "visibility" => "private", "deck_id" => "#{other_deck.id}"})
+      |> form("#deck-modal-form", %{
+        "name" => "Updated Name",
+        "description" => "New desc",
+        "visibility" => "private",
+        "deck_id" => "#{other_deck.id}"
+      })
       |> render_submit()
 
       assert render(view) =~ "Deck updated"
@@ -57,7 +75,9 @@ defmodule LanglerWeb.DeckLive.IndexTest do
       {:ok, view, _html} = live(conn, ~p"/decks")
 
       view
-      |> element("#deck-card-#{other_deck.id} button[phx-click='set_visibility'][phx-value-deck-id='#{other_deck.id}']")
+      |> element(
+        "#deck-card-#{other_deck.id} button[phx-click='set_visibility'][phx-value-deck-id='#{other_deck.id}']"
+      )
       |> render_click()
 
       assert has_element?(view, "#deck-modal-form")
@@ -69,7 +89,9 @@ defmodule LanglerWeb.DeckLive.IndexTest do
       assert has_element?(view, "#deck-card-#{other_deck.id}")
 
       view
-      |> element("#deck-card-#{other_deck.id} button[phx-click='delete_deck'][phx-value-deck-id='#{other_deck.id}']")
+      |> element(
+        "#deck-card-#{other_deck.id} button[phx-click='delete_deck'][phx-value-deck-id='#{other_deck.id}']"
+      )
       |> render_click()
 
       assert render(view) =~ "Deck deleted"
